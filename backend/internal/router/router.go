@@ -1,0 +1,68 @@
+package router
+
+import (
+	"github.com/irvanmhndra/pos-core-api/internal/handler"
+	"github.com/labstack/echo/v5"
+)
+
+type Handlers struct {
+	Health          *handler.HealthHandler
+	Auth            *handler.AuthHandler
+	User            *handler.UserHandler
+	Customer        *handler.CustomerHandler
+	ProductCategory *handler.ProductCategoryHandler
+	Product         *handler.ProductHandler
+}
+
+func Setup(e *echo.Echo, h *Handlers) {
+	// Health check endpoints
+	e.GET("/", h.Health.Check)
+	e.GET("/health", h.Health.Check)
+	e.GET("/health/live", h.Health.Liveness)
+	e.GET("/health/ready", h.Health.Readiness)
+
+	// API group
+	api := e.Group("/api")
+	v1 := api.Group("/v1")
+
+	// Auth routes
+	auth := v1.Group("/auth")
+	auth.POST("/login", h.Auth.Login)
+	auth.POST("/register", h.Auth.Register)
+	auth.POST("/refresh", h.Auth.RefreshToken)
+	auth.POST("/logout", h.Auth.Logout)
+
+	// User routes
+	users := v1.Group("/users")
+	users.POST("", h.User.Create)
+	users.GET("", h.User.List)
+	users.GET("/:id", h.User.Get)
+	users.PUT("/:id", h.User.Update)
+	users.PATCH("/:id/status", h.User.UpdateStatus)
+	users.DELETE("/:id", h.User.Delete)
+
+	// Customer routes
+	customers := v1.Group("/customers")
+	customers.POST("", h.Customer.Create)
+	customers.GET("", h.Customer.List)
+	customers.GET("/:id", h.Customer.Get)
+	customers.PUT("/:id", h.Customer.Update)
+	customers.DELETE("/:id", h.Customer.Delete)
+
+	// Product Category routes
+	categories := v1.Group("/product-categories")
+	categories.POST("", h.ProductCategory.Create)
+	categories.GET("", h.ProductCategory.List)
+	categories.GET("/all", h.ProductCategory.ListAll)
+	categories.GET("/:id", h.ProductCategory.Get)
+	categories.PUT("/:id", h.ProductCategory.Update)
+	categories.DELETE("/:id", h.ProductCategory.Delete)
+
+	// Product routes
+	products := v1.Group("/products")
+	products.POST("", h.Product.Create)
+	products.GET("", h.Product.List)
+	products.GET("/:id", h.Product.Get)
+	products.PUT("/:id", h.Product.Update)
+	products.DELETE("/:id", h.Product.Delete)
+}

@@ -1,0 +1,27 @@
+# .mockery.yaml
+with-expecter: true
+packages:
+  github.com/yourusername/pos-core-api/internal/repository:
+    interfaces:
+      UserRepository:
+      ProductRepository:
+      OrderRepository:
+      StockRepository:
+      AuditLogRepository:
+    config:
+      dir: internal/repository/mocks
+      outpkg: mocks
+
+  github.com/yourusername/pos-core-api/internal/client/payment:
+    interfaces:
+      Gateway:
+    config:
+      dir: internal/client/mocks
+      outpkg: mocks
+
+  github.com/yourusername/pos-core-api/internal/event/publisher:
+    interfaces:
+      EventPublisher:
+    config:
+      dir: internal/event/mocks
+      outpkg: mocks

@@ -1,0 +1,27 @@
+package app
+
+import (
+	"github.com/irvanmhndra/pos-core-api/internal/handler"
+	"github.com/irvanmhndra/pos-core-api/pkg/validator"
+	"github.com/jmoiron/sqlx"
+)
+
+type Handlers struct {
+	Health          *handler.HealthHandler
+	Auth            *handler.AuthHandler
+	User            *handler.UserHandler
+	Customer        *handler.CustomerHandler
+	ProductCategory *handler.ProductCategoryHandler
+	Product         *handler.ProductHandler
+}
+
+func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator) *Handlers {
+	return &Handlers{
+		Health:          handler.NewHealthHandler(db),
+		Auth:            handler.NewAuthHandler(services.Auth, v),
+		User:            handler.NewUserHandler(services.User, v),
+		Customer:        handler.NewCustomerHandler(services.Customer, v),
+		ProductCategory: handler.NewProductCategoryHandler(services.ProductCategory, v),
+		Product:         handler.NewProductHandler(services.Product, v),
+	}
+}
