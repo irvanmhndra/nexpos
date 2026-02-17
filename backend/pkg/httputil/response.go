@@ -39,7 +39,7 @@ func newMeta() *Meta {
 }
 
 func Success(c *echo.Context, status int, message string, data any) error {
-	return c.JSON(status, Response{
+	return (*c).JSON(status, Response{
 		Success: true,
 		Message: message,
 		Data:    data,
@@ -52,7 +52,7 @@ func SuccessWithPagination(c *echo.Context, status int, message string, data any
 	meta.Pagination = pagination
 	meta.Summary = summary
 
-	return c.JSON(status, Response{
+	return (*c).JSON(status, Response{
 		Success: true,
 		Message: message,
 		Data:    data,
@@ -71,9 +71,9 @@ func Error(c *echo.Context, err error) error {
 		if appErr.Details != nil {
 			resp.Errors = appErr.Details
 		}
-		return c.JSON(appErr.HTTPStatus, resp)
+		return (*c).JSON(appErr.HTTPStatus, resp)
 	}
-	return c.JSON(500, Response{
+	return (*c).JSON(500, Response{
 		Success:   false,
 		Message:   "internal server error",
 		ErrorCode: "INTERNAL_ERROR",
@@ -87,7 +87,7 @@ type FieldError struct {
 }
 
 func ValidationError(c *echo.Context, errors []FieldError) error {
-	return c.JSON(422, Response{
+	return (*c).JSON(422, Response{
 		Success:   false,
 		Message:   "Validation failed",
 		ErrorCode: "VALIDATION_ERROR",

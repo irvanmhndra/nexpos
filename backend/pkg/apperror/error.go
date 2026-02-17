@@ -38,7 +38,12 @@ func Conflict(message string) *AppError {
 }
 
 func InternalError(err error) *AppError {
-	return &AppError{Code: "INTERNAL_ERROR", Message: "internal server error", HTTPStatus: http.StatusInternalServerError}
+	// Include actual error message for debugging
+	message := "internal server error"
+	if err != nil {
+		message = err.Error()
+	}
+	return &AppError{Code: "INTERNAL_ERROR", Message: message, HTTPStatus: http.StatusInternalServerError}
 }
 
 func ValidationError(message string, details any) *AppError {
