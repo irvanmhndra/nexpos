@@ -1,0 +1,262 @@
+package handler
+
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/irvanmhndra/pos-core-api/internal/dto"
+	"github.com/irvanmhndra/pos-core-api/internal/service"
+	"github.com/irvanmhndra/pos-core-api/pkg/apperror"
+	"github.com/irvanmhndra/pos-core-api/pkg/httputil"
+	"github.com/irvanmhndra/pos-core-api/pkg/validator"
+	"github.com/labstack/echo/v5"
+)
+
+type OrderHandler struct {
+	orderSvc  *service.OrderService
+	validator *validator.CustomValidator
+}
+
+func NewOrderHandler(orderSvc *service.OrderService, validator *validator.CustomValidator) *OrderHandler {
+	return &OrderHandler{
+		orderSvc:  orderSvc,
+		validator: validator,
+	}
+}
+
+func (h *OrderHandler) Create(c *echo.Context) error {
+	var req dto.CreateOrderRequest
+	if err := (*c).Bind(&req); err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+	}
+
+	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
+		return httputil.ValidationError(c, fieldErrors)
+	}
+
+	ctx := (*c).Request().Context()
+	companyID := int64(1) // TODO: Get from auth context
+	branchID := int64(1)  // TODO: Get from auth context
+	cashierID := int64(1) // TODO: Get from auth context
+
+	result, err := h.orderSvc.Create(ctx, companyID, branchID, cashierID, req)
+	if err != nil {
+		return httputil.Error(c, err)
+	}
+
+	return httputil.Success(c, http.StatusCreated, "Order created successfully", result)
+}
+
+func (h *OrderHandler) Get(c *echo.Context) error {
+	id, err := strconv.ParseInt((*c).Param("id"), 10, 64)
+	if err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid order ID"))
+	}
+
+	ctx := (*c).Request().Context()
+	companyID := int64(1) // TODO: Get from auth context
+
+	result, err := h.orderSvc.GetByID(ctx, companyID, id)
+	if err != nil {
+		return httputil.Error(c, err)
+	}
+
+	return httputil.Success(c, http.StatusOK, "Order retrieved successfully", result)
+}
+
+func (h *OrderHandler) List(c *echo.Context) error {
+	var req dto.ListOrderRequest
+	if err := (*c).Bind(&req); err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid query parameters"))
+	}
+
+	ctx := (*c).Request().Context()
+	companyID := int64(1) // TODO: Get from auth context
+
+	result, err := h.orderSvc.List(ctx, companyID, req)
+	if err != nil {
+		return httputil.Error(c, err)
+	}
+
+	// Convert dto.PaginationMeta to httputil.Pagination
+	pagination := &httputil.Pagination{
+		TotalRecords: result.Pagination.TotalRecords,
+		TotalPages:   result.Pagination.TotalPages,
+		CurrentPage:  result.Pagination.CurrentPage,
+		PerPage:      result.Pagination.PerPage,
+		Count:        len(result.Orders),
+		NextPage:     result.Pagination.NextPage,
+		PrevPage:     result.Pagination.PrevPage,
+	}
+
+	return httputil.SuccessWithPagination(c, http.StatusOK, "Orders retrieved successfully", result.Orders, pagination, nil)
+}
+
+func (h *OrderHandler) Update(c *echo.Context) error {
+	id, err := strconv.ParseInt((*c).Param("id"), 10, 64)
+	if err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid order ID"))
+	}
+
+	var req dto.UpdateOrderRequest
+	if err := (*c).Bind(&req); err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+	}
+
+	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
+		return httputil.ValidationError(c, fieldErrors)
+	}
+
+	ctx := (*c).Request().Context()
+	companyID := int64(1) // TODO: Get from auth context
+
+	result, err := h.orderSvc.UpdateOrder(ctx, companyID, id, req)
+	if err != nil {
+		return httputil.Error(c, err)
+	}
+
+	return httputil.Success(c, http.StatusOK, "Order updated successfully", result)
+}
+
+func (h *OrderHandler) Confirm(c *echo.Context) error {
+	id, err := strconv.ParseInt((*c).Param("id"), 10, 64)
+	if err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid order ID"))
+	}
+
+	ctx := (*c).Request().Context()
+	companyID := int64(1) // TODO: Get from auth context
+
+	result, err := h.orderSvc.ConfirmOrder(ctx, companyID, id)
+	if err != nil {
+		return httputil.Error(c, err)
+	}
+
+	return httputil.Success(c, http.StatusOK, "Order confirmed successfully", result)
+}
+
+func (h *OrderHandler) AddPayment(c *echo.Context) error {
+	id, err := strconv.ParseInt((*c).Param("id"), 10, 64)
+	if err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid order ID"))
+	}
+
+	var req dto.AddPaymentRequest
+	if err := (*c).Bind(&req); err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+	}
+
+	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
+		return httputil.ValidationError(c, fieldErrors)
+	}
+
+	ctx := (*c).Request().Context()
+	companyID := int64(1) // TODO: Get from auth context
+
+	result, err := h.orderSvc.AddPayment(ctx, companyID, id, req)
+	if err != nil {
+		return httputil.Error(c, err)
+	}
+
+	return httputil.Success(c, http.StatusOK, "Payment added successfully", result)
+}
+
+func (h *OrderHandler) Complete(c *echo.Context) error {
+	id, err := strconv.ParseInt((*c).Param("id"), 10, 64)
+	if err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid order ID"))
+	}
+
+	var req dto.CompleteOrderRequest
+	if err := (*c).Bind(&req); err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+	}
+
+	ctx := (*c).Request().Context()
+	companyID := int64(1) // TODO: Get from auth context
+
+	result, err := h.orderSvc.CompleteOrder(ctx, companyID, id, req)
+	if err != nil {
+		return httputil.Error(c, err)
+	}
+
+	return httputil.Success(c, http.StatusOK, "Order completed successfully", result)
+}
+
+func (h *OrderHandler) Cancel(c *echo.Context) error {
+	id, err := strconv.ParseInt((*c).Param("id"), 10, 64)
+	if err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid order ID"))
+	}
+
+	var req dto.CancelOrderRequest
+	if err := (*c).Bind(&req); err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+	}
+
+	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
+		return httputil.ValidationError(c, fieldErrors)
+	}
+
+	ctx := (*c).Request().Context()
+	companyID := int64(1) // TODO: Get from auth context
+
+	result, err := h.orderSvc.CancelOrder(ctx, companyID, id, req)
+	if err != nil {
+		return httputil.Error(c, err)
+	}
+
+	return httputil.Success(c, http.StatusOK, "Order cancelled successfully", result)
+}
+
+func (h *OrderHandler) Void(c *echo.Context) error {
+	id, err := strconv.ParseInt((*c).Param("id"), 10, 64)
+	if err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid order ID"))
+	}
+
+	var req dto.VoidOrderRequest
+	if err := (*c).Bind(&req); err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+	}
+
+	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
+		return httputil.ValidationError(c, fieldErrors)
+	}
+
+	ctx := (*c).Request().Context()
+	companyID := int64(1) // TODO: Get from auth context
+
+	result, err := h.orderSvc.VoidOrder(ctx, companyID, id, req)
+	if err != nil {
+		return httputil.Error(c, err)
+	}
+
+	return httputil.Success(c, http.StatusOK, "Order voided successfully", result)
+}
+
+func (h *OrderHandler) RefundPayment(c *echo.Context) error {
+	id, err := strconv.ParseInt((*c).Param("id"), 10, 64)
+	if err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid order ID"))
+	}
+
+	var req dto.RefundPaymentRequest
+	if err := (*c).Bind(&req); err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+	}
+
+	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
+		return httputil.ValidationError(c, fieldErrors)
+	}
+
+	ctx := (*c).Request().Context()
+	companyID := int64(1) // TODO: Get from auth context
+
+	result, err := h.orderSvc.RefundPayment(ctx, companyID, id, req)
+	if err != nil {
+		return httputil.Error(c, err)
+	}
+
+	return httputil.Success(c, http.StatusOK, "Payment refunded successfully", result)
+}

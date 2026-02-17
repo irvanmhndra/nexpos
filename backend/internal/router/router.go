@@ -12,6 +12,8 @@ type Handlers struct {
 	Customer        *handler.CustomerHandler
 	ProductCategory *handler.ProductCategoryHandler
 	Product         *handler.ProductHandler
+	Order           *handler.OrderHandler
+	Report          *handler.ReportHandler
 }
 
 func Setup(e *echo.Echo, h *Handlers) {
@@ -65,4 +67,26 @@ func Setup(e *echo.Echo, h *Handlers) {
 	products.GET("/:id", h.Product.Get)
 	products.PUT("/:id", h.Product.Update)
 	products.DELETE("/:id", h.Product.Delete)
+
+	// Order routes
+	orders := v1.Group("/orders")
+	orders.POST("", h.Order.Create)
+	orders.GET("", h.Order.List)
+	orders.GET("/:id", h.Order.Get)
+	orders.PUT("/:id", h.Order.Update)
+	orders.POST("/:id/confirm", h.Order.Confirm)
+	orders.POST("/:id/payments", h.Order.AddPayment)
+	orders.POST("/:id/complete", h.Order.Complete)
+	orders.POST("/:id/cancel", h.Order.Cancel)
+	orders.POST("/:id/void", h.Order.Void)
+	orders.POST("/:id/refund", h.Order.RefundPayment)
+
+	// Report routes
+	reports := v1.Group("/reports")
+	reports.GET("/summary", h.Report.GetSummary)
+	reports.GET("/sales-trend", h.Report.GetSalesTrend)
+	reports.GET("/top-products", h.Report.GetTopProducts)
+	reports.GET("/category-revenue", h.Report.GetCategoryRevenue)
+	reports.GET("/payment-methods", h.Report.GetPaymentMethods)
+	reports.GET("/hourly-sales", h.Report.GetHourlySales)
 }
