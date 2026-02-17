@@ -57,6 +57,29 @@ test-integration:
 	@echo "Running integration tests..."
 	go test -v -race ./tests/integration/...
 
+test-integration-setup:
+	@echo "Starting test database..."
+	docker-compose -f docker-compose.test.yml up -d
+	@echo "Waiting for database to be ready..."
+	@sleep 3
+
+test-integration-teardown:
+	@echo "Stopping test database..."
+	docker-compose -f docker-compose.test.yml down -v
+
+test-integration-run: test-integration-setup
+	@echo "Running integration tests..."
+	go test -v -race ./tests/integration/... || (make test-integration-teardown && exit 1)
+	@make test-integration-teardown
+
+test-integration-verbose:
+	@echo "Running integration tests with verbose output..."
+	go test -v -race -count=1 ./tests/integration/...
+
+test-integration-filter:
+	@echo "Running filtered integration tests..."
+	go test -v -race -run $(filter) ./tests/integration/...
+
 test-coverage:
 	@echo "Running tests with coverage..."
 	go test -v -race -coverprofile=coverage.out ./...
@@ -112,10 +135,14 @@ help:
 	@echo "  make migrate-create name=xxx  Create new migration"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test               Run all tests"
-	@echo "  make test-unit          Run unit tests only"
-	@echo "  make test-integration   Run integration tests only"
-	@echo "  make test-coverage      Generate coverage report"
+	@echo "  make test                     Run all tests"
+	@echo "  make test-unit               Run unit tests only"
+	@echo "  make test-integration        Run integration tests (assumes DB running)"
+	@echo "  make test-integration-run    Start DB, run tests, stop DB"
+	@echo "  make test-integration-setup  Start test database container"
+	@echo "  make test-integration-teardown  Stop test database container"
+	@echo "  make test-integration-filter filter=TestName  Run specific tests"
+	@echo "  make test-coverage           Generate coverage report"
 	@echo ""
 	@echo "Mocks:"
 	@echo "  make mocks              Generate mocks (requires mockery)"

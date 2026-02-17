@@ -1,0 +1,17 @@
+# docker-compose.test.yml - Integration test services
+services:
+  postgres-test:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: pos_test_user
+      POSTGRES_PASSWORD: pos_test_password
+      POSTGRES_DB: pos_test_db
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pos_test_user -d pos_test_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /var/lib/postgresql/data
