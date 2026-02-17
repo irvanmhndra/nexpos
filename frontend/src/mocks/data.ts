@@ -127,15 +127,18 @@ export function generateCustomer(overrides?: Partial<Customer>): Customer {
 
 // Generate mock branch
 export function generateBranch(overrides?: Partial<Branch>): Branch {
+  const regions = ['DKI Jakarta', 'Jawa Barat', 'Jawa Timur', 'Sumatera Utara', 'Bali'];
+  const region = faker.helpers.arrayElement(regions);
   return {
     id: faker.string.uuid(),
     name: `Cabang ${faker.location.city()}`,
     code: faker.string.alphanumeric(3).toUpperCase(),
     address: faker.location.streetAddress(),
     city: faker.location.city(),
+    region,
     phone: `+62 21 ${faker.string.numeric(4)} ${faker.string.numeric(4)}`,
     manager: faker.person.fullName(),
-    status: 'active',
+    status: faker.helpers.arrayElement(['active', 'active', 'active', 'inactive', 'maintenance']),
     createdAt: faker.date.past().toISOString(),
     ...overrides,
   };
@@ -256,6 +259,7 @@ export interface Branch {
   code: string;
   address: string;
   city: string;
+  region: string;
   phone: string;
   manager: string;
   status: string;
@@ -295,7 +299,20 @@ export const mockUsers = [
 export const mockProducts = Array.from({ length: 50 }, () => generateProduct());
 export const mockOrders = Array.from({ length: 100 }, () => generateOrder());
 export const mockCustomers = Array.from({ length: 200 }, () => generateCustomer());
-export const mockBranches = Array.from({ length: 5 }, () => generateBranch());
+export const mockBranches: Branch[] = [
+  generateBranch({ name: 'Cabang Pusat Jakarta', code: 'JKT-001', city: 'Jakarta Selatan', region: 'DKI Jakarta', address: 'Jl. Jendral Sudirman Kav. 52-53, SCBD', phone: '021-555-0192', status: 'active' }),
+  generateBranch({ name: 'Cabang Bandung Indah', code: 'BDG-004', city: 'Kota Bandung', region: 'Jawa Barat', address: 'Jl. Braga No. 99, Sumur Bandung', phone: '022-423-8888', status: 'active' }),
+  generateBranch({ name: 'Outlet Surabaya Timur', code: 'SBY-002', city: 'Surabaya', region: 'Jawa Timur', address: 'Jl. Kertajaya Indah No. 45', phone: '031-594-7721', status: 'inactive' }),
+  generateBranch({ name: 'Cabang Medan Fair', code: 'MDN-005', city: 'Medan', region: 'Sumatera Utara', address: 'Jl. Gatot Subroto No. 30', phone: '061-452-1109', status: 'maintenance' }),
+  generateBranch({ name: 'Cabang Bali Sanur', code: 'DPS-008', city: 'Sanur', region: 'Bali', address: 'Jl. Danau Tamblingan No. 12', phone: '0361-288-555', status: 'active' }),
+  generateBranch({ name: 'Cabang Jakarta Barat', code: 'JKT-003', city: 'Jakarta Barat', region: 'DKI Jakarta', address: 'Jl. Tanjung Duren Raya No. 7', phone: '021-566-1234', status: 'active' }),
+  generateBranch({ name: 'Cabang Bekasi Timur', code: 'BKS-006', city: 'Bekasi', region: 'Jawa Barat', address: 'Jl. Cut Meutia No. 55, Margahayu', phone: '021-880-2211', status: 'active' }),
+  generateBranch({ name: 'Cabang Yogyakarta', code: 'YGY-007', city: 'Yogyakarta', region: 'Jawa Timur', address: 'Jl. Malioboro No. 132', phone: '0274-587-890', status: 'inactive' }),
+  generateBranch({ name: 'Outlet Denpasar', code: 'DPS-009', city: 'Denpasar', region: 'Bali', address: 'Jl. Teuku Umar No. 88', phone: '0361-723-456', status: 'active' }),
+  generateBranch({ name: 'Cabang Semarang', code: 'SMG-010', city: 'Semarang', region: 'Jawa Timur', address: 'Jl. Pemuda No. 150', phone: '024-354-7788', status: 'active' }),
+  generateBranch({ name: 'Cabang Depok', code: 'DPK-011', city: 'Depok', region: 'Jawa Barat', address: 'Jl. Margonda Raya No. 204', phone: '021-776-5500', status: 'maintenance' }),
+  generateBranch({ name: 'Cabang Jakarta Utara', code: 'JKT-012', city: 'Jakarta Utara', region: 'DKI Jakarta', address: 'Jl. RE Martadinata No. 9', phone: '021-691-3300', status: 'active' }),
+];
 export const mockDashboardStats = generateDashboardStats();
 export const mockSalesTrend = generateSalesTrend();
 

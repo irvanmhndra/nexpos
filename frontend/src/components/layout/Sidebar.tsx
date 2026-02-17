@@ -15,6 +15,7 @@ const navItems: NavItem[] = [
   { label: 'Kategori', icon: 'category', path: '/categories' },
   { label: 'Pesanan', icon: 'shopping_cart', path: '/orders' },
   { label: 'Pelanggan', icon: 'group', path: '/customers' },
+  { label: 'Cabang', icon: 'store', path: '/branches' },
   { label: 'Laporan', icon: 'description', path: '/reports' },
   { label: 'Pengaturan', icon: 'settings', path: '/settings' },
 ];

@@ -282,20 +282,85 @@ export const handlers = [
   }),
 
   // Branches endpoints
-  http.get(`${API_BASE_URL}/branches`, () => {
-    return HttpResponse.json(mockBranches);
+  http.get(`${API_BASE_URL}/branches`, ({ request }) => {
+    const url = new URL(request.url);
+    const search = url.searchParams.get('search') || '';
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const perPage = parseInt(url.searchParams.get('per_page') || '10');
+    const status = url.searchParams.get('status');
+    const region = url.searchParams.get('region');
+
+    let filtered = [...mockBranches];
+
+    if (search) {
+      filtered = filtered.filter(
+        b =>
+          b.name.toLowerCase().includes(search.toLowerCase()) ||
+          b.address.toLowerCase().includes(search.toLowerCase()) ||
+          b.phone.includes(search)
+      );
+    }
+
+    if (status) {
+      filtered = filtered.filter(b => b.status === status);
+    }
+
+    if (region) {
+      filtered = filtered.filter(b => b.region === region);
+    }
+
+    const start = (page - 1) * perPage;
+    const paginated = filtered.slice(start, start + perPage);
+
+    return HttpResponse.json({
+      data: paginated,
+      total: filtered.length,
+      page,
+      limit: perPage,
+      totalPages: Math.ceil(filtered.length / perPage),
+    });
   }),
 
   http.get(`${API_BASE_URL}/branches/:id`, ({ params }) => {
     const branch = mockBranches.find(b => b.id === params.id);
-
-    if (!branch) {
-      return HttpResponse.json({ error: 'Branch not found' }, { status: 404 });
-    }
-
+    if (!branch) return HttpResponse.json({ error: 'Branch not found' }, { status: 404 });
     return HttpResponse.json(branch);
+  }),
+
+  http.post(`${API_BASE_URL}/branches`, async ({ request }) => {
+    const body = await request.json() as Partial<Branch>;
+    const cityCode = (body.city || 'BR').slice(0, 3).toUpperCase();
+    const newBranch: Branch = {
+      id: crypto.randomUUID(),
+      name: body.name || '',
+      code: `${cityCode}-${String(Math.floor(Math.random() * 900) + 100)}`,
+      address: body.address || '',
+      city: body.city || '',
+      region: body.region || '',
+      phone: body.phone || '',
+      manager: body.manager || '',
+      status: (body.status as Branch['status']) || 'active',
+      createdAt: new Date().toISOString(),
+    };
+    mockBranches.push(newBranch);
+    return HttpResponse.json(newBranch, { status: 201 });
+  }),
+
+  http.put(`${API_BASE_URL}/branches/:id`, async ({ params, request }) => {
+    const body = await request.json() as Partial<Branch>;
+    const index = mockBranches.findIndex(b => b.id === params.id);
+    if (index === -1) return HttpResponse.json({ error: 'Branch not found' }, { status: 404 });
+    mockBranches[index] = { ...mockBranches[index], ...body };
+    return HttpResponse.json(mockBranches[index]);
+  }),
+
+  http.delete(`${API_BASE_URL}/branches/:id`, ({ params }) => {
+    const index = mockBranches.findIndex(b => b.id === params.id);
+    if (index === -1) return HttpResponse.json({ error: 'Branch not found' }, { status: 404 });
+    mockBranches.splice(index, 1);
+    return HttpResponse.json({ message: 'Branch deleted successfully' });
   }),
 ];
 
 // Import types from data
-import type { Product, Order, User } from './data';
+import type { Product, Order, User, Branch } from './data';

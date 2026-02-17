@@ -6,6 +6,7 @@ import { ProductFormPage } from './pages/products/ProductFormPage';
 import { ProductCategoriesPage } from './pages/categories/ProductCategoriesPage';
 import { OrdersPage } from './pages/orders/OrdersPage';
 import { CustomersPage } from './pages/customers/CustomersPage';
+import { BranchesPage } from './pages/branches/BranchesPage';
 import { ReportsPage } from './pages/reports/ReportsPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { LoginPage } from './pages/auth/LoginPage';
@@ -63,6 +64,10 @@ export const router = createBrowserRouter([
       {
         path: '/customers',
         element: <CustomersPage />,
+      },
+      {
+        path: '/branches',
+        element: <BranchesPage />,
       },
       {
         path: '/reports',
