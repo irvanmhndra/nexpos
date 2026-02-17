@@ -19,6 +19,11 @@ type Repositories struct {
 	ProductCategory repository.ProductCategoryRepository
 	Product         repository.ProductRepository
 	ProductVariant  repository.ProductVariantRepository
+	Order           repository.OrderRepository
+	OrderItem       repository.OrderItemRepository
+	Payment         repository.PaymentRepository
+	Report          repository.ReportRepository
+	CompanySettings repository.CompanySettingsRepository
 }
 
 func initRepositories(db *sqlx.DB) *Repositories {
@@ -35,5 +40,10 @@ func initRepositories(db *sqlx.DB) *Repositories {
 		ProductCategory: postgres.NewProductCategoryRepository(db),
 		Product:         postgres.NewProductRepository(db),
 		ProductVariant:  postgres.NewProductVariantRepository(db),
+		Order:           postgres.NewOrderRepository(db),
+		OrderItem:       postgres.NewOrderItemRepository(db),
+		Payment:         postgres.NewPaymentRepository(db),
+		Report:          postgres.NewReportRepository(db),
+		CompanySettings: postgres.NewCompanySettingsRepository(db),
 	}
 }

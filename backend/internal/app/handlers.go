@@ -13,6 +13,8 @@ type Handlers struct {
 	Customer        *handler.CustomerHandler
 	ProductCategory *handler.ProductCategoryHandler
 	Product         *handler.ProductHandler
+	Order           *handler.OrderHandler
+	Report          *handler.ReportHandler
 }
 
 func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator) *Handlers {
@@ -23,5 +25,7 @@ func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator)
 		Customer:        handler.NewCustomerHandler(services.Customer, v),
 		ProductCategory: handler.NewProductCategoryHandler(services.ProductCategory, v),
 		Product:         handler.NewProductHandler(services.Product, v),
+		Order:           handler.NewOrderHandler(services.Order, v),
+		Report:          handler.NewReportHandler(services.Report, v),
 	}
 }

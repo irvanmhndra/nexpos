@@ -11,6 +11,8 @@ type Services struct {
 	Customer        *service.CustomerService
 	ProductCategory *service.ProductCategoryService
 	Product         *service.ProductService
+	Order           *service.OrderService
+	Report          *service.ReportService
 }
 
 func initServices(repos *Repositories, cfg *config.Config) *Services {
@@ -28,5 +30,15 @@ func initServices(repos *Repositories, cfg *config.Config) *Services {
 		Customer:        service.NewCustomerService(repos.Customer),
 		ProductCategory: service.NewProductCategoryService(repos.ProductCategory),
 		Product:         service.NewProductService(repos.Product, repos.ProductVariant, repos.ProductCategory),
+		Order: service.NewOrderService(
+			repos.Order,
+			repos.OrderItem,
+			repos.Payment,
+			repos.ProductVariant,
+			repos.Customer,
+			repos.User,
+			repos.CompanySettings,
+		),
+		Report: service.NewReportService(repos.Report),
 	}
 }

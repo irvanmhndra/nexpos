@@ -59,6 +59,9 @@ func New(cfg *config.Config) (*App, error) {
 	}))
 	e.Use(middleware.RequestID())
 
+	// Custom HTTP error handler for consistent error responses
+	e.HTTPErrorHandler = customHTTPErrorHandler
+
 	// Setup routes
 	router.Setup(e, &router.Handlers{
 		Health:          handlers.Health,
@@ -67,6 +70,8 @@ func New(cfg *config.Config) (*App, error) {
 		Customer:        handlers.Customer,
 		ProductCategory: handlers.ProductCategory,
 		Product:         handlers.Product,
+		Order:           handlers.Order,
+		Report:          handlers.Report,
 	})
 
 	return &App{
@@ -113,5 +118,43 @@ func (a *App) Run() {
 func (a *App) Close() {
 	if a.db != nil {
 		a.db.Close()
+	}
+}
+
+// Echo returns the Echo instance for testing
+func (a *App) Echo() *echo.Echo {
+	return a.echo
+}
+
+// DB returns the database connection for testing
+func (a *App) DB() *sqlx.DB {
+	return a.db
+}
+
+// customHTTPErrorHandler provides consistent error response format
+func customHTTPErrorHandler(c *echo.Context, err error) {
+	code := http.StatusInternalServerError
+	message := "internal server error"
+
+	if he, ok := err.(*echo.HTTPError); ok {
+		code = he.Code
+		message = he.Error()
+	} else if err != nil {
+		message = err.Error()
+	}
+
+	response := map[string]interface{}{
+		"success":    false,
+		"message":    message,
+		"error_code": http.StatusText(code),
+		"meta": map[string]interface{}{
+			"server_time": time.Now().UTC().Format(time.RFC3339),
+		},
+	}
+
+	if (*c).Request().Method == http.MethodHead {
+		(*c).NoContent(code)
+	} else {
+		(*c).JSON(code, response)
 	}
 }
