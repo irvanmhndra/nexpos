@@ -110,3 +110,106 @@ type ProductVariantRepository interface {
 	DeleteByProductID(ctx context.Context, productID int64) error
 	SKUExists(ctx context.Context, sku string, excludeID int64) (bool, error)
 }
+
+type OrderRepository interface {
+	Create(ctx context.Context, order *model.Order) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.Order, error)
+	GetByOrderNo(ctx context.Context, companyID int64, orderNo string) (*model.Order, error)
+	GetByOfflineID(ctx context.Context, companyID int64, offlineID string) (*model.Order, error)
+	List(ctx context.Context, companyID int64, params *OrderListParams) ([]*model.Order, int, error)
+	Update(ctx context.Context, order *model.Order) error
+	Delete(ctx context.Context, companyID, id int64) error
+	GenerateOrderNo(ctx context.Context, companyID, branchID int64) (string, error)
+}
+
+// OrderListParams for advanced filtering
+type OrderListParams struct {
+	Search            string
+	Status            *string
+	PaymentStatus     *string
+	FulfillmentType   *string
+	FulfillmentStatus *string
+	CustomerID        *int64
+	DateFrom          *string
+	DateTo            *string
+	Limit             int
+	Offset            int
+}
+
+type OrderItemRepository interface {
+	Create(ctx context.Context, item *model.OrderItem) error
+	GetByOrderID(ctx context.Context, orderID int64) ([]*model.OrderItem, error)
+	DeleteByOrderID(ctx context.Context, orderID int64) error
+}
+
+type PaymentRepository interface {
+	Create(ctx context.Context, payment *model.Payment) error
+	GetByID(ctx context.Context, id int64) (*model.Payment, error)
+	GetByOrderID(ctx context.Context, orderID int64) ([]*model.Payment, error)
+	Update(ctx context.Context, payment *model.Payment) error
+	DeleteByOrderID(ctx context.Context, orderID int64) error
+	GetTotalPaidByOrderID(ctx context.Context, orderID int64) (float64, error)
+	GetTotalRefundedByOrderID(ctx context.Context, orderID int64) (float64, error)
+}
+
+type CompanySettingsRepository interface {
+	GetByCompanyID(ctx context.Context, companyID int64) (*model.CompanySettings, error)
+	Upsert(ctx context.Context, settings *model.CompanySettings) error
+}
+
+type ReportRepository interface {
+	GetSummary(ctx context.Context, companyID int64, dateFrom, dateTo string) (*ReportSummary, error)
+	GetSalesTrend(ctx context.Context, companyID int64, dateFrom, dateTo string) ([]*SalesTrendItem, error)
+	GetTopProducts(ctx context.Context, companyID int64, dateFrom, dateTo string, limit int) ([]*TopProductItem, error)
+	GetCategoryRevenue(ctx context.Context, companyID int64, dateFrom, dateTo string) ([]*CategoryRevenueItem, error)
+	GetPaymentMethods(ctx context.Context, companyID int64, dateFrom, dateTo string) ([]*PaymentMethodItem, error)
+	GetHourlySales(ctx context.Context, companyID int64, dateFrom, dateTo string) ([]*HourlySalesItem, error)
+	GetNewCustomersCount(ctx context.Context, companyID int64, dateFrom, dateTo string) (int, error)
+}
+
+// Report data structures
+type ReportSummary struct {
+	TotalRevenue    float64
+	TotalOrders     int
+	TotalItemsSold  int
+	TotalCustomers  int
+	CompletedOrders int
+	CancelledOrders int
+	PendingOrders   int
+	TotalDiscount   float64
+	TotalTax        float64
+	TotalCOGS       float64
+}
+
+type SalesTrendItem struct {
+	Date   string
+	Sales  float64
+	Orders int
+	Items  int
+}
+
+type TopProductItem struct {
+	ProductID   int64
+	ProductName string
+	TotalSold   int
+	TotalAmount float64
+}
+
+type CategoryRevenueItem struct {
+	CategoryID   int64
+	CategoryName string
+	TotalAmount  float64
+	OrderCount   int
+}
+
+type PaymentMethodItem struct {
+	Method      string
+	TotalAmount float64
+	Count       int
+}
+
+type HourlySalesItem struct {
+	Hour        int
+	TotalAmount float64
+	OrderCount  int
+}
