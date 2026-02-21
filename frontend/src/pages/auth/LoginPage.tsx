@@ -6,8 +6,8 @@ import { useAuth } from '@/contexts/AuthContext';
 export function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [email, setEmail] = useState('admin@aplikabizz.com');
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -21,7 +21,7 @@ export function LoginPage() {
       await login(email, password);
       navigate('/');
     } catch (err) {
-      setError('Email atau password salah. Coba gunakan: admin@aplikabizz.com / password');
+      setError('Email atau password salah. Silakan periksa kembali kredensial Anda.');
     } finally {
       setIsLoading(false);
     }

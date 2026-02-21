@@ -5,6 +5,7 @@ import {
   mockOrders,
   mockCustomers,
   mockBranches,
+  mockPromotions,
   mockDashboardStats,
   mockSalesTrend,
 } from './data';
@@ -287,80 +288,205 @@ export const handlers = [
     const search = url.searchParams.get('search') || '';
     const page = parseInt(url.searchParams.get('page') || '1');
     const perPage = parseInt(url.searchParams.get('per_page') || '10');
-    const status = url.searchParams.get('status');
-    const region = url.searchParams.get('region');
+    const isActiveParam = url.searchParams.get('is_active');
 
     let filtered = [...mockBranches];
 
     if (search) {
+      const q = search.toLowerCase();
       filtered = filtered.filter(
         b =>
-          b.name.toLowerCase().includes(search.toLowerCase()) ||
-          b.address.toLowerCase().includes(search.toLowerCase()) ||
-          b.phone.includes(search)
+          b.name.toLowerCase().includes(q) ||
+          b.code.toLowerCase().includes(q) ||
+          (b.address || '').toLowerCase().includes(q) ||
+          (b.phone || '').includes(q)
       );
     }
 
-    if (status) {
-      filtered = filtered.filter(b => b.status === status);
+    if (isActiveParam !== null) {
+      const isActive = isActiveParam === 'true';
+      filtered = filtered.filter(b => b.is_active === isActive);
     }
 
-    if (region) {
-      filtered = filtered.filter(b => b.region === region);
-    }
-
+    const totalRecords = filtered.length;
+    const totalPages = Math.ceil(totalRecords / perPage) || 1;
     const start = (page - 1) * perPage;
     const paginated = filtered.slice(start, start + perPage);
 
     return HttpResponse.json({
+      success: true,
+      message: 'Branch list retrieved',
       data: paginated,
-      total: filtered.length,
-      page,
-      limit: perPage,
-      totalPages: Math.ceil(filtered.length / perPage),
+      meta: {
+        pagination: {
+          total_records: totalRecords,
+          total_pages: totalPages,
+          current_page: page,
+          per_page: perPage,
+          next_page: page < totalPages ? page + 1 : null,
+          prev_page: page > 1 ? page - 1 : null,
+        },
+        server_time: new Date().toISOString(),
+      },
     });
   }),
 
   http.get(`${API_BASE_URL}/branches/:id`, ({ params }) => {
-    const branch = mockBranches.find(b => b.id === params.id);
-    if (!branch) return HttpResponse.json({ error: 'Branch not found' }, { status: 404 });
-    return HttpResponse.json(branch);
+    const id = parseInt(params.id as string);
+    const branch = mockBranches.find(b => b.id === id);
+    if (!branch) {
+      return HttpResponse.json({ success: false, message: 'Branch not found', error_code: 'NOT_FOUND' }, { status: 404 });
+    }
+    return HttpResponse.json({ success: true, message: 'Branch retrieved successfully', data: branch });
   }),
 
   http.post(`${API_BASE_URL}/branches`, async ({ request }) => {
     const body = await request.json() as Partial<Branch>;
-    const cityCode = (body.city || 'BR').slice(0, 3).toUpperCase();
+    const nextId = mockBranches.length > 0 ? Math.max(...mockBranches.map(b => b.id)) + 1 : 1;
+    const now = new Date().toISOString();
     const newBranch: Branch = {
-      id: crypto.randomUUID(),
+      id: nextId,
+      code: body.code || `BR-${String(nextId).padStart(3, '0')}`,
       name: body.name || '',
-      code: `${cityCode}-${String(Math.floor(Math.random() * 900) + 100)}`,
-      address: body.address || '',
-      city: body.city || '',
-      region: body.region || '',
-      phone: body.phone || '',
-      manager: body.manager || '',
-      status: (body.status as Branch['status']) || 'active',
-      createdAt: new Date().toISOString(),
+      address: body.address ?? null,
+      phone: body.phone ?? null,
+      is_active: body.is_active !== undefined ? body.is_active : true,
+      created_at: now,
+      updated_at: now,
     };
     mockBranches.push(newBranch);
-    return HttpResponse.json(newBranch, { status: 201 });
+    return HttpResponse.json({ success: true, message: 'Branch created successfully', data: newBranch }, { status: 201 });
   }),
 
   http.put(`${API_BASE_URL}/branches/:id`, async ({ params, request }) => {
+    const id = parseInt(params.id as string);
     const body = await request.json() as Partial<Branch>;
-    const index = mockBranches.findIndex(b => b.id === params.id);
-    if (index === -1) return HttpResponse.json({ error: 'Branch not found' }, { status: 404 });
-    mockBranches[index] = { ...mockBranches[index], ...body };
-    return HttpResponse.json(mockBranches[index]);
+    const index = mockBranches.findIndex(b => b.id === id);
+    if (index === -1) {
+      return HttpResponse.json({ success: false, message: 'Branch not found', error_code: 'NOT_FOUND' }, { status: 404 });
+    }
+    mockBranches[index] = { ...mockBranches[index], ...body, id, updated_at: new Date().toISOString() };
+    return HttpResponse.json({ success: true, message: 'Branch updated successfully', data: mockBranches[index] });
   }),
 
   http.delete(`${API_BASE_URL}/branches/:id`, ({ params }) => {
-    const index = mockBranches.findIndex(b => b.id === params.id);
-    if (index === -1) return HttpResponse.json({ error: 'Branch not found' }, { status: 404 });
+    const id = parseInt(params.id as string);
+    const index = mockBranches.findIndex(b => b.id === id);
+    if (index === -1) {
+      return HttpResponse.json({ success: false, message: 'Branch not found', error_code: 'NOT_FOUND' }, { status: 404 });
+    }
     mockBranches.splice(index, 1);
-    return HttpResponse.json({ message: 'Branch deleted successfully' });
+    return HttpResponse.json({ success: true, message: 'Branch deleted successfully', data: null });
+  }),
+
+  // Promotions endpoints
+  http.get(`${API_BASE_URL}/promotions`, ({ request }) => {
+    const url = new URL(request.url);
+    const search = url.searchParams.get('search') || '';
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const perPage = parseInt(url.searchParams.get('per_page') || '10');
+    const isActiveParam = url.searchParams.get('is_active');
+    const typeParam = url.searchParams.get('type');
+
+    let filtered = [...mockPromotions];
+
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(
+        p =>
+          p.name.toLowerCase().includes(q) ||
+          p.code.toLowerCase().includes(q) ||
+          (p.description || '').toLowerCase().includes(q)
+      );
+    }
+
+    if (isActiveParam !== null) {
+      const isActive = isActiveParam === 'true';
+      filtered = filtered.filter(p => p.is_active === isActive);
+    }
+
+    if (typeParam) {
+      filtered = filtered.filter(p => p.type === typeParam);
+    }
+
+    const totalRecords = filtered.length;
+    const totalPages = Math.ceil(totalRecords / perPage) || 1;
+    const start = (page - 1) * perPage;
+    const paginated = filtered.slice(start, start + perPage);
+
+    return HttpResponse.json({
+      success: true,
+      message: 'Promotion list retrieved',
+      data: paginated,
+      meta: {
+        pagination: {
+          total_records: totalRecords,
+          total_pages: totalPages,
+          current_page: page,
+          per_page: perPage,
+          next_page: page < totalPages ? page + 1 : null,
+          prev_page: page > 1 ? page - 1 : null,
+        },
+        server_time: new Date().toISOString(),
+      },
+    });
+  }),
+
+  http.get(`${API_BASE_URL}/promotions/:id`, ({ params }) => {
+    const id = parseInt(params.id as string);
+    const promo = mockPromotions.find(p => p.id === id);
+    if (!promo) {
+      return HttpResponse.json({ success: false, message: 'Promotion not found', error_code: 'NOT_FOUND' }, { status: 404 });
+    }
+    return HttpResponse.json({ success: true, message: 'Promotion retrieved successfully', data: promo });
+  }),
+
+  http.post(`${API_BASE_URL}/promotions`, async ({ request }) => {
+    const body = await request.json() as Partial<Promotion>;
+    const nextId = mockPromotions.length > 0 ? Math.max(...mockPromotions.map(p => p.id)) + 1 : 1;
+    const now = new Date().toISOString();
+    const newPromo: Promotion = {
+      id: nextId,
+      code: body.code || `PROMO${nextId}`,
+      name: body.name || '',
+      description: body.description ?? null,
+      type: body.type || 'discount',
+      discount_type: body.discount_type ?? null,
+      discount_value: body.discount_value ?? null,
+      min_purchase: body.min_purchase ?? null,
+      max_discount: body.max_discount ?? null,
+      start_at: body.start_at || now,
+      end_at: body.end_at ?? null,
+      priority: body.priority ?? 0,
+      is_active: body.is_active !== undefined ? body.is_active : true,
+      created_at: now,
+      updated_at: now,
+    };
+    mockPromotions.push(newPromo);
+    return HttpResponse.json({ success: true, message: 'Promotion created successfully', data: newPromo }, { status: 201 });
+  }),
+
+  http.put(`${API_BASE_URL}/promotions/:id`, async ({ params, request }) => {
+    const id = parseInt(params.id as string);
+    const body = await request.json() as Partial<Promotion>;
+    const index = mockPromotions.findIndex(p => p.id === id);
+    if (index === -1) {
+      return HttpResponse.json({ success: false, message: 'Promotion not found', error_code: 'NOT_FOUND' }, { status: 404 });
+    }
+    mockPromotions[index] = { ...mockPromotions[index], ...body, id, updated_at: new Date().toISOString() };
+    return HttpResponse.json({ success: true, message: 'Promotion updated successfully', data: mockPromotions[index] });
+  }),
+
+  http.delete(`${API_BASE_URL}/promotions/:id`, ({ params }) => {
+    const id = parseInt(params.id as string);
+    const index = mockPromotions.findIndex(p => p.id === id);
+    if (index === -1) {
+      return HttpResponse.json({ success: false, message: 'Promotion not found', error_code: 'NOT_FOUND' }, { status: 404 });
+    }
+    mockPromotions.splice(index, 1);
+    return HttpResponse.json({ success: true, message: 'Promotion deleted successfully', data: null });
   }),
 ];
 
 // Import types from data
-import type { Product, Order, User, Branch } from './data';
+import type { Product, Order, User, Branch, Promotion } from './data';

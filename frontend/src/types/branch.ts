@@ -1,26 +1,20 @@
-export type BranchStatus = 'active' | 'inactive' | 'maintenance';
-
 export interface Branch {
-  id: string;
-  name: string;
+  id: number;
   code: string;
-  address: string;
-  city: string;
-  region: string;
-  phone: string;
-  manager: string;
-  status: BranchStatus;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  is_active: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 export interface CreateBranchRequest {
+  code: string;
   name: string;
-  address: string;
-  city: string;
-  region: string;
-  phone: string;
-  manager?: string;
-  status: BranchStatus;
+  address?: string | null;
+  phone?: string | null;
+  is_active: boolean;
 }
 
-export type UpdateBranchRequest = Partial<CreateBranchRequest>;
+export type UpdateBranchRequest = CreateBranchRequest;

@@ -7,6 +7,7 @@ import { ProductCategoriesPage } from './pages/categories/ProductCategoriesPage'
 import { OrdersPage } from './pages/orders/OrdersPage';
 import { CustomersPage } from './pages/customers/CustomersPage';
 import { BranchesPage } from './pages/branches/BranchesPage';
+import { PromotionsPage } from './pages/promotions/PromotionsPage';
 import { ReportsPage } from './pages/reports/ReportsPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { LoginPage } from './pages/auth/LoginPage';
@@ -68,6 +69,10 @@ export const router = createBrowserRouter([
       {
         path: '/branches',
         element: <BranchesPage />,
+      },
+      {
+        path: '/promotions',
+        element: <PromotionsPage />,
       },
       {
         path: '/reports',

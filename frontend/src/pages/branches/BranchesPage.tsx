@@ -2,15 +2,9 @@ import { useState } from 'react';
 import { Button, Icon, Input, Badge } from '@/components/ui';
 import { DeleteConfirmModal } from '@/components/common';
 import { useBranches, useCreateBranch, useUpdateBranch, useDeleteBranch } from '@/hooks/useBranches';
-import type { Branch, BranchStatus, CreateBranchRequest } from '@/types/branch';
+import type { Branch, CreateBranchRequest } from '@/types/branch';
 
 // ─── Status helpers ─────────────────────────────────────────────────────────
-
-const STATUS_CONFIG: Record<BranchStatus, { label: string; variant: 'success' | 'default' | 'warning' }> = {
-  active: { label: 'Aktif', variant: 'success' },
-  inactive: { label: 'Non-Aktif', variant: 'default' },
-  maintenance: { label: 'Renovasi', variant: 'warning' },
-};
 
 const ICON_COLORS = [
   'bg-blue-100 dark:bg-blue-900/30 text-primary',
@@ -20,34 +14,27 @@ const ICON_COLORS = [
   'bg-pink-100 dark:bg-pink-900/30 text-pink-600',
 ];
 
-function getBranchIconColor(id: string) {
-  const sum = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return ICON_COLORS[sum % ICON_COLORS.length];
+function getBranchIconColor(id: number) {
+  return ICON_COLORS[id % ICON_COLORS.length];
 }
 
 // ─── Form types ──────────────────────────────────────────────────────────────
 
 interface BranchFormData {
+  code: string;
   name: string;
   address: string;
-  city: string;
-  region: string;
   phone: string;
-  manager: string;
-  status: BranchStatus;
+  is_active: boolean;
 }
 
 const EMPTY_FORM: BranchFormData = {
+  code: '',
   name: '',
   address: '',
-  city: '',
-  region: '',
   phone: '',
-  manager: '',
-  status: 'active',
+  is_active: true,
 };
-
-const REGIONS = ['DKI Jakarta', 'Jawa Barat', 'Jawa Timur', 'Sumatera Utara', 'Bali'];
 
 // ─── Branch Form Modal ───────────────────────────────────────────────────────
 
@@ -67,13 +54,11 @@ function BranchFormModal({
   const [form, setForm] = useState<BranchFormData>(
     initialData
       ? {
+          code: initialData.code,
           name: initialData.name,
-          address: initialData.address,
-          city: initialData.city,
-          region: initialData.region,
-          phone: initialData.phone,
-          manager: initialData.manager,
-          status: initialData.status,
+          address: initialData.address ?? '',
+          phone: initialData.phone ?? '',
+          is_active: initialData.is_active,
         }
       : EMPTY_FORM
   );
@@ -82,12 +67,19 @@ function BranchFormModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(form);
+    onSubmit({
+      code: form.code,
+      name: form.name,
+      address: form.address || null,
+      phone: form.phone || null,
+      is_active: form.is_active,
+    });
   };
 
-  const set = (key: keyof BranchFormData) => (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) => setForm(prev => ({ ...prev, [key]: e.target.value }));
+  const set =
+    (key: keyof Omit<BranchFormData, 'is_active'>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm(prev => ({ ...prev, [key]: e.target.value }));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -109,98 +101,72 @@ function BranchFormModal({
         {/* Form */}
         <form onSubmit={handleSubmit}>
           <div className="px-6 py-5 space-y-4">
-            <Input
-              label="Nama Cabang"
-              placeholder="Contoh: Cabang Pusat Jakarta"
-              value={form.name}
-              onChange={set('name')}
-              required
-              fullWidth
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Kode Cabang"
+                placeholder="Contoh: JKT-001"
+                value={form.code}
+                onChange={set('code')}
+                required
+                fullWidth
+              />
+              <Input
+                label="Nama Cabang"
+                placeholder="Contoh: Cabang Jakarta Selatan"
+                value={form.name}
+                onChange={set('name')}
+                required
+                fullWidth
+              />
+            </div>
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-bold text-text-main dark:text-gray-200">
-                Alamat Lengkap
+                Alamat <span className="font-normal text-text-sub">(Opsional)</span>
               </label>
               <textarea
                 value={form.address}
                 onChange={set('address')}
                 placeholder="Alamat lengkap cabang..."
                 rows={3}
-                required
                 className="w-full rounded-lg border border-border-light dark:border-gray-600 bg-white dark:bg-card-dark text-text-main dark:text-white focus:border-primary focus:ring-1 focus:ring-primary p-3 text-sm placeholder:text-text-sub dark:placeholder:text-gray-500 resize-none"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Kota"
-                placeholder="Contoh: Jakarta Selatan"
-                value={form.city}
-                onChange={set('city')}
-                required
-                fullWidth
-              />
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-bold text-text-main dark:text-gray-200">
-                  Wilayah / Provinsi
-                </label>
-                <div className="relative">
-                  <select
-                    value={form.region}
-                    onChange={set('region')}
-                    required
-                    className="w-full h-11 pl-4 pr-10 rounded-lg border border-border-light dark:border-gray-600 bg-white dark:bg-card-dark text-text-main dark:text-white focus:border-primary focus:ring-1 focus:ring-primary appearance-none text-sm"
-                  >
-                    <option value="">Pilih Wilayah</option>
-                    {REGIONS.map(r => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-                  <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-text-sub pointer-events-none text-[18px]">
-                    expand_more
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Nomor Telepon"
-                placeholder="021-xxxxxxx"
-                value={form.phone}
-                onChange={set('phone')}
-                required
-                fullWidth
-              />
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-bold text-text-main dark:text-gray-200">
-                  Status
-                </label>
-                <div className="relative">
-                  <select
-                    value={form.status}
-                    onChange={set('status')}
-                    className="w-full h-11 pl-4 pr-10 rounded-lg border border-border-light dark:border-gray-600 bg-white dark:bg-card-dark text-text-main dark:text-white focus:border-primary focus:ring-1 focus:ring-primary appearance-none text-sm"
-                  >
-                    <option value="active">Aktif</option>
-                    <option value="inactive">Non-Aktif</option>
-                    <option value="maintenance">Renovasi</option>
-                  </select>
-                  <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-text-sub pointer-events-none text-[18px]">
-                    expand_more
-                  </span>
-                </div>
-              </div>
-            </div>
-
             <Input
-              label="Manajer Cabang (Opsional)"
-              placeholder="Nama penanggung jawab cabang"
-              value={form.manager}
-              onChange={set('manager')}
+              label="Nomor Telepon (Opsional)"
+              placeholder="021-xxxxxxx"
+              value={form.phone}
+              onChange={set('phone')}
               fullWidth
             />
+
+            {/* Status toggle */}
+            <div className="flex items-center justify-between p-3 rounded-lg border border-border-light dark:border-gray-600 bg-gray-50 dark:bg-background-dark">
+              <div>
+                <p className="text-sm font-semibold text-text-main dark:text-white">
+                  Status Cabang
+                </p>
+                <p className="text-xs text-text-sub dark:text-gray-400">
+                  {form.is_active ? 'Cabang aktif dan beroperasi' : 'Cabang tidak aktif'}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.is_active}
+                onClick={() => setForm(prev => ({ ...prev, is_active: !prev.is_active }))}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                  form.is_active ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block size-5 transform rounded-full bg-white shadow transition duration-200 ${
+                    form.is_active ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
 
           {/* Footer */}
@@ -224,21 +190,19 @@ export function BranchesPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [regionFilter, setRegionFilter] = useState('');
+  const [activeFilter, setActiveFilter] = useState('');
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [deletingBranch, setDeletingBranch] = useState<Branch | null>(null);
 
-  const PER_PAGE = 5;
+  const PER_PAGE = 10;
 
   const { data, isLoading } = useBranches({
     page,
     per_page: PER_PAGE,
     search: search || undefined,
-    status: statusFilter || undefined,
-    region: regionFilter || undefined,
+    is_active: activeFilter === '' ? undefined : activeFilter === 'true',
   });
 
   const createBranch = useCreateBranch();
@@ -254,13 +218,8 @@ export function BranchesPage() {
     setPage(1);
   };
 
-  const handleStatusFilter = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setStatusFilter(e.target.value);
-    setPage(1);
-  };
-
-  const handleRegionFilter = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setRegionFilter(e.target.value);
+  const handleActiveFilter = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setActiveFilter(e.target.value);
     setPage(1);
   };
 
@@ -285,7 +244,7 @@ export function BranchesPage() {
     setDeletingBranch(null);
   };
 
-  const startItem = (page - 1) * PER_PAGE + 1;
+  const startItem = total === 0 ? 0 : (page - 1) * PER_PAGE + 1;
   const endItem = Math.min(page * PER_PAGE, total);
 
   return (
@@ -327,10 +286,13 @@ export function BranchesPage() {
                   value={searchInput}
                   onChange={e => setSearchInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                  placeholder="Cari nama cabang, alamat, atau telepon..."
+                  placeholder="Cari nama, kode, alamat, atau telepon..."
                   className="w-full h-11 pl-10 pr-4 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-text-main dark:text-white placeholder:text-text-sub dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm"
                 />
               </div>
+              <Button onClick={handleSearch} variant="outline" className="shrink-0">
+                Cari
+              </Button>
             </div>
           </div>
 
@@ -341,36 +303,13 @@ export function BranchesPage() {
             </label>
             <div className="relative">
               <select
-                value={statusFilter}
-                onChange={handleStatusFilter}
+                value={activeFilter}
+                onChange={handleActiveFilter}
                 className="w-full h-11 pl-4 pr-10 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary appearance-none text-sm cursor-pointer"
               >
                 <option value="">Semua Status</option>
-                <option value="active">Aktif</option>
-                <option value="inactive">Non-Aktif</option>
-                <option value="maintenance">Renovasi</option>
-              </select>
-              <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-text-sub pointer-events-none text-[18px]">
-                expand_more
-              </span>
-            </div>
-          </div>
-
-          {/* Region Filter */}
-          <div className="flex flex-col w-full md:flex-1 gap-1.5">
-            <label className="text-sm font-semibold text-text-main dark:text-gray-200">
-              Wilayah
-            </label>
-            <div className="relative">
-              <select
-                value={regionFilter}
-                onChange={handleRegionFilter}
-                className="w-full h-11 pl-4 pr-10 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary appearance-none text-sm cursor-pointer"
-              >
-                <option value="">Semua Wilayah</option>
-                {REGIONS.map(r => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
+                <option value="true">Aktif</option>
+                <option value="false">Non-Aktif</option>
               </select>
               <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-text-sub pointer-events-none text-[18px]">
                 expand_more
@@ -405,7 +344,7 @@ export function BranchesPage() {
             </thead>
             <tbody className="divide-y divide-border-light dark:divide-border-dark">
               {isLoading ? (
-                Array.from({ length: PER_PAGE }).map((_, i) => (
+                Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
                     <td colSpan={5} className="p-4 pl-6">
                       <div className="h-10 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
@@ -423,7 +362,6 @@ export function BranchesPage() {
                 </tr>
               ) : (
                 branches.map(branch => {
-                  const statusCfg = STATUS_CONFIG[branch.status] ?? STATUS_CONFIG.inactive;
                   const iconColor = getBranchIconColor(branch.id);
                   return (
                     <tr
@@ -441,7 +379,7 @@ export function BranchesPage() {
                               {branch.name}
                             </p>
                             <p className="text-xs text-text-sub dark:text-gray-400">
-                              ID: {branch.code}
+                              {branch.code}
                             </p>
                           </div>
                         </div>
@@ -449,30 +387,33 @@ export function BranchesPage() {
 
                       {/* Address */}
                       <td className="p-4">
-                        <p
-                          className="text-sm text-text-main dark:text-gray-300 max-w-[260px] truncate"
-                          title={branch.address}
-                        >
-                          {branch.address}
-                        </p>
-                        {branch.region && (
-                          <p className="text-xs text-text-sub dark:text-gray-500 mt-0.5">
-                            {branch.city}, {branch.region}
+                        {branch.address ? (
+                          <p
+                            className="text-sm text-text-main dark:text-gray-300 max-w-[280px] truncate"
+                            title={branch.address}
+                          >
+                            {branch.address}
                           </p>
+                        ) : (
+                          <span className="text-xs text-text-sub dark:text-gray-500 italic">—</span>
                         )}
                       </td>
 
                       {/* Phone */}
                       <td className="p-4">
-                        <p className="text-sm text-text-main dark:text-gray-300 font-mono">
-                          {branch.phone}
-                        </p>
+                        {branch.phone ? (
+                          <p className="text-sm text-text-main dark:text-gray-300 font-mono">
+                            {branch.phone}
+                          </p>
+                        ) : (
+                          <span className="text-xs text-text-sub dark:text-gray-500 italic">—</span>
+                        )}
                       </td>
 
                       {/* Status */}
                       <td className="p-4">
-                        <Badge variant={statusCfg.variant} dot>
-                          {statusCfg.label}
+                        <Badge variant={branch.is_active ? 'success' : 'default'} dot>
+                          {branch.is_active ? 'Aktif' : 'Non-Aktif'}
                         </Badge>
                       </td>
 
@@ -521,7 +462,7 @@ export function BranchesPage() {
                 <span className="material-symbols-outlined text-[18px]">chevron_left</span>
               </button>
 
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => i + 1).map(p => (
                 <button
                   key={p}
                   onClick={() => setPage(p)}

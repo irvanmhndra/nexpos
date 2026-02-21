@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { Button, Icon, Input } from '@/components/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserManagement } from '@/components/features/settings/UserManagement';
+import { NotificationSettings } from '@/components/features/settings/NotificationSettings';
+import { IntegrationsSettings } from '@/components/features/settings/IntegrationsSettings';
+import { GeneralSettings } from '@/components/features/settings/GeneralSettings';
 
 type SettingsSection = 'user-profile' | 'company-profile' | 'users' | 'notifications' | 'integrations' | 'general';
 
@@ -341,17 +344,6 @@ export function SettingsPage() {
     </div>
   );
 
-  const renderPlaceholderSection = (title: string, description: string) => (
-    <div className="flex flex-col items-center justify-center gap-4 bg-white dark:bg-card-dark rounded-xl shadow-sm border border-border-light dark:border-border-dark p-12 min-h-[400px]">
-      <div className="size-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-        <Icon name="construction" size={32} className="text-text-sub" />
-      </div>
-      <h3 className="text-xl font-bold text-text-main dark:text-white">{title}</h3>
-      <p className="text-text-sub dark:text-gray-400 text-center max-w-md">
-        {description}
-      </p>
-    </div>
-  );
 
   const renderContent = () => {
     switch (activeSection) {
@@ -362,20 +354,11 @@ export function SettingsPage() {
       case 'users':
         return <UserManagement />;
       case 'notifications':
-        return renderPlaceholderSection(
-          'Notifikasi',
-          'Pengaturan notifikasi sedang dalam pengembangan. Anda akan dapat mengatur preferensi notifikasi email, push, dan in-app di sini.'
-        );
+        return <NotificationSettings />;
       case 'integrations':
-        return renderPlaceholderSection(
-          'Integrasi',
-          'Fitur integrasi sedang dalam pengembangan. Anda akan dapat menghubungkan aplikasi pihak ketiga seperti akuntansi, e-commerce, dan lainnya.'
-        );
+        return <IntegrationsSettings />;
       case 'general':
-        return renderPlaceholderSection(
-          'Pengaturan Umum',
-          'Pengaturan umum sedang dalam pengembangan. Anda akan dapat mengatur preferensi tampilan, bahasa, dan fitur aplikasi lainnya.'
-        );
+        return <GeneralSettings />;
       default:
         return renderUserProfile();
     }

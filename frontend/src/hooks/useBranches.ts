@@ -6,8 +6,7 @@ interface UseBranchesParams {
   page?: number;
   per_page?: number;
   search?: string;
-  status?: string;
-  region?: string;
+  is_active?: boolean;
 }
 
 export function useBranches(params: UseBranchesParams = {}) {
@@ -32,7 +31,7 @@ export function useUpdateBranch() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, branch }: { id: string; branch: UpdateBranchRequest }) =>
+    mutationFn: ({ id, branch }: { id: number; branch: UpdateBranchRequest }) =>
       branchesService.updateBranch(id, branch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branches'] });
@@ -44,7 +43,7 @@ export function useDeleteBranch() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => branchesService.deleteBranch(id),
+    mutationFn: (id: number) => branchesService.deleteBranch(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branches'] });
     },
