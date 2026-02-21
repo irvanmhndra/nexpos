@@ -67,11 +67,13 @@ func New(cfg *config.Config) (*App, error) {
 		Health:          handlers.Health,
 		Auth:            handlers.Auth,
 		User:            handlers.User,
+		Branch:          handlers.Branch,
 		Customer:        handlers.Customer,
 		ProductCategory: handlers.ProductCategory,
 		Product:         handlers.Product,
 		Order:           handlers.Order,
 		Report:          handlers.Report,
+		Promotion:       handlers.Promotion,
 	})
 
 	return &App{

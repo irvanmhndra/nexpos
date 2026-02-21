@@ -24,6 +24,7 @@ type Repositories struct {
 	Payment         repository.PaymentRepository
 	Report          repository.ReportRepository
 	CompanySettings repository.CompanySettingsRepository
+	Promotion       repository.PromotionRepository
 }
 
 func initRepositories(db *sqlx.DB) *Repositories {
@@ -45,5 +46,6 @@ func initRepositories(db *sqlx.DB) *Repositories {
 		Payment:         postgres.NewPaymentRepository(db),
 		Report:          postgres.NewReportRepository(db),
 		CompanySettings: postgres.NewCompanySettingsRepository(db),
+		Promotion:       postgres.NewPromotionRepository(db),
 	}
 }

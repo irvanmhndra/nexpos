@@ -8,11 +8,13 @@ import (
 type Services struct {
 	Auth            *service.AuthService
 	User            *service.UserService
+	Branch          *service.BranchService
 	Customer        *service.CustomerService
 	ProductCategory *service.ProductCategoryService
 	Product         *service.ProductService
 	Order           *service.OrderService
 	Report          *service.ReportService
+	Promotion       *service.PromotionService
 }
 
 func initServices(repos *Repositories, cfg *config.Config) *Services {
@@ -27,6 +29,7 @@ func initServices(repos *Repositories, cfg *config.Config) *Services {
 			cfg.JWT,
 		),
 		User:            service.NewUserService(repos.User),
+		Branch:          service.NewBranchService(repos.Branch),
 		Customer:        service.NewCustomerService(repos.Customer),
 		ProductCategory: service.NewProductCategoryService(repos.ProductCategory),
 		Product:         service.NewProductService(repos.Product, repos.ProductVariant, repos.ProductCategory),
@@ -39,6 +42,7 @@ func initServices(repos *Repositories, cfg *config.Config) *Services {
 			repos.User,
 			repos.CompanySettings,
 		),
-		Report: service.NewReportService(repos.Report),
+		Report:    service.NewReportService(repos.Report),
+		Promotion: service.NewPromotionService(repos.Promotion),
 	}
 }

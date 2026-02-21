@@ -9,11 +9,13 @@ type Handlers struct {
 	Health          *handler.HealthHandler
 	Auth            *handler.AuthHandler
 	User            *handler.UserHandler
+	Branch          *handler.BranchHandler
 	Customer        *handler.CustomerHandler
 	ProductCategory *handler.ProductCategoryHandler
 	Product         *handler.ProductHandler
 	Order           *handler.OrderHandler
 	Report          *handler.ReportHandler
+	Promotion       *handler.PromotionHandler
 }
 
 func Setup(e *echo.Echo, h *Handlers) {
@@ -42,6 +44,14 @@ func Setup(e *echo.Echo, h *Handlers) {
 	users.PUT("/:id", h.User.Update)
 	users.PATCH("/:id/status", h.User.UpdateStatus)
 	users.DELETE("/:id", h.User.Delete)
+
+	// Branch routes
+	branches := v1.Group("/branches")
+	branches.POST("", h.Branch.Create)
+	branches.GET("", h.Branch.List)
+	branches.GET("/:id", h.Branch.Get)
+	branches.PUT("/:id", h.Branch.Update)
+	branches.DELETE("/:id", h.Branch.Delete)
 
 	// Customer routes
 	customers := v1.Group("/customers")
@@ -89,4 +99,12 @@ func Setup(e *echo.Echo, h *Handlers) {
 	reports.GET("/category-revenue", h.Report.GetCategoryRevenue)
 	reports.GET("/payment-methods", h.Report.GetPaymentMethods)
 	reports.GET("/hourly-sales", h.Report.GetHourlySales)
+
+	// Promotion routes
+	promotions := v1.Group("/promotions")
+	promotions.POST("", h.Promotion.Create)
+	promotions.GET("", h.Promotion.List)
+	promotions.GET("/:id", h.Promotion.Get)
+	promotions.PUT("/:id", h.Promotion.Update)
+	promotions.DELETE("/:id", h.Promotion.Delete)
 }
