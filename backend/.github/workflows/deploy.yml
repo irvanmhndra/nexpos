@@ -10,28 +10,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-          cache: true
-
-      - name: Build binary
+      - name: Login to GHCR
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o nexpos-api ./cmd/api
+          echo ${{ secrets.GHCR_TOKEN }} | \
+            docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Deploy binary to VPS
-        uses: appleboy/scp-action@v0.1.7
+      - name: Build & push image
+        run: |
+          docker build -t ghcr.io/irvanmhndra/nexpos-api:latest .
+          docker push ghcr.io/irvanmhndra/nexpos-api:latest
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: nexpos-api
-          target: /home/deploy/nexpos/
+          script: |
+            cd ~/nexpos
+            docker compose pull nexpos-api
+            docker compose up -d nexpos-api
+            docker image prune -f
+            echo "✅ API deployed: $(date)"
 
-      - name: Restart service
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Run Migrations
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          script: sudo systemctl restart nexpos-api
+          script: |
+            sleep 5
+            docker exec nexpos_api sh -c '/app/migrate -path /app/migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB?sslmode=$POSTGRES_SSLMODE" up'
+            echo "✅ Migrations applied: $(date)"

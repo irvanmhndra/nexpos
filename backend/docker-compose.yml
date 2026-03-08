@@ -1,7 +1,7 @@
-# docker-compose.yml
 services:
   postgres:
     image: postgres:18-alpine
+    container_name: nexpos_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -9,20 +9,23 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - nexpos_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  mongo:
-    image: mongo:7
+  nexpos-api:
+    image: ghcr.io/irvanmhndra/nexpos-api:latest
+    container_name: nexpos_api
+    env_file: .env
     ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
 
 volumes:
-  postgres_data:
-  mongo_data:
+  nexpos_pgdata:
