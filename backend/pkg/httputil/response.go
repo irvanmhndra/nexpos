@@ -1,8 +1,6 @@
 package httputil
 
 import (
-	"time"
-
 	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
 	"github.com/labstack/echo/v5"
 )
@@ -19,7 +17,6 @@ type Response struct {
 type Meta struct {
 	Pagination *Pagination `json:"pagination,omitempty"`
 	Summary    any         `json:"summary,omitempty"`
-	ServerTime string      `json:"server_time"`
 }
 
 type Pagination struct {
@@ -32,31 +29,20 @@ type Pagination struct {
 	PrevPage     *int `json:"prev_page"`
 }
 
-func newMeta() *Meta {
-	return &Meta{
-		ServerTime: time.Now().UTC().Format(time.RFC3339),
-	}
-}
-
 func Success(c *echo.Context, status int, message string, data any) error {
 	return (*c).JSON(status, Response{
 		Success: true,
 		Message: message,
 		Data:    data,
-		Meta:    newMeta(),
 	})
 }
 
 func SuccessWithPagination(c *echo.Context, status int, message string, data any, pagination *Pagination, summary any) error {
-	meta := newMeta()
-	meta.Pagination = pagination
-	meta.Summary = summary
-
 	return (*c).JSON(status, Response{
 		Success: true,
 		Message: message,
 		Data:    data,
-		Meta:    meta,
+		Meta:    &Meta{Pagination: pagination, Summary: summary},
 	})
 }
 
@@ -66,7 +52,6 @@ func Error(c *echo.Context, err error) error {
 			Success:   false,
 			Message:   appErr.Message,
 			ErrorCode: appErr.Code,
-			Meta:      newMeta(),
 		}
 		if appErr.Details != nil {
 			resp.Errors = appErr.Details
@@ -77,7 +62,6 @@ func Error(c *echo.Context, err error) error {
 		Success:   false,
 		Message:   "internal server error",
 		ErrorCode: "INTERNAL_ERROR",
-		Meta:      newMeta(),
 	})
 }
 
@@ -92,6 +76,5 @@ func ValidationError(c *echo.Context, errors []FieldError) error {
 		Message:   "Validation failed",
 		ErrorCode: "VALIDATION_ERROR",
 		Errors:    errors,
-		Meta:      newMeta(),
 	})
 }
