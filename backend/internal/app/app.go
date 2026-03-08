@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/irvanmhndra/nexpos-api/config"
 	"github.com/irvanmhndra/nexpos-api/internal/router"
+	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
 	"github.com/irvanmhndra/nexpos-api/pkg/validator"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v5"
@@ -135,28 +137,21 @@ func (a *App) DB() *sqlx.DB {
 
 // customHTTPErrorHandler provides consistent error response format
 func customHTTPErrorHandler(c *echo.Context, err error) {
-	code := http.StatusInternalServerError
-	message := "internal server error"
-
-	if he, ok := err.(*echo.HTTPError); ok {
-		code = he.Code
-		message = he.Error()
-	} else if err != nil {
-		message = err.Error()
+	var sc echo.HTTPStatusCoder
+	if errors.As(err, &sc) {
+		code := sc.StatusCode()
+		_ = c.JSON(code, httputil.Response{
+			Success:   false,
+			Message:   http.StatusText(code),
+			ErrorCode: http.StatusText(code),
+		})
+		return
 	}
 
-	response := map[string]interface{}{
-		"success":    false,
-		"message":    message,
-		"error_code": http.StatusText(code),
-		"meta": map[string]interface{}{
-			"server_time": time.Now().UTC().Format(time.RFC3339),
-		},
-	}
-
-	if (*c).Request().Method == http.MethodHead {
-		(*c).NoContent(code)
-	} else {
-		(*c).JSON(code, response)
-	}
+	slog.Error("unhandled error", "method", c.Request().Method, "path", c.Request().URL.Path, "error", err)
+	_ = c.JSON(http.StatusInternalServerError, httputil.Response{
+		Success:   false,
+		Message:   "internal server error",
+		ErrorCode: "INTERNAL_ERROR",
+	})
 }
