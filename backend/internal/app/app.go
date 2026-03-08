@@ -137,6 +137,10 @@ func (a *App) DB() *sqlx.DB {
 
 // customHTTPErrorHandler provides consistent error response format
 func customHTTPErrorHandler(c *echo.Context, err error) {
+	if r, _ := echo.UnwrapResponse(c.Response()); r != nil && r.Committed {
+		return
+	}
+
 	var sc echo.HTTPStatusCoder
 	if errors.As(err, &sc) {
 		code := sc.StatusCode()
