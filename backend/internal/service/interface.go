@@ -88,12 +88,12 @@ type PromotionServiceInterface interface {
 
 // ReportServiceInterface defines the contract for reporting operations
 type ReportServiceInterface interface {
-	GetSummary(ctx context.Context, companyID int64, req dto.ReportSummaryRequest) (*dto.ReportSummaryResponse, error)
-	GetSalesTrend(ctx context.Context, companyID int64, req dto.SalesTrendRequest) ([]*dto.SalesTrendResponse, error)
-	GetTopProducts(ctx context.Context, companyID int64, req dto.TopProductsRequest) ([]*dto.TopProductResponse, error)
-	GetCategoryRevenue(ctx context.Context, companyID int64, req dto.CategoryRevenueRequest) ([]*dto.CategoryRevenueResponse, error)
-	GetPaymentMethods(ctx context.Context, companyID int64, req dto.PaymentMethodsRequest) ([]*dto.PaymentMethodResponse, error)
-	GetHourlySales(ctx context.Context, companyID int64, req dto.HourlySalesRequest) ([]*dto.HourlySalesResponse, error)
+	GetSummary(ctx context.Context, companyID int64, dateFrom, dateTo string) (*dto.ReportSummaryResponse, error)
+	GetSalesTrend(ctx context.Context, companyID int64, dateFrom, dateTo string) (*dto.SalesTrendResponse, error)
+	GetTopProducts(ctx context.Context, companyID int64, dateFrom, dateTo string, limit int) (*dto.TopProductsResponse, error)
+	GetCategoryRevenue(ctx context.Context, companyID int64, dateFrom, dateTo string) (*dto.CategoryRevenueResponse, error)
+	GetPaymentMethods(ctx context.Context, companyID int64, dateFrom, dateTo string) (*dto.PaymentMethodResponse, error)
+	GetHourlySales(ctx context.Context, companyID int64, dateFrom, dateTo string) (*dto.HourlySalesResponse, error)
 }
 
 // Ensure concrete types implement interfaces
