@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/irvanmhndra/pos-core-api/internal/repository"
-	"github.com/irvanmhndra/pos-core-api/internal/repository/postgres"
+	"github.com/irvanmhndra/nexpos-api/internal/repository"
+	"github.com/irvanmhndra/nexpos-api/internal/repository/postgres"
 	"github.com/jmoiron/sqlx"
 )
 

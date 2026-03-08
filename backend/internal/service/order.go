@@ -6,10 +6,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/irvanmhndra/pos-core-api/internal/dto"
-	"github.com/irvanmhndra/pos-core-api/internal/model"
-	"github.com/irvanmhndra/pos-core-api/internal/repository"
-	"github.com/irvanmhndra/pos-core-api/pkg/apperror"
+	"github.com/irvanmhndra/nexpos-api/internal/dto"
+	"github.com/irvanmhndra/nexpos-api/internal/model"
+	"github.com/irvanmhndra/nexpos-api/internal/repository"
+	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
 )
 
 type OrderService struct {

@@ -3,8 +3,8 @@ package mocks
 import (
 	"context"
 
-	"github.com/irvanmhndra/pos-core-api/internal/dto"
-	"github.com/irvanmhndra/pos-core-api/internal/model"
+	"github.com/irvanmhndra/nexpos-api/internal/dto"
+	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/stretchr/testify/mock"
 )
 

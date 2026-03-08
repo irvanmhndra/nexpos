@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/irvanmhndra/pos-core-api/internal/handler"
-	"github.com/irvanmhndra/pos-core-api/pkg/validator"
+	"github.com/irvanmhndra/nexpos-api/internal/handler"
+	"github.com/irvanmhndra/nexpos-api/pkg/validator"
 	"github.com/jmoiron/sqlx"
 )
 

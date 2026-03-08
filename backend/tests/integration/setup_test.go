@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/irvanmhndra/pos-core-api/config"
-	"github.com/irvanmhndra/pos-core-api/internal/app"
-	"github.com/irvanmhndra/pos-core-api/tests/integration/testutil"
+	"github.com/irvanmhndra/nexpos-api/config"
+	"github.com/irvanmhndra/nexpos-api/internal/app"
+	"github.com/irvanmhndra/nexpos-api/tests/integration/testutil"
 )
 
 var (

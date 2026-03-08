@@ -1,7 +1,7 @@
 package router
 
 import (
-	"github.com/irvanmhndra/pos-core-api/internal/handler"
+	"github.com/irvanmhndra/nexpos-api/internal/handler"
 	"github.com/labstack/echo/v5"
 )
 

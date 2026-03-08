@@ -3,7 +3,7 @@ package httputil
 import (
 	"time"
 
-	"github.com/irvanmhndra/pos-core-api/pkg/apperror"
+	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
 	"github.com/labstack/echo/v5"
 )
 

@@ -3,7 +3,7 @@ package dto
 import (
 	"time"
 
-	"github.com/irvanmhndra/pos-core-api/internal/model"
+	"github.com/irvanmhndra/nexpos-api/internal/model"
 )
 
 // ============== Requests ==============

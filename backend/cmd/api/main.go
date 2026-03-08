@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/irvanmhndra/pos-core-api/config"
-	"github.com/irvanmhndra/pos-core-api/internal/app"
+	"github.com/irvanmhndra/nexpos-api/config"
+	"github.com/irvanmhndra/nexpos-api/internal/app"
 	_ "github.com/lib/pq"
 )
 

@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/irvanmhndra/pos-core-api/pkg/httputil"
+	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v5"
 )

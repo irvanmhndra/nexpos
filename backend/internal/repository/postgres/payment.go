@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/irvanmhndra/pos-core-api/internal/model"
+	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/jmoiron/sqlx"
 )
 

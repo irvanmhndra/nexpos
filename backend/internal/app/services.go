@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/irvanmhndra/pos-core-api/config"
-	"github.com/irvanmhndra/pos-core-api/internal/service"
+	"github.com/irvanmhndra/nexpos-api/config"
+	"github.com/irvanmhndra/nexpos-api/internal/service"
 )
 
 type Services struct {

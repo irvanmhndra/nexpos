@@ -4,11 +4,11 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/irvanmhndra/pos-core-api/internal/dto"
-	"github.com/irvanmhndra/pos-core-api/internal/service"
-	"github.com/irvanmhndra/pos-core-api/pkg/apperror"
-	"github.com/irvanmhndra/pos-core-api/pkg/httputil"
-	"github.com/irvanmhndra/pos-core-api/pkg/validator"
+	"github.com/irvanmhndra/nexpos-api/internal/dto"
+	"github.com/irvanmhndra/nexpos-api/internal/service"
+	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
+	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
+	"github.com/irvanmhndra/nexpos-api/pkg/validator"
 	"github.com/labstack/echo/v5"
 )
 

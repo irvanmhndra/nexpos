@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/irvanmhndra/pos-core-api/pkg/httputil"
+	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
 )
 
 type CustomValidator struct {

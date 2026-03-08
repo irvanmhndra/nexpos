@@ -3,7 +3,7 @@ package postgres
 import (
 	"context"
 
-	"github.com/irvanmhndra/pos-core-api/internal/repository"
+	"github.com/irvanmhndra/nexpos-api/internal/repository"
 	"github.com/jmoiron/sqlx"
 )
 

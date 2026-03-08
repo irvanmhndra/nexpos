@@ -1,4 +1,4 @@
-module github.com/irvanmhndra/pos-core-api
+module github.com/irvanmhndra/nexpos-api
 
 go 1.25.0
 

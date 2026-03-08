@@ -9,9 +9,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/irvanmhndra/pos-core-api/config"
-	"github.com/irvanmhndra/pos-core-api/internal/router"
-	"github.com/irvanmhndra/pos-core-api/pkg/validator"
+	"github.com/irvanmhndra/nexpos-api/config"
+	"github.com/irvanmhndra/nexpos-api/internal/router"
+	"github.com/irvanmhndra/nexpos-api/pkg/validator"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"

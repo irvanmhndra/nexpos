@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 
-	"github.com/irvanmhndra/pos-core-api/internal/dto"
-	"github.com/irvanmhndra/pos-core-api/internal/model"
+	"github.com/irvanmhndra/nexpos-api/internal/dto"
+	"github.com/irvanmhndra/nexpos-api/internal/model"
 )
 
 // AuthServiceInterface defines the contract for authentication operations
@@ -68,6 +68,34 @@ type OrderServiceInterface interface {
 	RefundPayment(ctx context.Context, companyID, orderID int64, req dto.RefundPaymentRequest) (*dto.OrderResponse, error)
 }
 
+// BranchServiceInterface defines the contract for branch operations
+type BranchServiceInterface interface {
+	Create(ctx context.Context, companyID int64, req dto.CreateBranchRequest) (*dto.BranchResponse, error)
+	GetByID(ctx context.Context, companyID, id int64) (*dto.BranchResponse, error)
+	List(ctx context.Context, companyID int64, req dto.ListBranchRequest) (*dto.BranchListResponse, error)
+	Update(ctx context.Context, companyID, id int64, req dto.UpdateBranchRequest) (*dto.BranchResponse, error)
+	Delete(ctx context.Context, companyID, id int64) error
+}
+
+// PromotionServiceInterface defines the contract for promotion operations
+type PromotionServiceInterface interface {
+	Create(ctx context.Context, companyID int64, req dto.CreatePromotionRequest) (*dto.PromotionResponse, error)
+	GetByID(ctx context.Context, companyID, id int64) (*dto.PromotionResponse, error)
+	List(ctx context.Context, companyID int64, req dto.ListPromotionRequest) (*dto.PromotionListResponse, error)
+	Update(ctx context.Context, companyID, id int64, req dto.UpdatePromotionRequest) (*dto.PromotionResponse, error)
+	Delete(ctx context.Context, companyID, id int64) error
+}
+
+// ReportServiceInterface defines the contract for reporting operations
+type ReportServiceInterface interface {
+	GetSummary(ctx context.Context, companyID int64, req dto.ReportSummaryRequest) (*dto.ReportSummaryResponse, error)
+	GetSalesTrend(ctx context.Context, companyID int64, req dto.SalesTrendRequest) ([]*dto.SalesTrendResponse, error)
+	GetTopProducts(ctx context.Context, companyID int64, req dto.TopProductsRequest) ([]*dto.TopProductResponse, error)
+	GetCategoryRevenue(ctx context.Context, companyID int64, req dto.CategoryRevenueRequest) ([]*dto.CategoryRevenueResponse, error)
+	GetPaymentMethods(ctx context.Context, companyID int64, req dto.PaymentMethodsRequest) ([]*dto.PaymentMethodResponse, error)
+	GetHourlySales(ctx context.Context, companyID int64, req dto.HourlySalesRequest) ([]*dto.HourlySalesResponse, error)
+}
+
 // Ensure concrete types implement interfaces
 var _ AuthServiceInterface = (*AuthService)(nil)
 var _ UserServiceInterface = (*UserService)(nil)
@@ -75,3 +103,6 @@ var _ CustomerServiceInterface = (*CustomerService)(nil)
 var _ ProductCategoryServiceInterface = (*ProductCategoryService)(nil)
 var _ ProductServiceInterface = (*ProductService)(nil)
 var _ OrderServiceInterface = (*OrderService)(nil)
+var _ BranchServiceInterface = (*BranchService)(nil)
+var _ PromotionServiceInterface = (*PromotionService)(nil)
+var _ ReportServiceInterface = (*ReportService)(nil)
