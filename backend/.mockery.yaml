@@ -1,25 +1,38 @@
 # .mockery.yaml
 with-expecter: true
 packages:
-  github.com/yourusername/pos-core-api/internal/repository:
+  github.com/irvanmhndra/pos-core-api/internal/repository:
     interfaces:
       UserRepository:
+      CompanyRepository:
+      BranchRepository:
+      UserSessionRepository:
+      RoleRepository:
+      PermissionRepository:
+      RolePermissionRepository:
+      UserBranchRepository:
+      CustomerRepository:
+      ProductCategoryRepository:
       ProductRepository:
+      ProductVariantRepository:
       OrderRepository:
-      StockRepository:
-      AuditLogRepository:
+      OrderItemRepository:
+      PaymentRepository:
+      CompanySettingsRepository:
+      PromotionRepository:
+      ReportRepository:
     config:
       dir: internal/repository/mocks
       outpkg: mocks
 
-  github.com/yourusername/pos-core-api/internal/client/payment:
+  github.com/irvanmhndra/pos-core-api/internal/client/payment:
     interfaces:
       Gateway:
     config:
       dir: internal/client/mocks
       outpkg: mocks
 
-  github.com/yourusername/pos-core-api/internal/event/publisher:
+  github.com/irvanmhndra/pos-core-api/internal/event/publisher:
     interfaces:
       EventPublisher:
     config:
