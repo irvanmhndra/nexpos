@@ -52,7 +52,41 @@ func New(cfg *config.Config) (*App, error) {
 	e := echo.New()
 
 	// Middleware
-	e.Use(middleware.RequestLogger())
+	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		LogLatency:      true,
+		LogRemoteIP:     true,
+		LogHost:         true,
+		LogMethod:       true,
+		LogURI:          true,
+		LogRequestID:    true,
+		LogUserAgent:    true,
+		LogStatus:       true,
+		LogResponseSize: true,
+		HandleError:     false, // let ServeHTTP call HTTPErrorHandler exactly once; prevents duplicate responses
+		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {
+			if v.Error == nil {
+				slog.Info("request",
+					"method", v.Method,
+					"uri", v.URI,
+					"status", v.Status,
+					"latency", v.Latency,
+					"remote_ip", v.RemoteIP,
+					"request_id", v.RequestID,
+				)
+			} else {
+				slog.Error("request error",
+					"method", v.Method,
+					"uri", v.URI,
+					"status", v.Status,
+					"latency", v.Latency,
+					"remote_ip", v.RemoteIP,
+					"request_id", v.RequestID,
+					"error", v.Error,
+				)
+			}
+			return nil
+		},
+	}))
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
