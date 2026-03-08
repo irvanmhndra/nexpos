@@ -20,7 +20,6 @@ type Handlers struct {
 
 func Setup(e *echo.Echo, h *Handlers) {
 	// Health check endpoints
-	e.GET("/", h.Health.Check)
 	e.GET("/health", h.Health.Check)
 	e.GET("/health/live", h.Health.Liveness)
 	e.GET("/health/ready", h.Health.Readiness)
