@@ -103,7 +103,7 @@ export function RegisterPage() {
           Buat Akun Baru
         </h1>
         <p className="text-text-sub dark:text-gray-400 text-base font-medium">
-          Daftar untuk mulai mengelola bisnis Anda dengan Aplikabizz.
+          Daftar untuk mulai mengelola bisnis Anda dengan Nexpos.
         </p>
       </div>
 

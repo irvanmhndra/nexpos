@@ -24,7 +24,7 @@ function App() {
         {/* Header */}
         <div className="space-y-2">
           <h1 className="text-4xl font-bold text-text-main dark:text-white">
-            Aplikabizz UI Components
+            Nexpos UI Components
           </h1>
           <p className="text-text-sub dark:text-gray-400">
             Testing all base UI components with Tailwind CSS

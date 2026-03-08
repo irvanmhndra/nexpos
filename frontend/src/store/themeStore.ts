@@ -26,7 +26,7 @@ export const useThemeStore = create<ThemeStore>()(
       },
     }),
     {
-      name: 'aplikabizz-theme',
+      name: 'nexpos-theme',
       onRehydrateStorage: () => state => {
         if (state) {
           applyTheme(state.theme);

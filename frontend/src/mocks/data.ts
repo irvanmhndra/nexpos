@@ -302,7 +302,7 @@ export const mockUsers = [
   {
     id: 'admin-001',
     name: 'Admin User',
-    email: 'admin@aplikabizz.com',
+    email: 'admin@nexpos.com',
     phone: '+62 812 3456 7890',
     role: 'admin',
     avatar: '',

@@ -46,7 +46,7 @@ export function Sidebar() {
             </div>
             <div className="flex flex-col">
               <h1 className="text-text-main dark:text-white text-lg font-bold leading-normal">
-                Aplikabizz
+                Nexpos
               </h1>
               <p className="text-text-sub dark:text-gray-400 text-sm font-medium leading-normal">
                 Business Manager

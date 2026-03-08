@@ -13,7 +13,7 @@ export const api = axios.create({
 api.interceptors.request.use(
   config => {
     // Get token from localStorage (matches AuthContext storage key)
-    const token = localStorage.getItem('aplikabizz_access_token');
+    const token = localStorage.getItem('nexpos_access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -30,7 +30,7 @@ api.interceptors.response.use(
   error => {
     if (error.response?.status === 401) {
       // Handle unauthorized - redirect to login
-      localStorage.removeItem('aplikabizz_auth_token');
+      localStorage.removeItem('nexpos_auth_token');
       window.location.href = '/login';
     }
     return Promise.reject(error);

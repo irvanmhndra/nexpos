@@ -78,11 +78,11 @@ export const STOCK_THRESHOLDS = {
 
 // Local Storage Keys
 export const STORAGE_KEYS = {
-  AUTH_TOKEN: 'aplikabizz_auth_token',
-  USER: 'aplikabizz_user',
-  THEME: 'aplikabizz_theme',
-  SIDEBAR_COLLAPSED: 'aplikabizz_sidebar_collapsed',
-  SELECTED_BRANCH: 'aplikabizz_selected_branch',
+  AUTH_TOKEN: 'nexpos_auth_token',
+  USER: 'nexpos_user',
+  THEME: 'nexpos_theme',
+  SIDEBAR_COLLAPSED: 'nexpos_sidebar_collapsed',
+  SELECTED_BRANCH: 'nexpos_selected_branch',
 } as const;
 
 // Routes

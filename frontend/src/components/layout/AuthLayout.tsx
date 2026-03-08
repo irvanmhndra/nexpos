@@ -31,7 +31,7 @@ export function AuthLayout() {
               <Icon name="analytics" filled size={28} />
             </div>
             <h2 className="text-text-main dark:text-white text-2xl font-bold tracking-tight">
-              Aplikabizz
+              Nexpos
             </h2>
           </div>
 
@@ -42,7 +42,7 @@ export function AuthLayout() {
         {/* Footer */}
         <div className="px-6 pb-6 text-center lg:text-left lg:px-20 xl:px-32">
           <p className="text-xs text-gray-400">
-            © 2024 Aplikabizz Inc. All rights reserved.
+            © 2024 Nexpos Inc. All rights reserved.
           </p>
         </div>
       </div>

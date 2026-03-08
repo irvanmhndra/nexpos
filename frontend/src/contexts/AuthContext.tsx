@@ -28,9 +28,9 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080
 
 // Storage keys
 const STORAGE_KEYS = {
-  USER: 'aplikabizz_user',
-  ACCESS_TOKEN: 'aplikabizz_access_token',
-  REFRESH_TOKEN: 'aplikabizz_refresh_token',
+  USER: 'nexpos_user',
+  ACCESS_TOKEN: 'nexpos_access_token',
+  REFRESH_TOKEN: 'nexpos_refresh_token',
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
