@@ -20,7 +20,7 @@ export function LoginPage() {
     try {
       await login(email, password);
       navigate('/');
-    } catch (err) {
+    } catch {
       setError('Email atau password salah. Silakan periksa kembali kredensial Anda.');
     } finally {
       setIsLoading(false);

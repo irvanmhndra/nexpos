@@ -89,7 +89,7 @@ export function RegisterPage() {
     try {
       await register(formData.name, formData.email, formData.password);
       navigate('/');
-    } catch (err) {
+    } catch {
       setError('Pendaftaran gagal. Email mungkin sudah terdaftar.');
     } finally {
       setIsLoading(false);
@@ -206,24 +206,6 @@ export function RegisterPage() {
           disabled={isLoading}
         >
           {isLoading ? 'Memproses...' : 'Daftar Sekarang'}
-        </Button>
-
-        <div className="relative flex py-2 items-center">
-          <div className="flex-grow border-t border-border-light dark:border-border-dark"></div>
-          <span className="flex-shrink-0 mx-4 text-gray-400 text-sm font-medium">
-            Atau daftar dengan
-          </span>
-          <div className="flex-grow border-t border-border-light dark:border-border-dark"></div>
-        </div>
-
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          className="w-full"
-          leftIcon={<Icon name="login" size="sm" />}
-        >
-          Daftar dengan Google
         </Button>
 
         <div className="text-center pt-2">
