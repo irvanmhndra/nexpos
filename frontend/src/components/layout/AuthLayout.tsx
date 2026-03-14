@@ -21,7 +21,7 @@ export function AuthLayout() {
   }
 
   return (
-    <div className="min-h-screen w-full flex overflow-hidden bg-background-light dark:bg-background-dark">
+    <div className="h-screen w-full flex overflow-hidden bg-background-light dark:bg-background-dark">
       {/* Left Column: Form Section */}
       <div className="w-full lg:w-1/2 flex flex-col bg-white dark:bg-card-dark relative z-10 overflow-y-auto">
         <div className="flex-1 flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-20 xl:px-32">
