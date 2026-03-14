@@ -98,38 +98,11 @@ export function LoginPage() {
           variant="primary"
           size="lg"
           className="w-full"
-          rightIcon={!isLoading && <Icon name="arrow_forward" size="sm" />}
-          disabled={isLoading}
+          isLoading={isLoading}
+          rightIcon={!isLoading ? <Icon name="arrow_forward" size="sm" /> : undefined}
         >
-          {isLoading ? 'Memproses...' : 'Masuk ke Dashboard'}
+          {isLoading ? 'Memproses...' : 'Masuk'}
         </Button>
-
-        <div className="relative flex py-2 items-center">
-          <div className="flex-grow border-t border-border-light dark:border-border-dark"></div>
-          <span className="flex-shrink-0 mx-4 text-gray-400 text-sm font-medium">
-            Atau masuk dengan
-          </span>
-          <div className="flex-grow border-t border-border-light dark:border-border-dark"></div>
-        </div>
-
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          className="w-full"
-          leftIcon={<Icon name="login" size="sm" />}
-        >
-          Masuk dengan Google
-        </Button>
-
-        <div className="text-center pt-2">
-          <p className="text-text-sub dark:text-gray-400 text-sm">
-            Belum punya akun?{' '}
-            <Link to="/register" className="text-primary font-bold hover:underline">
-              Daftar Sekarang
-            </Link>
-          </p>
-        </div>
       </form>
     </div>
   );
