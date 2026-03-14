@@ -61,7 +61,7 @@ export function AuthLayout() {
             </div>
 
             {/* Floating Card 1 */}
-            <div className="absolute -bottom-8 -left-8 bg-white dark:bg-card-dark p-4 rounded-xl shadow-xl border border-gray-100 dark:border-border-dark flex items-center gap-4 animate-bounce duration-[3000ms]">
+            <div className="absolute -bottom-8 -left-8 bg-white dark:bg-card-dark p-4 rounded-xl shadow-xl border border-gray-100 dark:border-border-dark flex items-center gap-4 animate-float">
               <div className="size-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
                 <Icon name="trending_up" filled size="md" />
               </div>
