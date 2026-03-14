@@ -24,7 +24,7 @@ export function AuthLayout() {
     <div className="h-screen w-full flex overflow-hidden bg-background-light dark:bg-background-dark">
       {/* Left Column: Form Section */}
       <div className="w-full lg:w-1/2 flex flex-col bg-white dark:bg-card-dark relative z-10 overflow-y-auto">
-        <div className="flex-1 flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-20 xl:px-32">
+        <div className="my-auto px-6 py-12 sm:px-12 lg:px-20 xl:px-32">
           {/* Logo */}
           <div className="mb-10 flex items-center gap-3">
             <div className="flex items-center justify-center size-10 rounded-xl bg-primary/10 text-primary">
