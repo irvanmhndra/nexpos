@@ -8,6 +8,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Float animation — must be outside @layer so keyframes are globally scoped */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
 @layer base {
   * {
     @apply border-border-light dark:border-border-dark;
@@ -40,15 +49,6 @@
 
   .material-symbols-outlined.fill {
     font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-  }
-
-  /* Float animation (subtle up/down, less aggressive than animate-bounce) */
-  @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-8px); }
-  }
-  .animate-float {
-    animation: float 3s ease-in-out infinite;
   }
 
   /* Scrollbar utilities */
