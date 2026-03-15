@@ -21,10 +21,10 @@ export function AuthLayout() {
   }
 
   return (
-    <div className="min-h-screen w-full flex overflow-hidden bg-background-light dark:bg-background-dark">
-      {/* Left Column: Form Section */}
-      <div className="w-full lg:w-1/2 flex flex-col bg-white dark:bg-card-dark relative z-10 overflow-y-auto">
-        <div className="flex-1 flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-20 xl:px-32">
+    <div className="min-h-screen w-full flex items-start bg-background-light dark:bg-background-dark">
+      {/* Left Column: Form Section — natural height, page scrolls */}
+      <div className="w-full lg:w-1/2 flex flex-col min-h-screen bg-white dark:bg-card-dark relative z-10">
+        <div className="my-auto px-6 py-12 sm:px-12 lg:px-20 xl:px-32">
           {/* Logo */}
           <div className="mb-10 flex items-center gap-3">
             <div className="flex items-center justify-center size-10 rounded-xl bg-primary/10 text-primary">
@@ -47,8 +47,8 @@ export function AuthLayout() {
         </div>
       </div>
 
-      {/* Right Column: Visual Section */}
-      <div className="hidden lg:flex w-1/2 relative bg-primary/5 dark:bg-background-dark flex-col justify-between overflow-hidden">
+      {/* Right Column: Sticky visual panel — always viewport height */}
+      <div className="hidden lg:flex w-1/2 sticky top-0 h-screen relative bg-primary/5 dark:bg-background-dark flex-col overflow-hidden">
         {/* Decorative Background Elements */}
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-400/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2"></div>
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-400/20 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2"></div>
