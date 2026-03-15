@@ -98,8 +98,9 @@ export function POSPage() {
     return Math.min(matchedPromo.discount_value, subtotal);
   }, [matchedPromo, subtotal]);
 
+  const grandTotal = subtotal - promoDiscount;
   const paymentAmountNum = parseFloat(paymentAmount) || 0;
-  const changeAmount = paymentAmountNum - subtotal;
+  const changeAmount = paymentAmountNum - grandTotal;
   const stockMap = useMemo(() => {
     const map: Record<number, number> = {};
     inventoryData?.data.forEach(item => { map[item.product_variant_id] = item.current_stock; });
@@ -622,14 +623,34 @@ export function POSPage() {
             )
           )}
 
-          {/* Subtotal row */}
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-text-sub dark:text-gray-400">
-              Subtotal ({totalItems} item)
-            </span>
-            <span className="text-lg font-bold text-text-main dark:text-white">
-              {formatCurrency(subtotal)}
-            </span>
+          {/* Subtotal / discount / total rows */}
+          <div className="space-y-1">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-text-sub dark:text-gray-400">
+                Subtotal ({totalItems} item)
+              </span>
+              <span className={`text-sm font-medium ${promoDiscount > 0 ? 'text-text-sub dark:text-gray-400 line-through' : 'text-lg font-bold text-text-main dark:text-white'}`}>
+                {formatCurrency(subtotal)}
+              </span>
+            </div>
+            {promoDiscount > 0 && (
+              <>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-green-600 dark:text-green-400">
+                    Diskon ({promoCode})
+                  </span>
+                  <span className="text-sm font-medium text-green-600 dark:text-green-400">
+                    -{formatCurrency(promoDiscount)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-1 border-t border-border-light dark:border-border-dark">
+                  <span className="text-sm font-semibold text-text-main dark:text-white">Total</span>
+                  <span className="text-lg font-bold text-text-main dark:text-white">
+                    {formatCurrency(grandTotal)}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           {!showPayment ? (
@@ -675,7 +696,7 @@ export function POSPage() {
                     type="number"
                     value={paymentAmount}
                     onChange={e => setPaymentAmount(e.target.value)}
-                    placeholder={String(subtotal)}
+                    placeholder={String(grandTotal)}
                     autoFocus
                     className="w-full h-12 pl-10 pr-4 rounded-lg border border-border-light dark:border-gray-600 bg-white dark:bg-card-dark text-text-main dark:text-white focus:border-primary focus:ring-1 focus:ring-primary text-lg font-bold"
                   />
