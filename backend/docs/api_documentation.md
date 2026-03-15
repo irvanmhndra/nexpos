@@ -267,6 +267,8 @@ Returns all categories as a flat array (no pagination). Useful for dropdowns.
 
 **Query parameters:** `page`, `limit`, `search`, `category`, `status`
 
+> `search` matches both product name and variant SKU.
+
 **Response (200):**
 ```json
 {
@@ -286,6 +288,9 @@ Returns all categories as a flat array (no pagination). Useful for dropdowns.
           "name": "330ml",
           "sku": "TEH-330",
           "price": 5000,
+          "sale_price": 4000,           // nullable
+          "sale_start": "2026-03-01T00:00:00Z", // nullable
+          "sale_end": "2026-03-31T23:59:59Z",   // nullable
           "standard_cost": 3000,
           "is_active": true
         }
@@ -304,10 +309,12 @@ Returns all categories as a flat array (no pagination). Useful for dropdowns.
   "product_category_id": 1,
   "image_data": "data:image/jpeg;base64,...",
   "variants": [
-    { "name": "Default", "sku": "KPS-001", "price": 15000, "standard_cost": 8000 }
+    { "name": "Default", "sku": "KPS-001", "price": 15000, "standard_cost": 8000, "sale_price": 12000, "sale_start": "2026-03-01T00:00:00Z", "sale_end": null }
   ]
 }
 ```
+
+> All sale price fields are optional. Set `sale_price` to `null` to disable.
 
 **Response (201):** Returns the created product with all variants.
 
@@ -414,6 +421,8 @@ Creates an order and immediately deducts stock.
 }
 ```
 
+> **Note:** If a variant has an active sale price (`sale_price < price` and within `sale_start`/`sale_end` window), the order uses the sale price automatically. No change to the request body is needed.
+
 ### POST /orders/preview
 
 Calculates order totals (with promo validation) **without creating the order**. Used by POS before checkout to show accurate pricing.
@@ -442,6 +451,8 @@ Calculates order totals (with promo validation) **without creating the order**. 
 ```
 
 If promo code is invalid or inactive, `applied_promotion` is `null` and `promo_discount` is `0`.
+
+> **Note:** If a variant has an active sale price (`sale_price < price` and within `sale_start`/`sale_end` window), the order uses the sale price automatically. No change to the request body is needed.
 
 ### GET /orders/:id
 

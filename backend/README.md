@@ -15,8 +15,10 @@ A multi-tenant Point of Sale (POS) backend API built with Go, designed for retai
 - **Order Management** — Full lifecycle: Draft → Confirmed → Completed (or Cancelled/Voided)
 - **Payment Processing** — Multiple payment methods and refunds
 - **Product Catalog** — Products with variants, categories, SKUs, and cost tracking
+- **Sale Price (Harga Coret)** — Optional promotional pricing per variant with configurable start/end window; effective price applied automatically in orders
 - **Inventory Management** — Stock tracking, adjustments, movement history, min-stock alerts
 - **Promotions** — Promo codes with fixed/percentage discount types
+- **SKU Search** — Product list search matches both product name and variant SKU; pg_trgm GIN indexes for efficient ILIKE at scale
 - **Order Preview** — Calculate totals with promo validation before committing
 - **Customer Management** — Customer profiles
 - **Sales Reports** — Summary metrics, trends, top products, category revenue, hourly sales
@@ -237,7 +239,7 @@ nexpos-api/
 │   ├── validator/           # Request validation
 │   ├── logger/              # Logging
 │   └── pagination/          # Pagination helpers
-├── migrations/              # Database migrations (24 migrations)
+├── migrations/              # Database migrations (26 migrations)
 ├── docs/                    # Documentation
 ├── docker-compose.yml
 ├── makefile
