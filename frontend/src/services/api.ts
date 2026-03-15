@@ -29,9 +29,11 @@ api.interceptors.response.use(
   response => response,
   error => {
     if (error.response?.status === 401) {
-      // Handle unauthorized - redirect to login
-      localStorage.removeItem('nexpos_auth_token');
-      window.location.href = '/login';
+      // Clear all auth keys (must match AuthContext storage keys exactly)
+      localStorage.removeItem('nexpos_user');
+      localStorage.removeItem('nexpos_access_token');
+      localStorage.removeItem('nexpos_refresh_token');
+      window.location.replace('/login');
     }
     return Promise.reject(error);
   }
