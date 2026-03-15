@@ -24,6 +24,7 @@ export interface OrderFormData {
   paymentAmount: number;
   shippingAddress: string;
   notes?: string;
+  promoCode?: string;
 }
 
 export interface OrderItem {
@@ -80,6 +81,7 @@ export function OrderFormModal({
         paymentAmount: 0,
         shippingAddress: '',
         notes: '',
+        promoCode: '',
       });
       setErrors({});
     }
@@ -556,6 +558,19 @@ export function OrderFormModal({
                   </p>
                 </div>
               )}
+            </div>
+
+            {/* Promo Code */}
+            <div>
+              <label className="block text-sm font-bold text-text-main dark:text-gray-200 mb-2">
+                Kode Promo (Opsional)
+              </label>
+              <Input
+                value={formData.promoCode || ''}
+                onChange={e => setFormData({ ...formData, promoCode: e.target.value.toUpperCase() })}
+                placeholder="Masukkan kode promo..."
+                leftIcon={<Icon name="local_offer" size={20} />}
+              />
             </div>
 
             {/* Notes */}

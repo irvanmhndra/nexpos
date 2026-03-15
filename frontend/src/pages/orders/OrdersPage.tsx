@@ -65,6 +65,7 @@ export function OrdersPage() {
             ]
           : undefined,
         notes: formData.notes || undefined,
+        promo_code: formData.promoCode || undefined,
       };
 
       await createOrder.mutateAsync(createOrderData);

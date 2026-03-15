@@ -52,3 +52,39 @@
     scrollbar-width: none;
   }
 }
+
+@media print {
+  /* Hide everything by default */
+  body > * {
+    visibility: hidden;
+  }
+
+  /* Show only receipt content */
+  .receipt-content,
+  .receipt-content * {
+    visibility: visible;
+  }
+
+  /* Position receipt at top-left */
+  .receipt-content {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 80mm;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  /* Hide no-print elements */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Clean page breaks */
+  @page {
+    margin: 4mm;
+    size: 80mm auto;
+  }
+}

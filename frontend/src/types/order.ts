@@ -92,6 +92,14 @@ export interface Order {
   balance_due: number;
   refunded_total: number;
 
+  // Applied promotion
+  applied_promotion?: {
+    id: number;
+    code: string;
+    name: string;
+    discount_amount: number;
+  } | null;
+
   items: OrderItem[];
   payments: Payment[];
   created_at: string;
@@ -108,6 +116,7 @@ export interface CreateOrderRequest {
   payments?: PaymentInput[];
   notes?: string;
   offline_id?: string;
+  promo_code?: string;
 }
 
 export interface UpdateOrderRequest {

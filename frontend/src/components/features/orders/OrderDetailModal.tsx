@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, Icon, Input } from '@/components/ui';
 import { formatCurrency, formatDate } from '@/utils';
 import type { Order, PaymentMethod } from '@/types/order';
+import { ReceiptModal } from './ReceiptModal';
 import {
   useConfirmOrder,
   useAddPayment,
@@ -20,6 +21,7 @@ type ActionMode = 'view' | 'add-payment' | 'cancel' | 'void';
 
 export function OrderDetailModal({ isOpen, onClose, order }: OrderDetailModalProps) {
   const [actionMode, setActionMode] = useState<ActionMode>('view');
+  const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [paymentRef, setPaymentRef] = useState('');
@@ -169,6 +171,7 @@ export function OrderDetailModal({ isOpen, onClose, order }: OrderDetailModalPro
   const canComplete = order?.status === 'confirmed' && order?.payment_status === 'paid';
   const canCancel = (order?.status === 'draft' || order?.status === 'confirmed') && order?.payment_status !== 'paid';
   const canVoid = (order?.status === 'confirmed' || order?.status === 'completed') && order?.payment_status === 'paid';
+  const canPrintReceipt = order?.payment_status === 'paid';
 
   const renderActionContent = () => {
     switch (actionMode) {
@@ -292,6 +295,7 @@ export function OrderDetailModal({ isOpen, onClose, order }: OrderDetailModalPro
   if (!isOpen || !order) return null;
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
       <div className="bg-white dark:bg-card-dark rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
@@ -394,7 +398,12 @@ export function OrderDetailModal({ isOpen, onClose, order }: OrderDetailModalPro
           </div>
           {order.total_discount > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-text-sub dark:text-gray-400">Diskon</span>
+              <span className="text-text-sub dark:text-gray-400">
+                Diskon
+                {order.applied_promotion && (
+                  <span className="ml-1 text-xs font-mono text-primary">({order.applied_promotion.code})</span>
+                )}
+              </span>
               <span className="text-red-600">-{formatCurrency(order.total_discount)}</span>
             </div>
           )}
@@ -480,7 +489,7 @@ export function OrderDetailModal({ isOpen, onClose, order }: OrderDetailModalPro
         {actionMode !== 'view' && renderActionContent()}
 
         {/* Action Buttons */}
-        {actionMode === 'view' && (canConfirm || canAddPayment || canComplete || canCancel || canVoid) && (
+        {actionMode === 'view' && (canConfirm || canAddPayment || canComplete || canCancel || canVoid || canPrintReceipt) && (
           <div className="flex flex-wrap gap-2 pt-4 border-t border-border-light dark:border-border-dark">
             {canConfirm && (
               <Button
@@ -533,11 +542,29 @@ export function OrderDetailModal({ isOpen, onClose, order }: OrderDetailModalPro
                 Void
               </Button>
             )}
+            {canPrintReceipt && (
+              <Button
+                variant="outline"
+                onClick={() => setIsReceiptOpen(true)}
+                leftIcon={<Icon name="receipt" size={18} />}
+                className="ml-auto"
+              >
+                Cetak Struk
+              </Button>
+            )}
           </div>
         )}
           </div>
         </div>
       </div>
     </div>
+
+    {/* Receipt print modal */}
+    <ReceiptModal
+      isOpen={isReceiptOpen}
+      onClose={() => setIsReceiptOpen(false)}
+      order={order}
+    />
+    </>
   );
 }

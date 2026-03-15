@@ -31,6 +31,7 @@ export function useCreateOrder() {
 
   return useMutation({
     mutationFn: (data: CreateOrderRequest) => ordersService.createOrder(data),
+    meta: { suppressToast: true }, // error shown inline in POSPage
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
