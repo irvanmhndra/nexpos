@@ -11,6 +11,7 @@ type ProductVariant struct {
 	ProductID        int64     `db:"product_id" json:"product_id"`
 	SKU              string    `db:"sku" json:"sku"`
 	Name             string    `db:"name" json:"name"`
+	ProductName      string    `db:"product_name" json:"-"`
 	Attributes       JSONMap   `db:"attributes" json:"attributes"`
 	Price            float64   `db:"price" json:"price"`
 	StandardCost     float64   `db:"standard_cost" json:"standard_cost"`

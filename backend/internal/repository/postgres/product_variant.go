@@ -37,7 +37,7 @@ func (r *ProductVariantRepository) Create(ctx context.Context, variant *model.Pr
 
 func (r *ProductVariantRepository) GetByID(ctx context.Context, id int64) (*model.ProductVariant, error) {
 	var variant model.ProductVariant
-	query := `SELECT * FROM product_variants WHERE id = $1`
+	query := `SELECT pv.*, p.name AS product_name FROM product_variants pv JOIN products p ON p.id = pv.product_id WHERE pv.id = $1`
 	err := r.db.GetContext(ctx, &variant, query, id)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -128,5 +128,12 @@ func (r *ProductVariantRepository) SKUExists(ctx context.Context, sku string, ex
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM product_variants WHERE sku = $1 AND id != $2)`
 	err := r.db.GetContext(ctx, &exists, query, sku, excludeID)
+	return exists, err
+}
+
+func (r *ProductVariantRepository) SKUExistsInOtherProduct(ctx context.Context, sku string, productID int64) (bool, error) {
+	var exists bool
+	query := `SELECT EXISTS(SELECT 1 FROM product_variants WHERE sku = $1 AND product_id != $2)`
+	err := r.db.GetContext(ctx, &exists, query, sku, productID)
 	return exists, err
 }

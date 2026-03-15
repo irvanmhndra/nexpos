@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/irvanmhndra/nexpos-api/internal/dto"
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/irvanmhndra/nexpos-api/internal/repository"
 	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
+	"github.com/lib/pq"
 )
 
 type ProductService struct {
@@ -37,6 +40,11 @@ func (s *ProductService) Create(ctx context.Context, companyID int64, req dto.Cr
 		if category == nil {
 			return nil, apperror.BadRequest("Category not found")
 		}
+	}
+
+	// Validate at least one variant
+	if len(req.Variants) == 0 {
+		return nil, apperror.BadRequest("product must have at least one variant")
 	}
 
 	// Validate SKUs don't exist
@@ -197,6 +205,11 @@ func (s *ProductService) Update(ctx context.Context, companyID, id int64, req dt
 		}
 	}
 
+	// Validate at least one variant
+	if len(req.Variants) == 0 {
+		return nil, apperror.BadRequest("product must have at least one variant")
+	}
+
 	// Validate SKUs don't exist (excluding current variants)
 	existingVariants, err := s.variantRepo.GetByProductID(ctx, id)
 	if err != nil {
@@ -208,11 +221,7 @@ func (s *ProductService) Update(ctx context.Context, companyID, id int64, req dt
 	}
 
 	for _, v := range req.Variants {
-		excludeID := int64(0)
-		if v.ID != nil {
-			excludeID = *v.ID
-		}
-		exists, err := s.variantRepo.SKUExists(ctx, v.SKU, excludeID)
+		exists, err := s.variantRepo.SKUExistsInOtherProduct(ctx, v.SKU, id)
 		if err != nil {
 			return nil, apperror.InternalError(err)
 		}
@@ -234,68 +243,87 @@ func (s *ProductService) Update(ctx context.Context, companyID, id int64, req dt
 		return nil, apperror.InternalError(err)
 	}
 
-	// Track which variant IDs are being updated
-	updatedIDs := make(map[int64]bool)
+	// Separate incoming variants: those with a valid existing ID vs brand-new ones
+	var toExplicitUpdate []dto.ProductVariantInput
+	var toAssign []dto.ProductVariantInput
+	for _, v := range req.Variants {
+		if v.ID != nil && existingIDs[*v.ID] {
+			toExplicitUpdate = append(toExplicitUpdate, v)
+		} else {
+			toAssign = append(toAssign, v)
+		}
+	}
 
-	// Update or create variants
-	hasDefault := false
-	for i, v := range req.Variants {
+	// Collect orphan existing rows (not explicitly kept by ID)
+	keptIDs := make(map[int64]bool)
+	for _, v := range toExplicitUpdate {
+		keptIDs[*v.ID] = true
+	}
+	var orphans []*model.ProductVariant
+	for _, ev := range existingVariants {
+		if !keptIDs[ev.ID] {
+			orphans = append(orphans, ev)
+		}
+	}
+
+	buildVariant := func(v dto.ProductVariantInput, pos int) *model.ProductVariant {
 		variantIsActive := true
 		if v.IsActive != nil {
 			variantIsActive = *v.IsActive
 		}
-
-		isDefault := v.IsDefault
-		if i == 0 && !hasDefault {
-			isDefault = true
+		return &model.ProductVariant{
+			ProductID:        id,
+			SKU:              v.SKU,
+			Name:             v.Name,
+			Attributes:       model.JSONMap(v.Attributes),
+			Price:            v.Price,
+			StandardCost:     v.StandardCost,
+			LastPurchaseCost: v.LastPurchaseCost,
+			IsDefault:        v.IsDefault || pos == 0,
+			IsActive:         variantIsActive,
 		}
-		if v.IsDefault {
-			hasDefault = true
-		}
+	}
 
-		if v.ID != nil && existingIDs[*v.ID] {
-			// Update existing variant
-			variant := &model.ProductVariant{
-				ID:               *v.ID,
-				ProductID:        id,
-				SKU:              v.SKU,
-				Name:             v.Name,
-				Attributes:       model.JSONMap(v.Attributes),
-				Price:            v.Price,
-				StandardCost:     v.StandardCost,
-				LastPurchaseCost: v.LastPurchaseCost,
-				IsDefault:        isDefault,
-				IsActive:         variantIsActive,
-			}
+	// Process explicit updates first
+	for i, v := range toExplicitUpdate {
+		variant := buildVariant(v, i)
+		variant.ID = *v.ID
+		if err := s.variantRepo.Update(ctx, variant); err != nil {
+			return nil, apperror.InternalError(err)
+		}
+	}
+
+	// For brand-new variants: reuse orphan rows (UPDATE) before inserting.
+	// This avoids duplicate-key errors and minimises row churn.
+	offset := len(toExplicitUpdate)
+	orphanIdx := 0
+	for i, v := range toAssign {
+		variant := buildVariant(v, offset+i)
+		if orphanIdx < len(orphans) {
+			variant.ID = orphans[orphanIdx].ID
+			orphanIdx++
 			if err := s.variantRepo.Update(ctx, variant); err != nil {
 				return nil, apperror.InternalError(err)
 			}
-			updatedIDs[*v.ID] = true
 		} else {
-			// Create new variant
-			variant := &model.ProductVariant{
-				ProductID:        id,
-				SKU:              v.SKU,
-				Name:             v.Name,
-				Attributes:       model.JSONMap(v.Attributes),
-				Price:            v.Price,
-				StandardCost:     v.StandardCost,
-				LastPurchaseCost: v.LastPurchaseCost,
-				IsDefault:        isDefault,
-				IsActive:         variantIsActive,
-			}
 			if err := s.variantRepo.Create(ctx, variant); err != nil {
 				return nil, apperror.InternalError(err)
 			}
 		}
 	}
 
-	// Delete variants that were not in the update request
-	for _, ev := range existingVariants {
-		if !updatedIDs[ev.ID] {
-			if err := s.variantRepo.Delete(ctx, ev.ID); err != nil {
-				return nil, apperror.InternalError(err)
+	// Delete leftover orphans only when variant count decreases
+	for ; orphanIdx < len(orphans); orphanIdx++ {
+		orphan := orphans[orphanIdx]
+		if err := s.variantRepo.Delete(ctx, orphan.ID); err != nil {
+			var pqErr *pq.Error
+			if errors.As(err, &pqErr) && pqErr.Code == "23503" {
+				return nil, apperror.BadRequest(fmt.Sprintf(
+					"Variant '%s' (SKU: %s) tidak dapat dihapus karena sudah memiliki riwayat transaksi",
+					orphan.Name, orphan.SKU,
+				))
 			}
+			return nil, apperror.InternalError(err)
 		}
 	}
 
