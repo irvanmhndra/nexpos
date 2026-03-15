@@ -9,18 +9,43 @@ interface NavItem {
   path: string;
 }
 
-const navItems: NavItem[] = [
-  { label: 'Kasir', icon: 'point_of_sale', path: '/pos' },
-  { label: 'Dashboard', icon: 'dashboard', path: '/' },
-  { label: 'Produk', icon: 'inventory_2', path: '/products' },
-  { label: 'Kategori', icon: 'category', path: '/categories' },
-  { label: 'Inventaris', icon: 'warehouse', path: '/inventory' },
-  { label: 'Pesanan', icon: 'shopping_cart', path: '/orders' },
-  { label: 'Pelanggan', icon: 'group', path: '/customers' },
-  { label: 'Cabang', icon: 'store', path: '/branches' },
-  { label: 'Promo', icon: 'local_offer', path: '/promotions' },
-  { label: 'Laporan', icon: 'description', path: '/reports' },
-  { label: 'Pengaturan', icon: 'settings', path: '/settings' },
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    title: '',
+    items: [
+      { label: 'Dashboard', icon: 'dashboard', path: '/' },
+      { label: 'Kasir', icon: 'point_of_sale', path: '/pos' },
+      { label: 'Pesanan', icon: 'receipt_long', path: '/orders' },
+    ],
+  },
+  {
+    title: 'Katalog',
+    items: [
+      { label: 'Produk', icon: 'inventory_2', path: '/products' },
+      { label: 'Kategori', icon: 'category', path: '/categories' },
+      { label: 'Inventaris', icon: 'warehouse', path: '/inventory' },
+    ],
+  },
+  {
+    title: 'Pelanggan',
+    items: [
+      { label: 'Pelanggan', icon: 'group', path: '/customers' },
+      { label: 'Promo', icon: 'local_offer', path: '/promotions' },
+    ],
+  },
+  {
+    title: 'Lainnya',
+    items: [
+      { label: 'Laporan', icon: 'bar_chart', path: '/reports' },
+      { label: 'Cabang', icon: 'store', path: '/branches' },
+      { label: 'Pengaturan', icon: 'settings', path: '/settings' },
+    ],
+  },
 ];
 
 export function Sidebar() {
@@ -34,9 +59,9 @@ export function Sidebar() {
 
   return (
     <aside className="hidden lg:flex w-72 flex-col bg-card-light dark:bg-card-dark border-r border-border-light dark:border-border-dark flex-shrink-0 transition-colors duration-200">
-      <div className="flex h-full flex-col justify-between p-4">
+      <div className="flex h-full min-h-0 flex-col justify-between p-4">
         {/* Logo & Brand */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto">
           <Link to="/" className="flex items-center gap-3 px-2 group">
             <div className="bg-primary/10 p-2 rounded-lg">
               <Icon name="analytics" filled className="text-primary" size={28} />
@@ -80,33 +105,45 @@ export function Sidebar() {
           )}
 
           {/* Navigation */}
-          <nav className="flex flex-col gap-2">
-            {navItems.map(item => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group',
-                  isActive(item.path)
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-text-main dark:text-gray-300 hover:bg-background-light dark:hover:bg-background-dark'
+          <nav className="flex flex-col gap-1">
+            {navGroups.map((group, groupIdx) => (
+              <div key={group.title || groupIdx}>
+                {groupIdx > 0 && (
+                  <div className="my-2 mx-2 border-t border-border-light dark:border-border-dark" />
                 )}
-              >
-                <Icon
-                  name={item.icon}
-                  filled={isActive(item.path)}
-                  size="md"
-                  className={cn(!isActive(item.path) && 'group-hover:text-primary')}
-                />
-                <p
-                  className={cn(
-                    'text-sm leading-normal',
-                    isActive(item.path) ? 'font-bold' : 'font-medium'
-                  )}
-                >
-                  {item.label}
-                </p>
-              </Link>
+                {group.title && (
+                  <p className="px-3 pt-1 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-sub/60 dark:text-gray-500">
+                    {group.title}
+                  </p>
+                )}
+                {group.items.map(item => (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group',
+                      isActive(item.path)
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-text-main dark:text-gray-300 hover:bg-background-light dark:hover:bg-background-dark'
+                    )}
+                  >
+                    <Icon
+                      name={item.icon}
+                      filled={isActive(item.path)}
+                      size="md"
+                      className={cn(!isActive(item.path) && 'group-hover:text-primary')}
+                    />
+                    <p
+                      className={cn(
+                        'text-sm leading-normal',
+                        isActive(item.path) ? 'font-bold' : 'font-medium'
+                      )}
+                    >
+                      {item.label}
+                    </p>
+                  </Link>
+                ))}
+              </div>
             ))}
           </nav>
         </div>
