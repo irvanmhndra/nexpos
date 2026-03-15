@@ -68,6 +68,7 @@ type CreateOrderRequest struct {
 	Payments        []PaymentInput   `json:"payments"` // Optional - can add payments later
 	Notes           *string          `json:"notes"`
 	OfflineID       *uuid.UUID       `json:"offline_id"` // For offline sync
+	PromoCode       *string          `json:"promo_code"`
 }
 
 type UpdateOrderRequest struct {
@@ -116,6 +117,13 @@ type ListOrderRequest struct {
 
 // ============== Order Response DTOs ==============
 
+type AppliedPromotionDTO struct {
+	ID             int64   `json:"id"`
+	Code           string  `json:"code"`
+	Name           string  `json:"name"`
+	DiscountAmount float64 `json:"discount_amount"`
+}
+
 type OrderResponse struct {
 	ID            int64   `json:"id"`
 	OrderNo       string  `json:"order_no"`
@@ -129,6 +137,7 @@ type OrderResponse struct {
 	TotalTax      float64 `json:"total_tax"`
 	GrandTotal    float64 `json:"grand_total"`
 	Notes         *string `json:"notes"`
+	AppliedPromotion *AppliedPromotionDTO `json:"applied_promotion,omitempty"`
 
 	// Lifecycle fields
 	PaymentStatus     string     `json:"payment_status"`

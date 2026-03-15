@@ -35,9 +35,9 @@ func (h *OrderHandler) Create(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
-	branchID := int64(1)  // TODO: Get from auth context
-	cashierID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
+	branchID := getBranchID(c)
+	cashierID := getUserID(c)
 
 	result, err := h.orderSvc.Create(ctx, companyID, branchID, cashierID, req)
 	if err != nil {
@@ -54,7 +54,7 @@ func (h *OrderHandler) Get(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.orderSvc.GetByID(ctx, companyID, id)
 	if err != nil {
@@ -71,14 +71,13 @@ func (h *OrderHandler) List(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.orderSvc.List(ctx, companyID, req)
 	if err != nil {
 		return httputil.Error(c, err)
 	}
 
-	// Convert dto.PaginationMeta to httputil.Pagination
 	pagination := &httputil.Pagination{
 		TotalRecords: result.Pagination.TotalRecords,
 		TotalPages:   result.Pagination.TotalPages,
@@ -108,7 +107,7 @@ func (h *OrderHandler) Update(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.orderSvc.UpdateOrder(ctx, companyID, id, req)
 	if err != nil {
@@ -125,7 +124,7 @@ func (h *OrderHandler) Confirm(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.orderSvc.ConfirmOrder(ctx, companyID, id)
 	if err != nil {
@@ -151,7 +150,7 @@ func (h *OrderHandler) AddPayment(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.orderSvc.AddPayment(ctx, companyID, id, req)
 	if err != nil {
@@ -173,7 +172,7 @@ func (h *OrderHandler) Complete(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.orderSvc.CompleteOrder(ctx, companyID, id, req)
 	if err != nil {
@@ -199,7 +198,7 @@ func (h *OrderHandler) Cancel(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.orderSvc.CancelOrder(ctx, companyID, id, req)
 	if err != nil {
@@ -225,7 +224,7 @@ func (h *OrderHandler) Void(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.orderSvc.VoidOrder(ctx, companyID, id, req)
 	if err != nil {
@@ -251,7 +250,7 @@ func (h *OrderHandler) RefundPayment(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.orderSvc.RefundPayment(ctx, companyID, id, req)
 	if err != nil {

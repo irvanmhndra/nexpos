@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/irvanmhndra/nexpos-api/internal/dto"
@@ -20,6 +22,9 @@ type OrderService struct {
 	customerRepo     repository.CustomerRepository
 	userRepo         repository.UserRepository
 	settingsRepo     repository.CompanySettingsRepository
+	stockRepo        repository.StockRepository
+	movementRepo     repository.StockMovementRepository
+	promotionRepo    repository.PromotionRepository
 }
 
 func NewOrderService(
@@ -30,6 +35,9 @@ func NewOrderService(
 	customerRepo repository.CustomerRepository,
 	userRepo repository.UserRepository,
 	settingsRepo repository.CompanySettingsRepository,
+	stockRepo repository.StockRepository,
+	movementRepo repository.StockMovementRepository,
+	promotionRepo repository.PromotionRepository,
 ) *OrderService {
 	return &OrderService{
 		orderRepo:     orderRepo,
@@ -39,6 +47,9 @@ func NewOrderService(
 		customerRepo:  customerRepo,
 		userRepo:      userRepo,
 		settingsRepo:  settingsRepo,
+		stockRepo:     stockRepo,
+		movementRepo:  movementRepo,
+		promotionRepo: promotionRepo,
 	}
 }
 
@@ -103,6 +114,22 @@ func (s *OrderService) Create(ctx context.Context, companyID, branchID, cashierI
 			return nil, apperror.InternalError(err)
 		}
 
+		// Check stock availability
+		stock, err := s.stockRepo.GetByVariantAndBranch(ctx, *itemInput.ProductVariantID, branchID)
+		if err != nil {
+			return nil, apperror.InternalError(err)
+		}
+		availableStock := 0
+		if stock != nil {
+			availableStock = stock.Quantity
+		}
+		if availableStock < itemInput.Quantity {
+			return nil, apperror.ValidationError(
+				fmt.Sprintf("Stok %s tidak cukup (tersedia: %d, diminta: %d)", variant.SKU, availableStock, itemInput.Quantity),
+				nil,
+			)
+		}
+
 		// Calculate item amounts
 		unitPrice := variant.Price
 		quantity := float64(itemInput.Quantity)
@@ -132,7 +159,7 @@ func (s *OrderService) Create(ctx context.Context, companyID, branchID, cashierI
 			ProductID:         &variant.ProductID,
 			ProductVariantID:  itemInput.ProductVariantID,
 			SKU:               variant.SKU,
-			ProductName:       "",
+			ProductName:       variant.ProductName,
 			VariantName:       &variant.Name,
 			VariantAttributes: variant.Attributes,
 			UnitPrice:         unitPrice,
@@ -143,6 +170,13 @@ func (s *OrderService) Create(ctx context.Context, companyID, branchID, cashierI
 			Subtotal:          subtotal,
 			CogsAmount:        cogsAmount,
 		})
+	}
+
+	// Evaluate and apply promotion
+	subtotal := totalAmount - totalDiscount
+	promo, promoDiscount := s.evaluatePromotion(ctx, companyID, req.PromoCode, subtotal)
+	if promo != nil {
+		totalDiscount += promoDiscount
 	}
 
 	grandTotal := totalAmount - totalDiscount + totalTax
@@ -177,6 +211,14 @@ func (s *OrderService) Create(ctx context.Context, companyID, branchID, cashierI
 		GrandTotal:        grandTotal,
 		Notes:             req.Notes,
 		OfflineID:         req.OfflineID,
+	}
+	if promo != nil {
+		order.AppliedPromotions = model.JSONMap{
+			"id":              promo.ID,
+			"code":            promo.Code,
+			"name":            promo.Name,
+			"discount_amount": promoDiscount,
+		}
 	}
 
 	if err := s.orderRepo.Create(ctx, order); err != nil {
@@ -296,6 +338,11 @@ func (s *OrderService) CompleteOrder(ctx context.Context, companyID, id int64, r
 		return nil, apperror.InternalError(err)
 	}
 
+	// Deduct stock (best-effort — order is already completed)
+	if err := s.deductStockForOrder(ctx, order); err != nil {
+		slog.Error("failed to deduct stock on order completion", "order_id", order.ID, "error", err)
+	}
+
 	return s.GetByID(ctx, companyID, id)
 }
 
@@ -346,6 +393,8 @@ func (s *OrderService) VoidOrder(ctx context.Context, companyID, id int64, req d
 		return nil, apperror.BadRequest("Cannot void this order")
 	}
 
+	wasCompleted := order.Status == model.OrderStatusCompleted
+
 	now := time.Now()
 	order.Status = model.OrderStatusVoided
 	order.VoidedAt = &now
@@ -358,6 +407,13 @@ func (s *OrderService) VoidOrder(ctx context.Context, companyID, id int64, req d
 
 	if err := s.orderRepo.Update(ctx, order); err != nil {
 		return nil, apperror.InternalError(err)
+	}
+
+	// Restore stock only if order was completed (stock was deducted)
+	if wasCompleted {
+		if err := s.restoreStockForOrder(ctx, order); err != nil {
+			slog.Error("failed to restore stock on order void", "order_id", order.ID, "error", err)
+		}
 	}
 
 	return s.GetByID(ctx, companyID, id)
@@ -494,6 +550,7 @@ func (s *OrderService) UpdateOrder(ctx context.Context, companyID, id int64, req
 				ProductID:         &variant.ProductID,
 				ProductVariantID:  itemInput.ProductVariantID,
 				SKU:               variant.SKU,
+				ProductName:       variant.ProductName,
 				VariantName:       &variant.Name,
 				VariantAttributes: variant.Attributes,
 				UnitPrice:         unitPrice,
@@ -621,6 +678,64 @@ func (s *OrderService) List(ctx context.Context, companyID int64, req dto.ListOr
 	}, nil
 }
 
+// evaluatePromotion finds the best applicable promotion for an order.
+// If promoCode is provided, validates that specific promo.
+// Otherwise auto-applies the highest-discount active promotion.
+func (s *OrderService) evaluatePromotion(ctx context.Context, companyID int64, promoCode *string, subtotalAfterItemDiscounts float64) (*model.Promotion, float64) {
+	now := time.Now()
+	var candidates []*model.Promotion
+
+	if promoCode != nil && *promoCode != "" {
+		p, err := s.promotionRepo.GetByCode(ctx, companyID, *promoCode)
+		if err != nil || p == nil || !p.IsActive {
+			return nil, 0
+		}
+		if p.StartAt.After(now) || (p.EndAt != nil && p.EndAt.Before(now)) {
+			return nil, 0
+		}
+		candidates = []*model.Promotion{p}
+	} else {
+		var err error
+		candidates, err = s.promotionRepo.GetActivePromotions(ctx, companyID, now)
+		if err != nil {
+			return nil, 0
+		}
+	}
+
+	var bestPromo *model.Promotion
+	var bestDiscount float64
+
+	for _, p := range candidates {
+		if p.DiscountType == nil || p.DiscountValue == nil {
+			continue
+		}
+		if p.MinPurchase != nil && subtotalAfterItemDiscounts < *p.MinPurchase {
+			continue
+		}
+
+		var discount float64
+		switch *p.DiscountType {
+		case "percentage":
+			discount = subtotalAfterItemDiscounts * (*p.DiscountValue) / 100
+			if p.MaxDiscount != nil && discount > *p.MaxDiscount {
+				discount = *p.MaxDiscount
+			}
+		case "fixed":
+			discount = *p.DiscountValue
+			if discount > subtotalAfterItemDiscounts {
+				discount = subtotalAfterItemDiscounts
+			}
+		}
+
+		if discount > bestDiscount {
+			bestDiscount = discount
+			bestPromo = p
+		}
+	}
+
+	return bestPromo, bestDiscount
+}
+
 // processPayments handles payment creation and order status updates
 func (s *OrderService) processPayments(ctx context.Context, order *model.Order, paymentInputs []dto.PaymentInput, settings *model.CompanySettings) ([]*model.Payment, error) {
 	payments := make([]*model.Payment, 0, len(paymentInputs))
@@ -652,6 +767,7 @@ func (s *OrderService) processPayments(ctx context.Context, order *model.Order, 
 	s.updateOrderPaymentStatus(ctx, order, totalPaid)
 
 	// Auto-complete counter orders when fully paid (if setting enabled)
+	autoCompleted := false
 	if settings.AutoCompleteCounterOrders &&
 		order.FulfillmentType == model.FulfillmentTypeCounter &&
 		order.PaymentStatus == model.PaymentStatusPaid &&
@@ -667,10 +783,18 @@ func (s *OrderService) processPayments(ctx context.Context, order *model.Order, 
 		order.Status = model.OrderStatusCompleted
 		order.CompletedAt = &now
 		order.PaidAt = &now
+		autoCompleted = true
 	}
 
 	if err := s.orderRepo.Update(ctx, order); err != nil {
 		return nil, apperror.InternalError(err)
+	}
+
+	// Deduct stock on auto-complete (best-effort)
+	if autoCompleted {
+		if err := s.deductStockForOrder(ctx, order); err != nil {
+			slog.Error("failed to deduct stock on auto-complete", "order_id", order.ID, "error", err)
+		}
 	}
 
 	return payments, nil
@@ -790,6 +914,34 @@ func (s *OrderService) toResponse(ctx context.Context, companyID int64, order *m
 		}
 	}
 
+	// Populate applied promotion if present
+	if len(order.AppliedPromotions) > 0 {
+		ap := &dto.AppliedPromotionDTO{}
+		if id, ok := order.AppliedPromotions["id"]; ok {
+			switch v := id.(type) {
+			case float64:
+				ap.ID = int64(v)
+			case int64:
+				ap.ID = v
+			}
+		}
+		if code, ok := order.AppliedPromotions["code"].(string); ok {
+			ap.Code = code
+		}
+		if name, ok := order.AppliedPromotions["name"].(string); ok {
+			ap.Name = name
+		}
+		if disc, ok := order.AppliedPromotions["discount_amount"]; ok {
+			switch v := disc.(type) {
+			case float64:
+				ap.DiscountAmount = v
+			}
+		}
+		if ap.Code != "" {
+			resp.AppliedPromotion = ap
+		}
+	}
+
 	return resp
 }
 
@@ -798,4 +950,122 @@ func roundToNearest(value, nearest float64) float64 {
 		return value
 	}
 	return float64(int64((value+nearest/2)/nearest)) * nearest
+}
+
+// deductStockForOrder creates OUT movements for each order item (best-effort).
+func (s *OrderService) deductStockForOrder(ctx context.Context, order *model.Order) error {
+	items, err := s.orderItemRepo.GetByOrderID(ctx, order.ID)
+	if err != nil {
+		return err
+	}
+
+	refType := "order"
+	for _, item := range items {
+		if item.ProductVariantID == nil {
+			continue // skip custom/untracked items
+		}
+		variantID := *item.ProductVariantID
+
+		current, err := s.stockRepo.GetByVariantAndBranch(ctx, variantID, order.BranchID)
+		if err != nil {
+			slog.Error("deductStock: get stock failed", "variant_id", variantID, "error", err)
+			continue
+		}
+
+		currentQty := 0
+		minQty := 0
+		if current != nil {
+			currentQty = current.Quantity
+			minQty = current.MinQuantity
+		}
+
+		newQty := currentQty - item.Quantity
+		if newQty < 0 {
+			slog.Warn("deductStock: stock went negative", "variant_id", variantID, "order_id", order.ID)
+		}
+
+		refID := order.ID
+		movement := &model.StockMovement{
+			ProductVariantID: variantID,
+			BranchID:         order.BranchID,
+			Type:             model.StockMovementOut,
+			Quantity:         item.Quantity,
+			StockBefore:      currentQty,
+			StockAfter:       newQty,
+			ReferenceType:    &refType,
+			ReferenceID:      &refID,
+		}
+		if err := s.movementRepo.Create(ctx, movement); err != nil {
+			slog.Error("deductStock: create movement failed", "variant_id", variantID, "error", err)
+			continue
+		}
+
+		stock := &model.Stock{
+			ProductVariantID: variantID,
+			BranchID:         order.BranchID,
+			Quantity:         newQty,
+			MinQuantity:      minQty,
+		}
+		if err := s.stockRepo.Upsert(ctx, stock); err != nil {
+			slog.Error("deductStock: upsert stock failed", "variant_id", variantID, "error", err)
+		}
+	}
+	return nil
+}
+
+// restoreStockForOrder creates IN movements to reverse a completed order's stock deductions.
+func (s *OrderService) restoreStockForOrder(ctx context.Context, order *model.Order) error {
+	items, err := s.orderItemRepo.GetByOrderID(ctx, order.ID)
+	if err != nil {
+		return err
+	}
+
+	refType := "order_void"
+	for _, item := range items {
+		if item.ProductVariantID == nil {
+			continue
+		}
+		variantID := *item.ProductVariantID
+
+		current, err := s.stockRepo.GetByVariantAndBranch(ctx, variantID, order.BranchID)
+		if err != nil {
+			slog.Error("restoreStock: get stock failed", "variant_id", variantID, "error", err)
+			continue
+		}
+
+		currentQty := 0
+		minQty := 0
+		if current != nil {
+			currentQty = current.Quantity
+			minQty = current.MinQuantity
+		}
+
+		newQty := currentQty + item.Quantity
+		refID := order.ID
+		movement := &model.StockMovement{
+			ProductVariantID: variantID,
+			BranchID:         order.BranchID,
+			Type:             model.StockMovementIn,
+			Quantity:         item.Quantity,
+			StockBefore:      currentQty,
+			StockAfter:       newQty,
+			ReferenceType:    &refType,
+			ReferenceID:      &refID,
+		}
+		if err := s.movementRepo.Create(ctx, movement); err != nil {
+			slog.Error("restoreStock: create movement failed", "variant_id", variantID, "error", err)
+			continue
+		}
+
+		stock := &model.Stock{
+			ProductVariantID: variantID,
+			BranchID:         order.BranchID,
+			Quantity:         newQty,
+			MinQuantity:      minQty,
+		}
+		if err := s.stockRepo.Upsert(ctx, stock); err != nil {
+			slog.Error("restoreStock: upsert stock failed", "variant_id", variantID, "error", err)
+		}
+	}
+	return nil
 }
