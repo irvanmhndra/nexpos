@@ -140,7 +140,8 @@ export const dashboardService = {
         params: { per_page: 5, page: 1 },
       });
       // Map to expected format for DataTable
-      return (data.data || []).map((order: any) => ({
+      interface RawOrder { id: number; order_no: string; customer_name?: string; created_at: string; status: string; grand_total: number; }
+      return (data.data || []).map((order: RawOrder) => ({
         id: order.id,
         orderNumber: order.order_no,
         customerName: order.customer_name || 'Walk-in Customer',

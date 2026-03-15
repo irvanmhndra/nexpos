@@ -50,6 +50,7 @@ function CategoryFormModal({
 
   useEffect(() => {
     if (editingCategory) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData({
         code: editingCategory.code,
         name: editingCategory.name,
@@ -58,6 +59,7 @@ function CategoryFormModal({
         is_active: editingCategory.is_active,
       });
     } else {
+       
       setFormData({
         code: '',
         name: '',

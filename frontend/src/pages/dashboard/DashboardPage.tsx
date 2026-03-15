@@ -90,8 +90,9 @@ export function DashboardPage() {
     {
       header: 'Status',
       accessor: (row: RecentOrder) => {
-        const statusConfig: Record<string, { variant: any; label: string }> = {
-          draft: { variant: 'secondary', label: 'Draft' },
+        type BadgeVariant = 'default' | 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'gray';
+        const statusConfig: Record<string, { variant: BadgeVariant; label: string }> = {
+          draft: { variant: 'default', label: 'Draft' },
           confirmed: { variant: 'info', label: 'Dikonfirmasi' },
           completed: { variant: 'success', label: 'Selesai' },
           cancelled: { variant: 'danger', label: 'Dibatalkan' },

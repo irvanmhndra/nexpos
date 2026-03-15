@@ -86,6 +86,7 @@ export function BusinessSettings() {
   // Populate form when settings load
   useEffect(() => {
     if (settings) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm({
         tax_enabled: settings.tax_enabled,
         tax_rate: settings.tax_rate,
@@ -100,6 +101,7 @@ export function BusinessSettings() {
         offline_mode_enabled: settings.offline_mode_enabled,
         max_offline_days: settings.max_offline_days,
       });
+       
       setIsDirty(false);
     }
   }, [settings]);

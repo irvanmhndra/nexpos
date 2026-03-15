@@ -68,8 +68,11 @@ export function OrderFormModal({
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsManualCustomer(false);
+       
       setPayNow(true);
+       
       setFormData({
         customerId: '',
         customerName: '',
@@ -83,6 +86,7 @@ export function OrderFormModal({
         notes: '',
         promoCode: '',
       });
+       
       setErrors({});
     }
   }, [isOpen]);

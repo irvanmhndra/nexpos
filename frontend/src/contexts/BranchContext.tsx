@@ -54,6 +54,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
     }
 
     setActiveBranchState(branches[0]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branches, user?.default_branch?.id]);
 
   const setActiveBranch = (branch: Branch) => {
@@ -68,6 +69,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useBranch() {
   const context = useContext(BranchContext);
   if (!context) throw new Error('useBranch must be used within BranchProvider');
