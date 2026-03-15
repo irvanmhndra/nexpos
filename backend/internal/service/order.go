@@ -131,7 +131,7 @@ func (s *OrderService) Create(ctx context.Context, companyID, branchID, cashierI
 		}
 
 		// Calculate item amounts
-		unitPrice := variant.Price
+		unitPrice := effectivePrice(variant)
 		quantity := float64(itemInput.Quantity)
 		discountAmount := itemInput.DiscountAmount
 		subtotal := (unitPrice * quantity) - discountAmount
@@ -274,7 +274,7 @@ func (s *OrderService) Preview(ctx context.Context, companyID, branchID int64, r
 			return nil, apperror.InternalError(err)
 		}
 
-		unitPrice := variant.Price
+		unitPrice := effectivePrice(variant)
 		quantity := float64(itemInput.Quantity)
 		discount := itemInput.DiscountAmount
 		subtotalItem := (unitPrice * quantity) - discount
@@ -598,7 +598,7 @@ func (s *OrderService) UpdateOrder(ctx context.Context, companyID, id int64, req
 				return nil, apperror.InternalError(err)
 			}
 
-			unitPrice := variant.Price
+			unitPrice := effectivePrice(variant)
 			quantity := float64(itemInput.Quantity)
 			discountAmount := itemInput.DiscountAmount
 			subtotal := (unitPrice * quantity) - discountAmount
@@ -1016,6 +1016,17 @@ func (s *OrderService) toResponse(ctx context.Context, companyID int64, order *m
 	}
 
 	return resp
+}
+
+// effectivePrice returns the sale price if it's active, otherwise the normal price.
+func effectivePrice(v *model.ProductVariant) float64 {
+	now := time.Now()
+	if v.SalePrice != nil && *v.SalePrice < v.Price &&
+		(v.SaleStart == nil || !now.Before(*v.SaleStart)) &&
+		(v.SaleEnd == nil || !now.After(*v.SaleEnd)) {
+		return *v.SalePrice
+	}
+	return v.Price
 }
 
 func roundToNearest(value, nearest float64) float64 {
