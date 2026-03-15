@@ -125,7 +125,7 @@ func (r *StockRepository) ListInventory(ctx context.Context, companyID, branchID
 			COALESCE(b.name, '')             AS branch_name,
 			COALESCE(s.quantity, 0)          AS current_stock,
 			COALESCE(s.min_quantity, 0)      AS min_stock,
-			COALESCE(s.quantity, 0) * pv.standard_cost AS stock_value,
+			GREATEST(COALESCE(s.quantity, 0), 0) * pv.standard_cost AS stock_value,
 			(SELECT COUNT(*) FROM product_variants pv2 WHERE pv2.product_id = p.id AND pv2.is_active = true) > 1 AS has_variants
 		FROM product_variants pv
 		JOIN products p ON p.id = pv.product_id
@@ -171,7 +171,7 @@ func (r *StockRepository) GetInventoryStats(ctx context.Context, companyID, bran
 			COUNT(*) FILTER (WHERE COALESCE(s.quantity,0) <= 0)             AS out_of_stock,
 			COUNT(*) FILTER (WHERE COALESCE(s.quantity,0) > 0
 				AND COALESCE(s.quantity,0) <= COALESCE(s.min_quantity,0))   AS low_stock,
-			COALESCE(SUM(COALESCE(s.quantity,0) * pv.standard_cost), 0)    AS total_stock_value
+			COALESCE(SUM(GREATEST(COALESCE(s.quantity,0), 0) * pv.standard_cost), 0) AS total_stock_value
 		FROM product_variants pv
 		JOIN products p ON p.id = pv.product_id
 		` + stockJoin + `

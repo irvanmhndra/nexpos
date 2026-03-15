@@ -1054,7 +1054,8 @@ func (s *OrderService) deductStockForOrder(ctx context.Context, order *model.Ord
 
 		newQty := currentQty - item.Quantity
 		if newQty < 0 {
-			slog.Warn("deductStock: stock went negative", "variant_id", variantID, "order_id", order.ID)
+			slog.Warn("deductStock: stock went negative (race condition), clamping to 0", "variant_id", variantID, "order_id", order.ID)
+			newQty = 0
 		}
 
 		refID := order.ID
