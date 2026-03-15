@@ -162,3 +162,16 @@ func (r *promotionRepository) GetActivePromotions(ctx context.Context, companyID
 	err := r.db.SelectContext(ctx, &promotions, query, companyID, now)
 	return promotions, err
 }
+
+func (r *promotionRepository) GetByCode(ctx context.Context, companyID int64, code string) (*model.Promotion, error) {
+	var promo model.Promotion
+	query := `SELECT * FROM promotions WHERE company_id = $1 AND code = $2`
+	err := r.db.GetContext(ctx, &promo, query, companyID, code)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &promo, nil
+}
