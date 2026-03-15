@@ -35,7 +35,7 @@ func (h *BranchHandler) Create(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.branchSvc.Create(ctx, companyID, req)
 	if err != nil {
@@ -52,7 +52,7 @@ func (h *BranchHandler) Get(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.branchSvc.GetByID(ctx, companyID, id)
 	if err != nil {
@@ -83,7 +83,7 @@ func (h *BranchHandler) List(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.branchSvc.List(ctx, companyID, req)
 	if err != nil {
@@ -120,7 +120,7 @@ func (h *BranchHandler) Update(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.branchSvc.Update(ctx, companyID, id, req)
 	if err != nil {
@@ -137,7 +137,7 @@ func (h *BranchHandler) Delete(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: from auth context
+	companyID := getCompanyID(c)
 
 	if err := h.branchSvc.Delete(ctx, companyID, id); err != nil {
 		return httputil.Error(c, err)

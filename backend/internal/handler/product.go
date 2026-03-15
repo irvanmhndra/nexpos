@@ -35,7 +35,7 @@ func (h *ProductHandler) Create(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.productSvc.Create(ctx, companyID, req)
 	if err != nil {
@@ -52,7 +52,7 @@ func (h *ProductHandler) Get(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.productSvc.GetByID(ctx, companyID, id)
 	if err != nil {
@@ -65,7 +65,6 @@ func (h *ProductHandler) Get(c *echo.Context) error {
 func (h *ProductHandler) List(c *echo.Context) error {
 	var req dto.ListProductRequest
 
-	// Parse query params
 	if page := c.QueryParam("page"); page != "" {
 		if p, err := strconv.Atoi(page); err == nil {
 			req.Page = p
@@ -89,7 +88,7 @@ func (h *ProductHandler) List(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.productSvc.List(ctx, companyID, req)
 	if err != nil {
@@ -126,7 +125,7 @@ func (h *ProductHandler) Update(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.productSvc.Update(ctx, companyID, id, req)
 	if err != nil {
@@ -143,7 +142,7 @@ func (h *ProductHandler) Delete(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	if err := h.productSvc.Delete(ctx, companyID, id); err != nil {
 		return httputil.Error(c, err)

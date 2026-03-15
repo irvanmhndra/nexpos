@@ -35,7 +35,7 @@ func (h *ProductCategoryHandler) Create(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.categorySvc.Create(ctx, companyID, req)
 	if err != nil {
@@ -52,7 +52,7 @@ func (h *ProductCategoryHandler) Get(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.categorySvc.GetByID(ctx, companyID, id)
 	if err != nil {
@@ -65,7 +65,6 @@ func (h *ProductCategoryHandler) Get(c *echo.Context) error {
 func (h *ProductCategoryHandler) List(c *echo.Context) error {
 	var req dto.ListProductCategoryRequest
 
-	// Parse query params
 	if page := c.QueryParam("page"); page != "" {
 		if p, err := strconv.Atoi(page); err == nil {
 			req.Page = p
@@ -84,7 +83,7 @@ func (h *ProductCategoryHandler) List(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.categorySvc.List(ctx, companyID, req)
 	if err != nil {
@@ -107,7 +106,7 @@ func (h *ProductCategoryHandler) List(c *echo.Context) error {
 
 func (h *ProductCategoryHandler) ListAll(c *echo.Context) error {
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.categorySvc.ListAll(ctx, companyID)
 	if err != nil {
@@ -133,7 +132,7 @@ func (h *ProductCategoryHandler) Update(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.categorySvc.Update(ctx, companyID, id, req)
 	if err != nil {
@@ -150,7 +149,7 @@ func (h *ProductCategoryHandler) Delete(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	if err := h.categorySvc.Delete(ctx, companyID, id); err != nil {
 		return httputil.Error(c, err)

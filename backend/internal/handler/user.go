@@ -145,11 +145,3 @@ func (h *UserHandler) Delete(c *echo.Context) error {
 
 	return httputil.Success(c, http.StatusOK, "User deleted successfully", nil)
 }
-
-// Context helpers
-func getCompanyID(c *echo.Context) int64 {
-	if v := c.Get("company_id"); v != nil {
-		return v.(int64)
-	}
-	return 1 // Default for development
-}

@@ -35,7 +35,7 @@ func (h *ReportHandler) GetSummary(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.reportSvc.GetSummary(ctx, companyID, req.DateFrom, req.DateTo)
 	if err != nil {
@@ -56,7 +56,7 @@ func (h *ReportHandler) GetSalesTrend(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.reportSvc.GetSalesTrend(ctx, companyID, req.DateFrom, req.DateTo)
 	if err != nil {
@@ -85,7 +85,7 @@ func (h *ReportHandler) GetTopProducts(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.reportSvc.GetTopProducts(ctx, companyID, req.DateFrom, req.DateTo, limit)
 	if err != nil {
@@ -106,7 +106,7 @@ func (h *ReportHandler) GetCategoryRevenue(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.reportSvc.GetCategoryRevenue(ctx, companyID, req.DateFrom, req.DateTo)
 	if err != nil {
@@ -127,7 +127,7 @@ func (h *ReportHandler) GetPaymentMethods(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.reportSvc.GetPaymentMethods(ctx, companyID, req.DateFrom, req.DateTo)
 	if err != nil {
@@ -148,7 +148,7 @@ func (h *ReportHandler) GetHourlySales(c *echo.Context) error {
 	}
 
 	ctx := (*c).Request().Context()
-	companyID := int64(1) // TODO: Get from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.reportSvc.GetHourlySales(ctx, companyID, req.DateFrom, req.DateTo)
 	if err != nil {

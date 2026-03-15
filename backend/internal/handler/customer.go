@@ -35,8 +35,7 @@ func (h *CustomerHandler) Create(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	// TODO: Get companyID from auth context
-	companyID := int64(1) // Temporary hardcode
+	companyID := getCompanyID(c)
 
 	result, err := h.customerSvc.Create(ctx, companyID, req)
 	if err != nil {
@@ -53,7 +52,7 @@ func (h *CustomerHandler) Get(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // Temporary hardcode
+	companyID := getCompanyID(c)
 
 	result, err := h.customerSvc.GetByID(ctx, companyID, id)
 	if err != nil {
@@ -66,7 +65,6 @@ func (h *CustomerHandler) Get(c *echo.Context) error {
 func (h *CustomerHandler) List(c *echo.Context) error {
 	var req dto.ListCustomerRequest
 
-	// Parse query params
 	if page := c.QueryParam("page"); page != "" {
 		if p, err := strconv.Atoi(page); err == nil {
 			req.Page = p
@@ -85,7 +83,7 @@ func (h *CustomerHandler) List(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // Temporary hardcode
+	companyID := getCompanyID(c)
 
 	result, err := h.customerSvc.List(ctx, companyID, req)
 	if err != nil {
@@ -122,7 +120,7 @@ func (h *CustomerHandler) Update(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // Temporary hardcode
+	companyID := getCompanyID(c)
 
 	result, err := h.customerSvc.Update(ctx, companyID, id, req)
 	if err != nil {
@@ -139,7 +137,7 @@ func (h *CustomerHandler) Delete(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // Temporary hardcode
+	companyID := getCompanyID(c)
 
 	if err := h.customerSvc.Delete(ctx, companyID, id); err != nil {
 		return httputil.Error(c, err)

@@ -63,6 +63,19 @@ func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest, ipAddress
 		return nil, apperror.UserInactive()
 	}
 
+	// Get default branch
+	var defaultBranch *dto.BranchInfo
+	var branchID *int64
+	branch, branchErr := s.userBranchRepo.GetDefaultBranch(ctx, user.ID)
+	if branchErr == nil && branch != nil {
+		branchID = &branch.ID
+		defaultBranch = &dto.BranchInfo{
+			ID:   branch.ID,
+			Code: branch.Code,
+			Name: branch.Name,
+		}
+	}
+
 	// Generate tokens
 	accessToken := generateToken()
 	refreshToken := generateToken()
@@ -71,6 +84,7 @@ func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest, ipAddress
 	session := &model.UserSession{
 		UserID:                user.ID,
 		CompanyID:             user.CompanyID,
+		BranchID:              branchID,
 		AccessToken:           accessToken,
 		AccessTokenExpiresAt:  time.Now().Add(s.jwtConfig.AccessTokenExpiry),
 		RefreshToken:          refreshToken,
@@ -109,6 +123,7 @@ func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest, ipAddress
 				Code: company.Code,
 				Name: company.Name,
 			},
+			DefaultBranch: defaultBranch,
 		},
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,

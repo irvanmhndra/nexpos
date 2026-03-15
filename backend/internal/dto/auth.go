@@ -25,12 +25,19 @@ type CompanyInfo struct {
 	Name string `json:"name"`
 }
 
+type BranchInfo struct {
+	ID   int64  `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
 type AuthUserResponse struct {
-	ID      int64        `json:"id"`
-	Name    string       `json:"name"`
-	Email   string       `json:"email"`
-	Role    string       `json:"role"`
-	Company *CompanyInfo `json:"company"`
+	ID            int64        `json:"id"`
+	Name          string       `json:"name"`
+	Email         string       `json:"email"`
+	Role          string       `json:"role"`
+	Company       *CompanyInfo `json:"company"`
+	DefaultBranch *BranchInfo  `json:"default_branch,omitempty"`
 }
 
 type LoginResponse struct {

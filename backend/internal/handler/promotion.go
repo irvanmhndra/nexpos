@@ -35,7 +35,7 @@ func (h *PromotionHandler) Create(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.promotionSvc.Create(ctx, companyID, req)
 	if err != nil {
@@ -52,7 +52,7 @@ func (h *PromotionHandler) Get(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.promotionSvc.GetByID(ctx, companyID, id)
 	if err != nil {
@@ -84,7 +84,7 @@ func (h *PromotionHandler) List(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.promotionSvc.List(ctx, companyID, req)
 	if err != nil {
@@ -121,7 +121,7 @@ func (h *PromotionHandler) Update(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: from auth context
+	companyID := getCompanyID(c)
 
 	result, err := h.promotionSvc.Update(ctx, companyID, id, req)
 	if err != nil {
@@ -138,7 +138,7 @@ func (h *PromotionHandler) Delete(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	companyID := int64(1) // TODO: from auth context
+	companyID := getCompanyID(c)
 
 	if err := h.promotionSvc.Delete(ctx, companyID, id); err != nil {
 		return httputil.Error(c, err)
