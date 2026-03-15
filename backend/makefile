@@ -4,7 +4,7 @@ include .env
 export
 
 DATABASE_URL=postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=$(POSTGRES_SSLMODE)
-MIGRATE=migrate -path migrations -database "$(DATABASE_URL)"
+MIGRATE=/opt/homebrew/bin/migrate -path migrations -database "$(DATABASE_URL)"
 
 # ==================== Build & Run ====================
 
