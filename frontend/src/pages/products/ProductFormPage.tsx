@@ -21,6 +21,7 @@ interface ProductFormData {
   image_data: string;
   hasMultipleVariants: boolean;
   // Single variant fields (when toggle OFF)
+  single_variant_id?: number; // store existing variant ID for update
   sku: string;
   price: number;
   standard_cost: number;
@@ -67,6 +68,7 @@ export function ProductFormPage() {
         image_data: product.image_data || '',
         hasMultipleVariants: !!hasMultipleVariants,
         // Single variant from first variant
+        single_variant_id: hasMultipleVariants ? undefined : firstVariant?.id,
         sku: firstVariant?.sku || '',
         price: firstVariant?.price || 0,
         standard_cost: firstVariant?.standard_cost || 0,
@@ -143,6 +145,7 @@ export function ProductFormPage() {
         }))
       : [
           {
+            id: formData.single_variant_id,
             name: 'Default',
             sku: formData.sku,
             price: formData.price,
