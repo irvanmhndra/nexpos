@@ -29,11 +29,17 @@ export default {
       },
       animation: {
         float: "float 3s ease-in-out infinite",
+        "scan-line": "scan-line 2s linear infinite",
       },
       keyframes: {
         float: {
           "0%, 100%": { transform: "translateY(0px)" },
           "50%": { transform: "translateY(-8px)" },
+        },
+        "scan-line": {
+          "0%": { top: "8px" },
+          "50%": { top: "calc(100% - 8px)" },
+          "100%": { top: "8px" },
         },
       },
     },
