@@ -12,6 +12,10 @@ interface VariantFormData {
   price: number;
   standard_cost: number;
   is_default: boolean;
+  sale_enabled: boolean;
+  sale_price: number;
+  sale_start: string;
+  sale_end: string;
 }
 
 interface ProductFormData {
@@ -25,6 +29,10 @@ interface ProductFormData {
   sku: string;
   price: number;
   standard_cost: number;
+  sale_enabled: boolean;
+  sale_price: number;
+  sale_start: string;
+  sale_end: string;
   // Multiple variants (when toggle ON)
   variants: VariantFormData[];
 }
@@ -50,6 +58,10 @@ export function ProductFormPage() {
     sku: '',
     price: 0,
     standard_cost: 0,
+    sale_enabled: false,
+    sale_price: 0,
+    sale_start: '',
+    sale_end: '',
     // Multiple variants
     variants: [],
   });
@@ -61,6 +73,7 @@ export function ProductFormPage() {
       const hasMultipleVariants = product.variants && product.variants.length > 1;
       const firstVariant = product.variants?.[0];
 
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData({
         name: product.name,
         category_id: product.category_id?.toString() || '',
@@ -72,6 +85,10 @@ export function ProductFormPage() {
         sku: firstVariant?.sku || '',
         price: firstVariant?.price || 0,
         standard_cost: firstVariant?.standard_cost || 0,
+        sale_enabled: !hasMultipleVariants && !!firstVariant?.sale_price,
+        sale_price: firstVariant?.sale_price || 0,
+        sale_start: firstVariant?.sale_start ? firstVariant.sale_start.slice(0, 16) : '',
+        sale_end: firstVariant?.sale_end ? firstVariant.sale_end.slice(0, 16) : '',
         // All variants for multiple
         variants: hasMultipleVariants
           ? product.variants.map(v => ({
@@ -81,6 +98,10 @@ export function ProductFormPage() {
               price: v.price,
               standard_cost: v.standard_cost,
               is_default: v.is_default,
+              sale_enabled: !!v.sale_price,
+              sale_price: v.sale_price || 0,
+              sale_start: v.sale_start ? v.sale_start.slice(0, 16) : '',
+              sale_end: v.sale_end ? v.sale_end.slice(0, 16) : '',
             }))
           : [],
       });
@@ -142,6 +163,9 @@ export function ProductFormPage() {
           price: v.price,
           standard_cost: v.standard_cost,
           is_default: v.is_default || idx === 0,
+          sale_price: v.sale_enabled && v.sale_price > 0 ? v.sale_price : null,
+          sale_start: v.sale_enabled && v.sale_start ? new Date(v.sale_start).toISOString() : null,
+          sale_end: v.sale_enabled && v.sale_end ? new Date(v.sale_end).toISOString() : null,
         }))
       : [
           {
@@ -151,6 +175,9 @@ export function ProductFormPage() {
             price: formData.price,
             standard_cost: formData.standard_cost,
             is_default: true,
+            sale_price: formData.sale_enabled && formData.sale_price > 0 ? formData.sale_price : null,
+            sale_start: formData.sale_enabled && formData.sale_start ? new Date(formData.sale_start).toISOString() : null,
+            sale_end: formData.sale_enabled && formData.sale_end ? new Date(formData.sale_end).toISOString() : null,
           },
         ];
 
@@ -188,6 +215,10 @@ export function ProductFormPage() {
             price: formData.price || 0,
             standard_cost: formData.standard_cost || 0,
             is_default: true,
+            sale_enabled: false,
+            sale_price: 0,
+            sale_start: '',
+            sale_end: '',
           },
           {
             name: '',
@@ -195,6 +226,10 @@ export function ProductFormPage() {
             price: formData.price || 0,
             standard_cost: formData.standard_cost || 0,
             is_default: false,
+            sale_enabled: false,
+            sale_price: 0,
+            sale_start: '',
+            sale_end: '',
           },
         ],
       });
@@ -207,6 +242,10 @@ export function ProductFormPage() {
         sku: firstVariant?.sku || formData.sku,
         price: firstVariant?.price || formData.price,
         standard_cost: firstVariant?.standard_cost || formData.standard_cost,
+        sale_enabled: firstVariant?.sale_enabled || false,
+        sale_price: firstVariant?.sale_price || 0,
+        sale_start: firstVariant?.sale_start || '',
+        sale_end: firstVariant?.sale_end || '',
         variants: [],
       });
     }
@@ -225,6 +264,10 @@ export function ProductFormPage() {
           price: lastVariant?.price || formData.price || 0,
           standard_cost: lastVariant?.standard_cost || formData.standard_cost || 0,
           is_default: false,
+          sale_enabled: false,
+          sale_price: 0,
+          sale_start: '',
+          sale_end: '',
         },
       ],
     });
@@ -473,6 +516,62 @@ export function ProductFormPage() {
                       Opsional, untuk perhitungan profit
                     </p>
                   </div>
+
+                  {/* Sale Price Section */}
+                  <div className="pt-3 border-t border-border-light dark:border-border-dark">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.sale_enabled}
+                        onChange={e => setFormData({ ...formData, sale_enabled: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <span className="text-sm font-medium text-text-main dark:text-gray-200">
+                        Aktifkan Harga Promo
+                      </span>
+                    </label>
+
+                    {formData.sale_enabled && (
+                      <div className="mt-3 space-y-3 pl-6">
+                        <div>
+                          <label className="block text-xs text-text-sub dark:text-gray-400 mb-1">
+                            Harga Promo (Rp)
+                          </label>
+                          <Input
+                            type="number"
+                            value={formData.sale_price}
+                            onChange={e => setFormData({ ...formData, sale_price: Number(e.target.value) })}
+                            placeholder="35000"
+                            min="0"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs text-text-sub dark:text-gray-400 mb-1">
+                              Mulai (opsional)
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={formData.sale_start}
+                              onChange={e => setFormData({ ...formData, sale_start: e.target.value })}
+                              className="w-full rounded-lg border border-border-light dark:border-gray-600 bg-white dark:bg-card-dark text-text-main dark:text-white focus:border-primary focus:ring-1 focus:ring-primary h-10 px-3 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-text-sub dark:text-gray-400 mb-1">
+                              Sampai (opsional)
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={formData.sale_end}
+                              onChange={e => setFormData({ ...formData, sale_end: e.target.value })}
+                              className="w-full rounded-lg border border-border-light dark:border-gray-600 bg-white dark:bg-card-dark text-text-main dark:text-white focus:border-primary focus:ring-1 focus:ring-primary h-10 px-3 text-sm"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 /* Multiple Variants Form */
@@ -569,6 +668,53 @@ export function ProductFormPage() {
                               min="0"
                             />
                           </div>
+                        </div>
+
+                        {/* Sale price per variant */}
+                        <div className="mt-3 pt-2 border-t border-border-light/50 dark:border-border-dark/50">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={variant.sale_enabled}
+                              onChange={e => updateVariant(index, 'sale_enabled', e.target.checked)}
+                              className="w-3.5 h-3.5 rounded border-gray-300 text-primary focus:ring-primary"
+                            />
+                            <span className="text-xs font-medium text-text-sub dark:text-gray-400">
+                              Harga Promo
+                            </span>
+                          </label>
+                          {variant.sale_enabled && (
+                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 pl-5">
+                              <div>
+                                <label className="block text-xs text-text-sub dark:text-gray-400 mb-1">Harga Promo</label>
+                                <Input
+                                  type="number"
+                                  value={variant.sale_price}
+                                  onChange={e => updateVariant(index, 'sale_price', Number(e.target.value))}
+                                  placeholder="35000"
+                                  min="0"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-text-sub dark:text-gray-400 mb-1">Mulai</label>
+                                <input
+                                  type="datetime-local"
+                                  value={variant.sale_start}
+                                  onChange={e => updateVariant(index, 'sale_start', e.target.value)}
+                                  className="w-full rounded-lg border border-border-light dark:border-gray-600 bg-white dark:bg-card-dark text-text-main dark:text-white focus:border-primary focus:ring-1 focus:ring-primary h-10 px-3 text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-text-sub dark:text-gray-400 mb-1">Sampai</label>
+                                <input
+                                  type="datetime-local"
+                                  value={variant.sale_end}
+                                  onChange={e => updateVariant(index, 'sale_end', e.target.value)}
+                                  className="w-full rounded-lg border border-border-light dark:border-gray-600 bg-white dark:bg-card-dark text-text-main dark:text-white focus:border-primary focus:ring-1 focus:ring-primary h-10 px-3 text-xs"
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

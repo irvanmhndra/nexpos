@@ -40,6 +40,9 @@ export interface ProductVariant {
   last_purchase_cost: number;
   is_default: boolean;
   is_active: boolean;
+  sale_price?: number;
+  sale_start?: string;
+  sale_end?: string;
   created_at: string;
   updated_at: string;
 }
@@ -54,6 +57,9 @@ export interface ProductVariantInput {
   last_purchase_cost?: number;
   is_default?: boolean;
   is_active?: boolean;
+  sale_price?: number | null;
+  sale_start?: string | null;
+  sale_end?: string | null;
 }
 
 // ============== Product ==============

@@ -24,6 +24,8 @@ export function generateUser(overrides?: Partial<User>): User {
 // Generate mock product variant
 export function generateProductVariant(productId: string, baseSku: string, index: number, isDefault: boolean = false): ProductVariant {
   const price = faker.number.int({ min: 50000, max: 10000000 });
+  // ~20% chance of having a sale price
+  const hasSale = faker.datatype.boolean({ probability: 0.2 });
   return {
     id: faker.string.uuid(),
     productId,
@@ -37,6 +39,9 @@ export function generateProductVariant(productId: string, baseSku: string, index
       size: faker.helpers.arrayElement(['S', 'M', 'L', 'XL']),
     },
     isActive: true,
+    salePrice: hasSale ? Math.floor(price * faker.number.float({ min: 0.5, max: 0.85 })) : undefined,
+    saleStart: hasSale ? faker.date.recent({ days: 7 }).toISOString() : undefined,
+    saleEnd: hasSale ? faker.date.soon({ days: 30 }).toISOString() : undefined,
   };
 }
 
@@ -208,6 +213,9 @@ export interface ProductVariant {
   stock: number;
   attributes: Record<string, string>;
   isActive: boolean;
+  salePrice?: number;
+  saleStart?: string;
+  saleEnd?: string;
 }
 
 export interface Order {
