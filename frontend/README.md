@@ -13,8 +13,8 @@ Frontend for Nexpos — a multi-tenant Point of Sale (POS) web application.
 
 ## Features
 
-- **POS Terminal** — Cart management, promo code application, server-side order preview, payment processing
-- **Products** — Product catalog with multi-variant support
+- **POS Terminal** — Cart management, sale price display, promo codes, barcode scanning (USB + camera), server-side order preview, stock-aware cart, payment processing
+- **Products** — Product catalog with multi-variant support, sale price (harga coret) with optional date range
 - **Inventory** — Stock levels, adjustments (in/out/adjustment), movement history
 - **Orders** — Order history and details
 - **Promotions** — Promo code management (fixed/percentage discounts)
@@ -73,8 +73,10 @@ npm run lint       # Run ESLint
 src/
 ├── components/
 │   ├── layout/          # Sidebar, Header, Layout wrapper
+│   ├── features/
+│   │   └── pos/             # POS-specific components (BarcodeScannerModal)
 │   └── ui/              # Reusable UI components (Button, Modal, Badge, etc.)
-├── hooks/               # TanStack Query hooks (useProducts, useOrders, useInventory, ...)
+├── hooks/               # TanStack Query hooks + feature hooks (useBarcodeScanner, ...)
 ├── mocks/
 │   ├── data.ts          # Mock data (products, orders, customers, stocks, movements, ...)
 │   └── handlers.ts      # MSW request handlers
@@ -120,6 +122,18 @@ To use the real backend, set `VITE_ENABLE_MSW=false` and ensure `VITE_API_BASE_U
 - **Primary color:** `#137fec` (Blue)
 - **Font family:** Manrope
 - **Icons:** Material Symbols Outlined
+
+## POS Barcode Scanner
+
+The POS terminal supports two barcode scanning modes:
+
+### USB/HID Scanner (automatic)
+Plug in any USB or Bluetooth barcode scanner. The app detects scanner input by keystroke timing — scanners type characters very fast (<80ms between keystrokes) then send Enter. No configuration needed.
+
+### Camera Scanner
+Click the QR code icon next to the POS search bar. The camera modal uses `@zxing/browser` and supports Code128, EAN-13, QR codes, and more. On mobile, the rear camera is preferred automatically.
+
+Both modes look up the product by **exact SKU match** and add it to the cart.
 
 ## Backend
 
