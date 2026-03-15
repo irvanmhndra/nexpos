@@ -1,6 +1,8 @@
 import { api } from './api';
 import type {
   Order,
+  OrderPreviewRequest,
+  OrderPreviewResponse,
   CreateOrderRequest,
   UpdateOrderRequest,
   AddPaymentRequest,
@@ -28,6 +30,12 @@ export const ordersService = {
   // Get single order
   getOrder: async (id: number) => {
     const { data } = await api.get<ApiResponse<Order>>(`/orders/${id}`);
+    return data.data;
+  },
+
+  // Preview order totals without creating anything
+  previewOrder: async (previewData: OrderPreviewRequest): Promise<OrderPreviewResponse> => {
+    const { data } = await api.post<ApiResponse<OrderPreviewResponse>>('/orders/preview', previewData);
     return data.data;
   },
 

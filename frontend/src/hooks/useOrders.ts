@@ -11,6 +11,25 @@ import type {
   OrderListParams,
 } from '@/types/order';
 
+interface PreviewItem {
+  product_variant_id: number;
+  quantity: number;
+}
+
+export function useOrderPreview(items: PreviewItem[], promoCode: string) {
+  return useQuery({
+    queryKey: ['order-preview', promoCode, items.map(i => `${i.product_variant_id}:${i.quantity}`).join(',')],
+    queryFn: () =>
+      ordersService.previewOrder({
+        items: items.map(i => ({ ...i, discount_amount: 0 })),
+        promo_code: promoCode,
+      }),
+    enabled: items.length > 0 && !!promoCode,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
 export function useOrders(params: OrderListParams = {}) {
   return useQuery({
     queryKey: ['orders', params],

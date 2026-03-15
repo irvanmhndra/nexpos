@@ -149,6 +149,27 @@ export interface RefundPaymentRequest {
   refund_reason: string;
 }
 
+// ============== Order Preview ==============
+
+export interface OrderPreviewRequest {
+  items: Array<{ product_variant_id: number; quantity: number; discount_amount?: number }>;
+  promo_code?: string;
+}
+
+export interface OrderPreviewResponse {
+  subtotal: number;
+  item_discount: number;
+  promo_discount: number;
+  tax: number;
+  grand_total: number;
+  applied_promotion?: {
+    id: number;
+    code: string;
+    name: string;
+    discount_amount: number;
+  } | null;
+}
+
 // ============== List Params ==============
 
 export interface OrderListParams {

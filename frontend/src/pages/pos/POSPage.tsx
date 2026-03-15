@@ -3,16 +3,14 @@ import { Button, Input, Icon, Badge } from '@/components/ui';
 import { useProducts } from '@/hooks/useProducts';
 import { useAllProductCategories } from '@/hooks/useProductCategories';
 import { useCustomers } from '@/hooks/useCustomers';
-import { useCreateOrder } from '@/hooks/useOrders';
+import { useCreateOrder, useOrderPreview } from '@/hooks/useOrders';
 import { useInventory } from '@/hooks/useInventory';
-import { usePromotions } from '@/hooks/usePromotions';
 import { useBranch } from '@/contexts/BranchContext';
 import { formatCurrency, getApiErrorMessage } from '@/utils';
 import { ReceiptModal } from '@/components/features/orders/ReceiptModal';
 import type { Product, ProductVariant } from '@/types/product';
 import type { Customer } from '@/types/customer';
 import type { PaymentMethod, CreateOrderRequest, Order } from '@/types/order';
-import type { Promotion } from '@/types/promotion';
 
 interface CartItem {
   productVariantId: number;
@@ -50,8 +48,6 @@ export function POSPage() {
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [promoInput, setPromoInput] = useState('');
-  const [matchedPromo, setMatchedPromo] = useState<Promotion | null>(null);
-  const [promoError, setPromoError] = useState('');
   const [showPayment, setShowPayment] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -79,26 +75,24 @@ export function POSPage() {
     ...(customerSearch ? { search: customerSearch } : {}),
   });
 
-  const { data: promotionsData } = usePromotions({ is_active: true, per_page: 100 });
-
   const products = productsData?.data || [];
   const cats = categories || [];
   const customers = customersData?.data || [];
-  const promotions = promotionsData?.data || [];
 
   const totalItems = useMemo(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
   const subtotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart]);
 
-  const promoDiscount = useMemo(() => {
-    if (!matchedPromo || !matchedPromo.discount_value) return 0;
-    if (matchedPromo.discount_type === 'percentage') {
-      const disc = (subtotal * matchedPromo.discount_value) / 100;
-      return matchedPromo.max_discount ? Math.min(disc, matchedPromo.max_discount) : disc;
-    }
-    return Math.min(matchedPromo.discount_value, subtotal);
-  }, [matchedPromo, subtotal]);
+  const previewItems = useMemo(
+    () => cart.map(i => ({ product_variant_id: i.productVariantId, quantity: i.quantity })),
+    [cart]
+  );
+  const { data: previewData, isFetching: isPreviewFetching } = useOrderPreview(previewItems, promoCode);
 
-  const grandTotal = subtotal - promoDiscount;
+  const promoDiscount = promoCode && previewData ? previewData.promo_discount : 0;
+  const grandTotal = promoCode && previewData ? previewData.grand_total : subtotal;
+  const promoApplied = !isPreviewFetching && !!previewData?.applied_promotion;
+  const promoInvalid = !isPreviewFetching && !!promoCode && !!previewData && !previewData.applied_promotion;
+
   const paymentAmountNum = parseFloat(paymentAmount) || 0;
   const changeAmount = paymentAmountNum - grandTotal;
   const stockMap = useMemo(() => {
@@ -203,18 +197,7 @@ export function POSPage() {
   const handleApplyPromo = () => {
     const code = promoInput.trim().toUpperCase();
     if (!code) return;
-    const found = promotions.find(p => p.code.toUpperCase() === code);
-    if (!found) {
-      setPromoError('Kode promo tidak valid');
-      return;
-    }
-    if (found.min_purchase && subtotal < found.min_purchase) {
-      setPromoError(`Minimum pembelian ${formatCurrency(found.min_purchase)}`);
-      return;
-    }
-    setMatchedPromo(found);
     setPromoCode(code);
-    setPromoError('');
   };
 
   const resetPOS = () => {
@@ -222,8 +205,6 @@ export function POSPage() {
     setSelectedCustomer(null);
     setPromoCode('');
     setPromoInput('');
-    setMatchedPromo(null);
-    setPromoError('');
     setPaymentAmount('');
     setPaymentMethod('cash');
     setShowPayment(false);
@@ -578,47 +559,56 @@ export function POSPage() {
           {/* Promo code (hidden during payment step) */}
           {!showPayment && (
             promoCode ? (
-              <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/10 border border-primary/20">
+              <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${
+                promoInvalid
+                  ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                  : 'bg-primary/10 border-primary/20'
+              }`}>
                 <div className="flex items-center gap-2">
-                  <Icon name="local_offer" size={16} className="text-primary" />
-                  <span className="text-sm font-medium text-primary">{promoCode}</span>
-                  {promoDiscount > 0 ? (
-                    <span className="text-xs font-medium text-green-600 dark:text-green-400">
-                      · Hemat {formatCurrency(promoDiscount)}
-                    </span>
+                  <Icon name="local_offer" size={16} className={promoInvalid ? 'text-red-500' : 'text-primary'} />
+                  {isPreviewFetching ? (
+                    <>
+                      <span className="text-sm font-medium text-primary">{promoCode}</span>
+                      <Icon name="progress_activity" size={14} className="text-primary animate-spin" />
+                    </>
+                  ) : promoApplied ? (
+                    <>
+                      <span className="text-sm font-medium text-primary">{promoCode}</span>
+                      <span className="text-xs font-medium text-green-600 dark:text-green-400">
+                        · Hemat {formatCurrency(promoDiscount)}
+                      </span>
+                    </>
                   ) : (
-                    <span className="text-xs text-text-sub dark:text-gray-400">akan diterapkan saat checkout</span>
+                    <>
+                      <span className="text-sm font-medium text-red-600 dark:text-red-400">{promoCode}</span>
+                      <span className="text-xs text-red-500">Kode promo tidak berlaku</span>
+                    </>
                   )}
                 </div>
                 <button
-                  onClick={() => { setPromoCode(''); setPromoInput(''); setMatchedPromo(null); setPromoError(''); }}
+                  onClick={() => { setPromoCode(''); setPromoInput(''); }}
                   className="text-text-sub hover:text-red-500 transition-colors"
                 >
                   <Icon name="close" size={16} />
                 </button>
               </div>
             ) : (
-              <div className="space-y-1">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Kode promo (opsional)..."
-                    leftIcon={<Icon name="local_offer" size={18} />}
-                    value={promoInput}
-                    onChange={e => { setPromoInput(e.target.value.toUpperCase()); setPromoError(''); }}
-                    onKeyDown={e => { if (e.key === 'Enter') handleApplyPromo(); }}
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={handleApplyPromo}
-                    disabled={!promoInput.trim()}
-                    className="shrink-0"
-                  >
-                    Terapkan
-                  </Button>
-                </div>
-                {promoError && (
-                  <p className="text-xs text-red-500 px-1">{promoError}</p>
-                )}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Kode promo (opsional)..."
+                  leftIcon={<Icon name="local_offer" size={18} />}
+                  value={promoInput}
+                  onChange={e => setPromoInput(e.target.value.toUpperCase())}
+                  onKeyDown={e => { if (e.key === 'Enter') handleApplyPromo(); }}
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleApplyPromo}
+                  disabled={!promoInput.trim()}
+                  className="shrink-0"
+                >
+                  Terapkan
+                </Button>
               </div>
             )
           )}

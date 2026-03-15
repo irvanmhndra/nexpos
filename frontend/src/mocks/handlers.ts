@@ -167,6 +167,91 @@ export const handlers = [
     return HttpResponse.json(order);
   }),
 
+  http.post(`${API_BASE_URL}/orders/preview`, async ({ request }) => {
+    const body = await request.json() as {
+      items: Array<{ product_variant_id: number; quantity: number; discount_amount?: number }>;
+      promo_code?: string;
+    };
+
+    const settings = mockCompanySettings;
+    let totalAmount = 0;
+    let itemDiscount = 0;
+    let totalTax = 0;
+
+    for (const item of body.items) {
+      let variant = null;
+      for (const product of mockProducts) {
+        for (const v of product.variants) {
+          if (parseInt(v.id) === item.product_variant_id) {
+            variant = v;
+            break;
+          }
+        }
+        if (variant) break;
+      }
+      if (!variant) {
+        return HttpResponse.json({ success: false, message: 'Produk tidak ditemukan' }, { status: 404 });
+      }
+
+      const qty = item.quantity;
+      const discount = item.discount_amount ?? 0;
+      const subtotalItem = (variant.price * qty) - discount;
+
+      let taxAmount = 0;
+      if (settings.tax_enabled) {
+        if (settings.tax_inclusive) {
+          taxAmount = subtotalItem * settings.tax_rate / (100 + settings.tax_rate);
+        } else {
+          taxAmount = subtotalItem * settings.tax_rate / 100;
+        }
+      }
+
+      totalAmount += variant.price * qty;
+      itemDiscount += discount;
+      totalTax += taxAmount;
+    }
+
+    const subtotal = totalAmount - itemDiscount;
+    let promoDiscount = 0;
+    let appliedPromotion = null;
+
+    if (body.promo_code) {
+      const now = new Date();
+      const promo = mockPromotions.find(p =>
+        p.code.toUpperCase() === body.promo_code!.toUpperCase() &&
+        p.is_active &&
+        p.discount_type != null &&
+        p.discount_value != null &&
+        new Date(p.start_at) <= now &&
+        (!p.end_at || new Date(p.end_at) >= now) &&
+        (!p.min_purchase || subtotal >= p.min_purchase)
+      );
+      if (promo && promo.discount_type && promo.discount_value != null) {
+        if (promo.discount_type === 'percentage') {
+          promoDiscount = subtotal * promo.discount_value / 100;
+          if (promo.max_discount) promoDiscount = Math.min(promoDiscount, promo.max_discount);
+        } else {
+          promoDiscount = Math.min(promo.discount_value, subtotal);
+        }
+        appliedPromotion = { id: promo.id, code: promo.code, name: promo.name, discount_amount: promoDiscount };
+      }
+    }
+
+    const grandTotal = subtotal - promoDiscount + totalTax;
+
+    return HttpResponse.json({
+      success: true,
+      data: {
+        subtotal,
+        item_discount: itemDiscount,
+        promo_discount: promoDiscount,
+        tax: totalTax,
+        grand_total: grandTotal,
+        applied_promotion: appliedPromotion,
+      },
+    });
+  }),
+
   http.post(`${API_BASE_URL}/orders`, async ({ request }) => {
     const body = await request.json() as any;
     const newOrder = {
