@@ -47,6 +47,7 @@ export function POSPage() {
   const [customerSearch, setCustomerSearch] = useState('');
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
   const [promoCode, setPromoCode] = useState('');
+  const [promoInput, setPromoInput] = useState('');
   const [showPayment, setShowPayment] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -185,6 +186,7 @@ export function POSPage() {
     setCart([]);
     setSelectedCustomer(null);
     setPromoCode('');
+    setPromoInput('');
     setPaymentAmount('');
     setPaymentMethod('cash');
     setShowPayment(false);
@@ -538,12 +540,43 @@ export function POSPage() {
         <div className="border-t border-border-light dark:border-border-dark p-4 space-y-3">
           {/* Promo code (hidden during payment step) */}
           {!showPayment && (
-            <Input
-              placeholder="Kode promo (opsional)..."
-              leftIcon={<Icon name="local_offer" size={18} />}
-              value={promoCode}
-              onChange={e => setPromoCode(e.target.value.toUpperCase())}
-            />
+            promoCode ? (
+              <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/10 border border-primary/20">
+                <div className="flex items-center gap-2">
+                  <Icon name="local_offer" size={16} className="text-primary" />
+                  <span className="text-sm font-medium text-primary">{promoCode}</span>
+                  <span className="text-xs text-text-sub dark:text-gray-400">akan diterapkan saat checkout</span>
+                </div>
+                <button
+                  onClick={() => { setPromoCode(''); setPromoInput(''); }}
+                  className="text-text-sub hover:text-red-500 transition-colors"
+                >
+                  <Icon name="close" size={16} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Kode promo (opsional)..."
+                  leftIcon={<Icon name="local_offer" size={18} />}
+                  value={promoInput}
+                  onChange={e => setPromoInput(e.target.value.toUpperCase())}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && promoInput.trim()) {
+                      setPromoCode(promoInput.trim());
+                    }
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => { if (promoInput.trim()) setPromoCode(promoInput.trim()); }}
+                  disabled={!promoInput.trim()}
+                  className="shrink-0"
+                >
+                  Terapkan
+                </Button>
+              </div>
+            )
           )}
 
           {/* Subtotal row */}
