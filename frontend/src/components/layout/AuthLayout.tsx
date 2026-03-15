@@ -53,7 +53,7 @@ export function AuthLayout() {
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-400/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2"></div>
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-400/20 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2"></div>
 
-        <div className="relative z-10 flex flex-col h-full items-center justify-center px-12">
+        <div className="relative z-10 flex flex-col h-full items-center justify-center pt-16 px-12">
           {/* Illustration */}
           <div className="relative w-full max-w-lg aspect-square mb-12">
             <div className="w-full h-full rounded-2xl bg-gradient-to-br from-primary/20 to-purple-500/20 flex items-center justify-center border border-white/10">
