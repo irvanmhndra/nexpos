@@ -85,6 +85,44 @@ export const STORAGE_KEYS = {
   SELECTED_BRANCH: 'nexpos_selected_branch',
 } as const;
 
+// Inventory Status
+export const INVENTORY_STATUS = {
+  NORMAL: 'normal',
+  LOW: 'low',
+  OUT_OF_STOCK: 'out_of_stock',
+} as const;
+
+export const INVENTORY_STATUS_LABELS: Record<string, string> = {
+  normal: 'Normal',
+  low: 'Menipis',
+  out_of_stock: 'Habis',
+};
+
+export const INVENTORY_STATUS_COLORS: Record<string, string> = {
+  normal: 'green',
+  low: 'yellow',
+  out_of_stock: 'red',
+};
+
+// Movement Type
+export const MOVEMENT_TYPE = {
+  IN: 'IN',
+  OUT: 'OUT',
+  ADJUST: 'ADJUST',
+} as const;
+
+export const MOVEMENT_TYPE_LABELS: Record<string, string> = {
+  IN: 'Stok Masuk',
+  OUT: 'Stok Keluar',
+  ADJUST: 'Penyesuaian',
+};
+
+export const MOVEMENT_TYPE_COLORS: Record<string, string> = {
+  IN: 'green',
+  OUT: 'red',
+  ADJUST: 'blue',
+};
+
 // Routes
 export const ROUTES = {
   HOME: '/',
@@ -92,6 +130,8 @@ export const ROUTES = {
   REGISTER: '/register',
   DASHBOARD: '/dashboard',
   PRODUCTS: '/products',
+  INVENTORY: '/inventory',
+  INVENTORY_MOVEMENTS: '/inventory/movements',
   ORDERS: '/orders',
   CUSTOMERS: '/customers',
   BRANCHES: '/branches',
@@ -101,6 +141,7 @@ export const ROUTES = {
   SETTINGS_USERS: '/settings/users',
   SETTINGS_NOTIFICATIONS: '/settings/notifications',
   SETTINGS_INTEGRATIONS: '/settings/integrations',
+  POS: '/pos',
 } as const;
 
 // File Upload

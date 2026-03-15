@@ -8,6 +8,9 @@ import {
   mockPromotions,
   mockDashboardStats,
   mockSalesTrend,
+  mockStockMovements,
+  variantMinStock,
+  mockCompanySettings,
 } from './data';
 
 // MSW handlers match the actual axios baseURL
@@ -486,7 +489,267 @@ export const handlers = [
     mockPromotions.splice(index, 1);
     return HttpResponse.json({ success: true, message: 'Promotion deleted successfully', data: null });
   }),
+
+  // ============== Inventory endpoints ==============
+
+  // Stats must come BEFORE /:id style routes
+  http.get(`${API_BASE_URL}/inventory/stats`, () => {
+    let totalSku = 0;
+    let lowStock = 0;
+    let outOfStock = 0;
+    let totalStockValue = 0;
+
+    for (const product of mockProducts) {
+      for (const variant of product.variants) {
+        totalSku++;
+        const minStock = variantMinStock[variant.id] ?? 5;
+        if (variant.stock === 0) {
+          outOfStock++;
+        } else if (variant.stock <= minStock) {
+          lowStock++;
+        }
+        totalStockValue += variant.stock * variant.cost;
+      }
+    }
+
+    return HttpResponse.json({
+      success: true,
+      message: 'Inventory stats retrieved',
+      data: { total_sku: totalSku, low_stock: lowStock, out_of_stock: outOfStock, total_stock_value: totalStockValue },
+    });
+  }),
+
+  http.get(`${API_BASE_URL}/inventory/movements/stats`, () => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thisMonth = mockStockMovements.filter(m => new Date(m.created_at) >= startOfMonth);
+
+    return HttpResponse.json({
+      success: true,
+      message: 'Movement stats retrieved',
+      data: {
+        total_movements: thisMonth.length,
+        stock_in: thisMonth.filter(m => m.type === 'IN').length,
+        stock_out: thisMonth.filter(m => m.type === 'OUT').length,
+        adjustments: thisMonth.filter(m => m.type === 'ADJUST').length,
+      },
+    });
+  }),
+
+  http.get(`${API_BASE_URL}/inventory/movements`, ({ request }) => {
+    const url = new URL(request.url);
+    const search = url.searchParams.get('search') || '';
+    const type = url.searchParams.get('type') || '';
+    const startDate = url.searchParams.get('start_date') || '';
+    const endDate = url.searchParams.get('end_date') || '';
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const perPage = parseInt(url.searchParams.get('per_page') || '10');
+
+    let filtered = [...mockStockMovements];
+
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(
+        m => m.product_name.toLowerCase().includes(q) || m.sku.toLowerCase().includes(q)
+      );
+    }
+    if (type) {
+      filtered = filtered.filter(m => m.type === type);
+    }
+    if (startDate) {
+      filtered = filtered.filter(m => m.created_at >= startDate);
+    }
+    if (endDate) {
+      filtered = filtered.filter(m => m.created_at <= endDate + 'T23:59:59Z');
+    }
+
+    const totalRecords = filtered.length;
+    const totalPages = Math.ceil(totalRecords / perPage) || 1;
+    const start = (page - 1) * perPage;
+    const paginated = filtered.slice(start, start + perPage);
+
+    return HttpResponse.json({
+      success: true,
+      message: 'Stock movements retrieved',
+      data: paginated,
+      meta: {
+        pagination: {
+          total_records: totalRecords,
+          total_pages: totalPages,
+          current_page: page,
+          per_page: perPage,
+          next_page: page < totalPages ? page + 1 : null,
+          prev_page: page > 1 ? page - 1 : null,
+        },
+      },
+    });
+  }),
+
+  http.get(`${API_BASE_URL}/inventory`, ({ request }) => {
+    const url = new URL(request.url);
+    const search = url.searchParams.get('search') || '';
+    const category = url.searchParams.get('category') || '';
+    const status = url.searchParams.get('status') || '';
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const perPage = parseInt(url.searchParams.get('per_page') || '10');
+
+    // Flatten products → inventory items
+    type InventoryRow = {
+      product_id: number;
+      product_variant_id: number;
+      product_name: string;
+      variant_name: string;
+      sku: string;
+      category_name: string;
+      image_data: string | null;
+      branch_id: number;
+      branch_name: string;
+      current_stock: number;
+      min_stock: number;
+      stock_value: number;
+      status: string;
+      has_variants: boolean;
+    };
+
+    const items: InventoryRow[] = [];
+    for (const product of mockProducts) {
+      const hasVariants = product.variants.length > 1;
+      for (const variant of product.variants) {
+        const minStock = variantMinStock[variant.id] ?? 5;
+        let st = 'normal';
+        if (variant.stock === 0) st = 'out_of_stock';
+        else if (variant.stock <= minStock) st = 'low';
+
+        items.push({
+          product_id: parseInt(product.id) || 0,
+          product_variant_id: parseInt(variant.id) || 0,
+          product_name: product.name,
+          variant_name: variant.name,
+          sku: variant.sku,
+          category_name: product.category,
+          image_data: product.image || null,
+          branch_id: 1,
+          branch_name: 'Cabang Utama',
+          current_stock: variant.stock,
+          min_stock: minStock,
+          stock_value: variant.stock * variant.cost,
+          status: st,
+          has_variants: hasVariants,
+        });
+      }
+    }
+
+    let filtered = items;
+
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(
+        i => i.product_name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q)
+      );
+    }
+    if (category) {
+      filtered = filtered.filter(i => i.category_name === category);
+    }
+    if (status) {
+      filtered = filtered.filter(i => i.status === status);
+    }
+
+    const totalRecords = filtered.length;
+    const totalPages = Math.ceil(totalRecords / perPage) || 1;
+    const start = (page - 1) * perPage;
+    const paginated = filtered.slice(start, start + perPage);
+
+    return HttpResponse.json({
+      success: true,
+      message: 'Inventory retrieved',
+      data: paginated,
+      meta: {
+        pagination: {
+          total_records: totalRecords,
+          total_pages: totalPages,
+          current_page: page,
+          per_page: perPage,
+          next_page: page < totalPages ? page + 1 : null,
+          prev_page: page > 1 ? page - 1 : null,
+        },
+      },
+    });
+  }),
+
+  http.post(`${API_BASE_URL}/inventory/adjust`, async ({ request }) => {
+    const body = await request.json() as { variant_id: number; type: string; quantity: number; note?: string };
+
+    // Find the variant in mockProducts and update stock
+    let targetProduct: Product | undefined;
+    let targetVariant: ProductVariant | undefined;
+
+    for (const product of mockProducts) {
+      const variant = product.variants.find(v => parseInt(v.id) === body.variant_id);
+      if (variant) {
+        targetProduct = product;
+        targetVariant = variant;
+        break;
+      }
+    }
+
+    if (!targetProduct || !targetVariant) {
+      return HttpResponse.json({ success: false, message: 'Variant not found' }, { status: 404 });
+    }
+
+    const stockBefore = targetVariant.stock;
+    let stockAfter = stockBefore;
+
+    if (body.type === 'IN') {
+      stockAfter = stockBefore + body.quantity;
+    } else if (body.type === 'OUT') {
+      stockAfter = Math.max(0, stockBefore - body.quantity);
+    } else {
+      stockAfter = body.quantity; // adjustment sets exact value
+    }
+
+    targetVariant.stock = stockAfter;
+
+    const movement: MockStockMovement = {
+      id: crypto.randomUUID(),
+      product_id: targetProduct.id,
+      variant_id: targetVariant.id,
+      product_name: targetProduct.name,
+      variant_name: targetVariant.name,
+      sku: targetVariant.sku,
+      type: body.type as 'IN' | 'OUT' | 'ADJUST',
+      quantity: body.quantity,
+      stock_before: stockBefore,
+      stock_after: stockAfter,
+      reference: null,
+      notes: body.note || null,
+      created_at: new Date().toISOString(),
+      created_by: 'Admin User',
+    };
+
+    mockStockMovements.unshift(movement);
+
+    return HttpResponse.json({ success: true, message: 'Stock adjusted successfully', data: movement }, { status: 201 });
+  }),
+
+  http.put(`${API_BASE_URL}/inventory/:variantId/min-stock`, async ({ params, request }) => {
+    const variantId = params.variantId as string;
+    const body = await request.json() as { min_stock: number };
+    variantMinStock[variantId] = body.min_stock;
+    return HttpResponse.json({ success: true, message: 'Min stock updated successfully', data: null });
+  }),
+
+  // Company settings
+  http.get(`${API_BASE_URL}/company-settings`, () => {
+    return HttpResponse.json({ success: true, message: 'Company settings retrieved successfully', data: mockCompanySettings });
+  }),
+
+  http.put(`${API_BASE_URL}/company-settings`, async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>;
+    Object.assign(mockCompanySettings, body);
+    mockCompanySettings.updated_at = new Date().toISOString();
+    return HttpResponse.json({ success: true, message: 'Company settings updated successfully', data: mockCompanySettings });
+  }),
 ];
 
 // Import types from data
-import type { Product, Order, User, Branch, Promotion } from './data';
+import type { Product, ProductVariant, Order, User, Branch, Promotion, MockStockMovement } from './data';

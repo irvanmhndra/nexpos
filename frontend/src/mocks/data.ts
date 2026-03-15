@@ -338,4 +338,96 @@ export const mockPromotions: Promotion[] = [
 export const mockDashboardStats = generateDashboardStats();
 export const mockSalesTrend = generateSalesTrend();
 
-// Products are already generated with variants in generateProduct function
+// ============== Inventory / Stock Movement ==============
+
+// Min stock per variant (keyed by variant id)
+export const variantMinStock: Record<string, number> = {};
+for (const product of mockProducts) {
+  for (const variant of product.variants) {
+    variantMinStock[variant.id] = faker.number.int({ min: 3, max: 15 });
+  }
+}
+
+export interface MockStockMovement {
+  id: string;
+  product_id: string;
+  variant_id: string;
+  product_name: string;
+  variant_name: string;
+  sku: string;
+  type: 'IN' | 'OUT' | 'ADJUST';
+  quantity: number;
+  stock_before: number;
+  stock_after: number;
+  reference: string | null;
+  notes: string | null;
+  created_at: string;
+  created_by: string;
+}
+
+export function generateStockMovement(product: Product, variant: ProductVariant): MockStockMovement {
+  const type = faker.helpers.arrayElement(['IN', 'OUT', 'ADJUST'] as const);
+  const quantity = faker.number.int({ min: 1, max: 20 });
+  const stockBefore = faker.number.int({ min: 0, max: 100 });
+  const stockAfter = type === 'IN'
+    ? stockBefore + quantity
+    : type === 'OUT'
+      ? Math.max(0, stockBefore - quantity)
+      : stockBefore + faker.number.int({ min: -10, max: 10 });
+
+  const references: Record<string, string | null> = {
+    IN: `PO-${faker.string.numeric(5)}`,
+    OUT: `SO-${faker.string.numeric(5)}`,
+    ADJUST: null,
+  };
+
+  const notesByType: Record<string, string> = {
+    IN: faker.helpers.arrayElement(['Pembelian dari supplier', 'Retur dari pelanggan', 'Transfer masuk dari cabang lain']),
+    OUT: faker.helpers.arrayElement(['Penjualan', 'Barang rusak', 'Transfer keluar ke cabang lain']),
+    ADJUST: faker.helpers.arrayElement(['Stock opname', 'Koreksi stok', 'Penyesuaian sistem']),
+  };
+
+  return {
+    id: faker.string.uuid(),
+    product_id: product.id,
+    variant_id: variant.id,
+    product_name: product.name,
+    variant_name: variant.name,
+    sku: variant.sku,
+    type,
+    quantity,
+    stock_before: stockBefore,
+    stock_after: stockAfter,
+    reference: references[type],
+    notes: notesByType[type],
+    created_at: faker.date.recent({ days: 60 }).toISOString(),
+    created_by: faker.helpers.arrayElement(mockUsers).name,
+  };
+}
+
+export const mockStockMovements: MockStockMovement[] = Array.from({ length: 100 }, () => {
+  const product = faker.helpers.arrayElement(mockProducts);
+  const variant = faker.helpers.arrayElement(product.variants);
+  return generateStockMovement(product, variant);
+}).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+
+// Company Settings mock
+export const mockCompanySettings = {
+  id: 1,
+  company_id: 1,
+  tax_enabled: false,
+  tax_rate: 11,
+  tax_inclusive: true,
+  rounding_enabled: false,
+  rounding_amount: 100,
+  auto_complete_counter_orders: true,
+  require_customer_for_delivery: true,
+  receipt_header: null as string | null,
+  receipt_footer: null as string | null,
+  show_tax_on_receipt: true,
+  offline_mode_enabled: false,
+  max_offline_days: 7,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+};
