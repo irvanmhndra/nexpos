@@ -5,8 +5,9 @@ import { UserManagement } from '@/components/features/settings/UserManagement';
 import { NotificationSettings } from '@/components/features/settings/NotificationSettings';
 import { IntegrationsSettings } from '@/components/features/settings/IntegrationsSettings';
 import { GeneralSettings } from '@/components/features/settings/GeneralSettings';
+import { BusinessSettings } from '@/components/features/settings/BusinessSettings';
 
-type SettingsSection = 'user-profile' | 'company-profile' | 'users' | 'notifications' | 'integrations' | 'general';
+type SettingsSection = 'user-profile' | 'company-profile' | 'users' | 'business' | 'notifications' | 'integrations' | 'general';
 
 export function SettingsPage() {
   const { user } = useAuth();
@@ -37,6 +38,7 @@ export function SettingsPage() {
     { id: 'user-profile' as const, label: 'Profil Saya', icon: 'person' },
     { id: 'company-profile' as const, label: 'Profil Perusahaan', icon: 'business' },
     { id: 'users' as const, label: 'Pengguna & Tim', icon: 'groups' },
+    { id: 'business' as const, label: 'Pengaturan Bisnis', icon: 'storefront' },
     { id: 'notifications' as const, label: 'Notifikasi', icon: 'notifications' },
     { id: 'integrations' as const, label: 'Integrasi', icon: 'extension' },
     { id: 'general' as const, label: 'Umum', icon: 'settings' },
@@ -353,6 +355,8 @@ export function SettingsPage() {
         return renderCompanyProfile();
       case 'users':
         return <UserManagement />;
+      case 'business':
+        return <BusinessSettings />;
       case 'notifications':
         return <NotificationSettings />;
       case 'integrations':

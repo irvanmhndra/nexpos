@@ -11,6 +11,11 @@ interface User {
     code: string;
     name: string;
   };
+  default_branch?: {
+    id: number;
+    code: string;
+    name: string;
+  } | null;
 }
 
 interface AuthContextType {

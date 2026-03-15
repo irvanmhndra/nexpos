@@ -1,7 +1,7 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Icon, Button } from '@/components/ui';
+import { Link, useLocation } from 'react-router-dom';
+import { Icon } from '@/components/ui';
 import { cn } from '@/utils';
-import { useAuth } from '@/contexts/AuthContext';
+import { useBranch } from '@/contexts/BranchContext';
 
 interface NavItem {
   label: string;
@@ -10,9 +10,11 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
+  { label: 'Kasir', icon: 'point_of_sale', path: '/pos' },
   { label: 'Dashboard', icon: 'dashboard', path: '/' },
   { label: 'Produk', icon: 'inventory_2', path: '/products' },
   { label: 'Kategori', icon: 'category', path: '/categories' },
+  { label: 'Inventaris', icon: 'warehouse', path: '/inventory' },
   { label: 'Pesanan', icon: 'shopping_cart', path: '/orders' },
   { label: 'Pelanggan', icon: 'group', path: '/customers' },
   { label: 'Cabang', icon: 'store', path: '/branches' },
@@ -23,16 +25,11 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { activeBranch, branches, setActiveBranch } = useBranch();
 
   const isActive = (path: string) => {
-    return location.pathname === path;
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+    if (path === '/') return location.pathname === '/';
+    return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
   return (
@@ -53,6 +50,34 @@ export function Sidebar() {
               </p>
             </div>
           </Link>
+
+          {/* Branch Switcher */}
+          {activeBranch && (
+            <div className="px-2">
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                <Icon name="store" size={16} className="text-primary flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-text-sub dark:text-gray-400">Cabang Aktif</p>
+                  {branches.length > 1 ? (
+                    <select
+                      value={activeBranch.id}
+                      onChange={e => {
+                        const branch = branches.find(b => b.id === Number(e.target.value));
+                        if (branch) setActiveBranch(branch);
+                      }}
+                      className="w-full bg-transparent text-sm font-medium text-text-main dark:text-white focus:outline-none cursor-pointer truncate"
+                    >
+                      {branches.map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-sm font-medium text-text-main dark:text-white truncate">{activeBranch.name}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Navigation */}
           <nav className="flex flex-col gap-2">
@@ -86,15 +111,6 @@ export function Sidebar() {
           </nav>
         </div>
 
-        {/* Logout Button */}
-        <Button
-          variant="ghost"
-          className="w-full justify-start"
-          leftIcon={<Icon name="logout" size="sm" />}
-          onClick={handleLogout}
-        >
-          Log Out
-        </Button>
       </div>
     </aside>
   );
