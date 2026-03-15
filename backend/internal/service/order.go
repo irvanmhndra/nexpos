@@ -247,6 +247,79 @@ func (s *OrderService) Create(ctx context.Context, companyID, branchID, cashierI
 	return s.GetByID(ctx, companyID, order.ID)
 }
 
+// Preview calculates order totals without persisting anything.
+// Used by the POS to show accurate pricing before checkout.
+func (s *OrderService) Preview(ctx context.Context, companyID, branchID int64, req dto.PreviewOrderRequest) (*dto.PreviewOrderResponse, error) {
+	if len(req.Items) == 0 {
+		return nil, apperror.BadRequest("Order must have at least one item")
+	}
+
+	settings, err := s.settingsRepo.GetByCompanyID(ctx, companyID)
+	if err != nil {
+		return nil, apperror.InternalError(err)
+	}
+
+	var totalAmount, itemDiscount, totalTax float64
+
+	for _, itemInput := range req.Items {
+		if itemInput.ProductVariantID == nil {
+			return nil, apperror.BadRequest("Product variant is required")
+		}
+
+		variant, err := s.variantRepo.GetByID(ctx, *itemInput.ProductVariantID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, apperror.NotFound("Product variant not found")
+			}
+			return nil, apperror.InternalError(err)
+		}
+
+		unitPrice := variant.Price
+		quantity := float64(itemInput.Quantity)
+		discount := itemInput.DiscountAmount
+		subtotalItem := (unitPrice * quantity) - discount
+
+		var taxAmount float64
+		if settings.TaxEnabled {
+			if settings.TaxInclusive {
+				taxAmount = subtotalItem * settings.TaxRate / (100 + settings.TaxRate)
+			} else {
+				taxAmount = subtotalItem * settings.TaxRate / 100
+			}
+		}
+
+		totalAmount += unitPrice * quantity
+		itemDiscount += discount
+		totalTax += taxAmount
+	}
+
+	subtotalAfterItemDiscounts := totalAmount - itemDiscount
+	promo, promoDiscount := s.evaluatePromotion(ctx, companyID, req.PromoCode, subtotalAfterItemDiscounts)
+
+	grandTotal := subtotalAfterItemDiscounts - promoDiscount + totalTax
+	if settings.RoundingEnabled && settings.RoundingAmount > 0 {
+		grandTotal = roundToNearest(grandTotal, settings.RoundingAmount)
+	}
+
+	resp := &dto.PreviewOrderResponse{
+		Subtotal:      subtotalAfterItemDiscounts,
+		ItemDiscount:  itemDiscount,
+		PromoDiscount: promoDiscount,
+		Tax:           totalTax,
+		GrandTotal:    grandTotal,
+	}
+	if promo != nil {
+		resp.AppliedPromotion = &dto.AppliedPromotionDTO{
+			ID:             promo.ID,
+			Code:           promo.Code,
+			Name:           promo.Name,
+			DiscountAmount: promoDiscount,
+		}
+	}
+
+	return resp, nil
+}
+
 // ConfirmOrder moves order from draft to confirmed
 func (s *OrderService) ConfirmOrder(ctx context.Context, companyID, id int64) (*dto.OrderResponse, error) {
 	order, err := s.orderRepo.GetByID(ctx, companyID, id)

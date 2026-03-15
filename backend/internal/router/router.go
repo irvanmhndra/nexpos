@@ -86,6 +86,7 @@ func Setup(e *echo.Echo, h *Handlers, authMW echo.MiddlewareFunc) {
 	orders := protected.Group("/orders")
 	orders.POST("", h.Order.Create)
 	orders.GET("", h.Order.List)
+	orders.POST("/preview", h.Order.Preview)
 	orders.GET("/:id", h.Order.Get)
 	orders.PUT("/:id", h.Order.Update)
 	orders.POST("/:id/confirm", h.Order.Confirm)

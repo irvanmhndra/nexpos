@@ -24,6 +24,28 @@ func NewOrderHandler(orderSvc *service.OrderService, validator *validator.Custom
 	}
 }
 
+func (h *OrderHandler) Preview(c *echo.Context) error {
+	var req dto.PreviewOrderRequest
+	if err := (*c).Bind(&req); err != nil {
+		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+	}
+
+	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
+		return httputil.ValidationError(c, fieldErrors)
+	}
+
+	ctx := (*c).Request().Context()
+	companyID := getCompanyID(c)
+	branchID := getBranchID(c)
+
+	result, err := h.orderSvc.Preview(ctx, companyID, branchID, req)
+	if err != nil {
+		return httputil.Error(c, err)
+	}
+
+	return httputil.Success(c, http.StatusOK, "Order preview calculated", result)
+}
+
 func (h *OrderHandler) Create(c *echo.Context) error {
 	var req dto.CreateOrderRequest
 	if err := (*c).Bind(&req); err != nil {

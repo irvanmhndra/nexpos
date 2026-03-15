@@ -171,3 +171,19 @@ type OrderListResponse struct {
 	Orders     []*OrderResponse `json:"orders"`
 	Pagination *PaginationMeta  `json:"pagination"`
 }
+
+// ============== Order Preview DTOs ==============
+
+type PreviewOrderRequest struct {
+	Items     []OrderItemInput `json:"items" validate:"required,min=1,dive"`
+	PromoCode *string          `json:"promo_code"`
+}
+
+type PreviewOrderResponse struct {
+	Subtotal         float64              `json:"subtotal"`
+	ItemDiscount     float64              `json:"item_discount"`
+	PromoDiscount    float64              `json:"promo_discount"`
+	Tax              float64              `json:"tax"`
+	GrandTotal       float64              `json:"grand_total"`
+	AppliedPromotion *AppliedPromotionDTO `json:"applied_promotion,omitempty"`
+}
