@@ -24,8 +24,8 @@ export function useOrderPreview(items: PreviewItem[], promoCode: string) {
         items: items.map(i => ({ ...i, discount_amount: 0 })),
         promo_code: promoCode,
       }),
-    enabled: items.length > 0 && !!promoCode,
-    staleTime: 30_000,
+    enabled: items.length > 0,
+    staleTime: 10_000,
     retry: false,
   });
 }

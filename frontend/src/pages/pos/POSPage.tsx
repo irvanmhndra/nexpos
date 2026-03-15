@@ -1,4 +1,5 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import toast from 'react-hot-toast';
 import { Button, Input, Icon, Badge } from '@/components/ui';
 import { useProducts } from '@/hooks/useProducts';
 import { useAllProductCategories } from '@/hooks/useProductCategories';
@@ -8,9 +9,29 @@ import { useInventory } from '@/hooks/useInventory';
 import { useBranch } from '@/contexts/BranchContext';
 import { formatCurrency, getApiErrorMessage } from '@/utils';
 import { ReceiptModal } from '@/components/features/orders/ReceiptModal';
+import { BarcodeScannerModal } from '@/components/features/pos/BarcodeScannerModal';
+import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
+import { productsService } from '@/services/productsService';
 import type { Product, ProductVariant } from '@/types/product';
 import type { Customer } from '@/types/customer';
 import type { PaymentMethod, CreateOrderRequest, Order } from '@/types/order';
+
+function getEffectivePrice(variant: ProductVariant): number {
+  const now = new Date();
+  if (
+    variant.sale_price != null &&
+    variant.sale_price < variant.price &&
+    (!variant.sale_start || new Date(variant.sale_start) <= now) &&
+    (!variant.sale_end || new Date(variant.sale_end) >= now)
+  ) {
+    return variant.sale_price;
+  }
+  return variant.price;
+}
+
+function isSaleActive(variant: ProductVariant): boolean {
+  return getEffectivePrice(variant) < variant.price;
+}
 
 interface CartItem {
   productVariantId: number;
@@ -54,8 +75,17 @@ export function POSPage() {
   const [orderSuccess, setOrderSuccess] = useState<OrderSuccess | null>(null);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
 
   const isSubmittingRef = useRef(false);
+
+  // Debounce search input — avoids query on every keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const { activeBranch } = useBranch();
   const createOrder = useCreateOrder();
@@ -65,7 +95,7 @@ export function POSPage() {
     per_page: 200,
     is_active: true,
     ...(selectedCategoryId ? { category_id: selectedCategoryId } : {}),
-    ...(search ? { search } : {}),
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
   });
 
   const { data: categories } = useAllProductCategories();
@@ -86,10 +116,19 @@ export function POSPage() {
     () => cart.map(i => ({ product_variant_id: i.productVariantId, quantity: i.quantity })),
     [cart]
   );
-  const { data: previewData, isFetching: isPreviewFetching } = useOrderPreview(previewItems, promoCode);
 
-  const promoDiscount = promoCode && previewData ? previewData.promo_discount : 0;
-  const grandTotal = promoCode && previewData ? previewData.grand_total : subtotal;
+  // Debounce preview — avoids firing on every rapid quantity change
+  const [debouncedPreviewItems, setDebouncedPreviewItems] = useState(previewItems);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedPreviewItems(previewItems), 300);
+    return () => clearTimeout(t);
+  }, [previewItems]);
+
+  const { data: previewData, isFetching: isPreviewFetching } = useOrderPreview(debouncedPreviewItems, promoCode);
+
+  const promoDiscount = previewData ? previewData.promo_discount : 0;
+  // Always use backend grand_total (includes tax). Fall back to subtotal while loading.
+  const grandTotal = previewData ? previewData.grand_total : subtotal;
   const promoApplied = !isPreviewFetching && !!previewData?.applied_promotion;
   const promoInvalid = !isPreviewFetching && !!promoCode && !!previewData && !previewData.applied_promotion;
 
@@ -112,7 +151,10 @@ export function POSPage() {
   };
 
   const addToCart = (product: Product, variant: ProductVariant) => {
-    if (isVariantOOS(variant.id)) return;
+    if (isVariantOOS(variant.id)) {
+      toast.error(`${variant.name} sudah habis`);
+      return;
+    }
     setCart(prev => {
       const existing = prev.find(i => i.productVariantId === variant.id);
       if (existing) {
@@ -127,13 +169,43 @@ export function POSPage() {
           productId: product.id,
           productName: product.name,
           variantName: variant.name,
-          price: variant.price,
+          price: getEffectivePrice(variant),
           quantity: 1,
         },
       ];
     });
     setVariantPickerProduct(null);
   };
+
+  // Barcode scan handler — looks up product by exact SKU and adds to cart
+  const handleBarcodeScan = useCallback(async (barcode: string) => {
+    let found: { product: Product; variant: ProductVariant } | null = null;
+    for (const p of products) {
+      const v = p.variants?.find(v => v.sku === barcode);
+      if (v) { found = { product: p, variant: v }; break; }
+    }
+    if (!found) {
+      try {
+        const res = await productsService.getProducts({ search: barcode, per_page: 10, is_active: true });
+        for (const p of res.data) {
+          const v = p.variants?.find(v => v.sku === barcode);
+          if (v) { found = { product: p, variant: v }; break; }
+        }
+      } catch {
+        // ignore fetch error
+      }
+    }
+    if (!found) {
+      toast.error(`Produk dengan SKU "${barcode}" tidak ditemukan`);
+      return;
+    }
+    addToCart(found.product, found.variant);
+    toast.success(`${found.product.name} ditambahkan`);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products]);
+
+  // USB/HID barcode scanner — disabled when camera modal is open to avoid conflict
+  useBarcodeScanner({ onScan: handleBarcodeScan, enabled: !isCameraScannerOpen });
 
   const handleProductClick = (product: Product) => {
     const variants = product.variants || [];
@@ -147,6 +219,14 @@ export function POSPage() {
   };
 
   const updateQty = (variantId: number, delta: number) => {
+    if (delta > 0) {
+      const stock = stockMap[variantId];
+      const currentQty = cart.find(i => i.productVariantId === variantId)?.quantity ?? 0;
+      if (stock !== undefined && currentQty >= stock) {
+        toast.error('Stok tidak mencukupi');
+        return;
+      }
+    }
     setCart(prev =>
       prev
         .map(i => (i.productVariantId === variantId ? { ...i, quantity: i.quantity + delta } : i))
@@ -200,6 +280,17 @@ export function POSPage() {
     setPromoCode(code);
   };
 
+  const quickAmounts = useMemo(() => {
+    const exact = grandTotal;
+    const candidates = [
+      exact,
+      Math.ceil(exact / 10000) * 10000,
+      Math.ceil(exact / 50000) * 50000,
+      Math.ceil(exact / 100000) * 100000,
+    ];
+    return [...new Set(candidates)];
+  }, [grandTotal]);
+
   const resetPOS = () => {
     setCart([]);
     setSelectedCustomer(null);
@@ -208,6 +299,7 @@ export function POSPage() {
     setPaymentAmount('');
     setPaymentMethod('cash');
     setShowPayment(false);
+    setConfirmClear(false);
     setOrderSuccess(null);
     setCompletedOrder(null);
     setSearch('');
@@ -288,12 +380,23 @@ export function POSPage() {
       <div className="flex-1 flex flex-col overflow-hidden border-r border-border-light dark:border-border-dark">
         {/* Search bar */}
         <div className="p-4 border-b border-border-light dark:border-border-dark bg-white dark:bg-card-dark">
-          <Input
-            placeholder="Cari produk atau SKU..."
-            leftIcon={<Icon name="search" size={20} />}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Input
+                placeholder="Cari produk atau SKU..."
+                leftIcon={<Icon name="search" size={20} />}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            <button
+              onClick={() => setIsCameraScannerOpen(true)}
+              title="Scan barcode kamera"
+              className="px-3 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-card-dark hover:border-primary hover:text-primary text-text-sub transition-colors"
+            >
+              <Icon name="qr_code_scanner" size={22} />
+            </button>
+          </div>
         </div>
 
         {/* Category filter tabs */}
@@ -341,6 +444,8 @@ export function POSPage() {
                   .filter(i => i.productId === product.id)
                   .reduce((s, i) => s + i.quantity, 0);
                 const singleOOS = !hasMultiVariant && !!firstVariant && isVariantOOS(firstVariant.id);
+                const allVariantsOOS = hasMultiVariant && product.variants?.every(v => isVariantOOS(v.id));
+                const isOOS = singleOOS || !!allVariantsOOS;
                 const singleStock = !hasMultiVariant && firstVariant ? variantStock(firstVariant.id) : undefined;
                 const multiTotalStock = hasMultiVariant
                   ? product.variants?.reduce((s, v) => s + (stockMap[v.id] ?? 0), 0)
@@ -350,15 +455,15 @@ export function POSPage() {
                   <button
                     key={product.id}
                     onClick={() => handleProductClick(product)}
-                    disabled={singleOOS}
-                    className={`relative text-left p-3 rounded-xl border bg-white dark:bg-card-dark transition-all border-border-light dark:border-border-dark ${singleOOS ? 'opacity-60 cursor-not-allowed' : 'hover:border-primary hover:shadow-md active:scale-[0.98]'}`}
+                    disabled={isOOS}
+                    className={`relative text-left p-3 rounded-xl border bg-white dark:bg-card-dark transition-all border-border-light dark:border-border-dark ${isOOS ? 'opacity-60 cursor-not-allowed' : 'hover:border-primary hover:shadow-md active:scale-[0.98]'}`}
                   >
                     {cartQty > 0 && (
                       <span className="absolute top-2 right-2 min-w-[20px] h-5 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center px-1">
                         {cartQty}
                       </span>
                     )}
-                    {singleOOS && (
+                    {isOOS && (
                       <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                         Habis
                       </span>
@@ -390,9 +495,20 @@ export function POSPage() {
                       </>
                     ) : (
                       <>
-                        <p className="text-sm font-bold text-primary">
-                          {firstVariant ? formatCurrency(firstVariant.price) : '-'}
-                        </p>
+                        {firstVariant && isSaleActive(firstVariant) ? (
+                          <div>
+                            <p className="text-xs text-text-sub dark:text-gray-400 line-through">
+                              {formatCurrency(firstVariant.price)}
+                            </p>
+                            <p className="text-sm font-bold text-red-600 dark:text-red-400">
+                              {formatCurrency(getEffectivePrice(firstVariant))}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-sm font-bold text-primary">
+                            {firstVariant ? formatCurrency(firstVariant.price) : '-'}
+                          </p>
+                        )}
                         {singleStock !== undefined && (
                           <p className={`text-xs mt-0.5 ${singleStock === 0 ? 'text-red-500 font-medium' : singleStock <= 5 ? 'text-amber-500' : 'text-text-sub dark:text-gray-400'}`}>
                             Stok: {singleStock}
@@ -424,12 +540,30 @@ export function POSPage() {
                 <span className="text-xs text-text-sub dark:text-gray-400">{activeBranch.name}</span>
               )}
               {cart.length > 0 && (
-                <button
-                  onClick={() => setCart([])}
-                  className="text-xs text-red-500 hover:text-red-700 font-medium"
-                >
-                  Hapus Semua
-                </button>
+                confirmClear ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-text-sub dark:text-gray-400">Yakin?</span>
+                    <button
+                      onClick={() => { setCart([]); setConfirmClear(false); }}
+                      className="text-xs text-red-500 hover:text-red-700 font-semibold"
+                    >
+                      Ya
+                    </button>
+                    <button
+                      onClick={() => setConfirmClear(false)}
+                      className="text-xs text-text-sub hover:text-text-main font-medium"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmClear(true)}
+                    className="text-xs text-red-500 hover:text-red-700 font-medium"
+                  >
+                    Hapus Semua
+                  </button>
+                )
               )}
             </div>
           </div>
@@ -645,7 +779,7 @@ export function POSPage() {
 
           {!showPayment ? (
             <Button
-              onClick={() => setShowPayment(true)}
+              onClick={() => { setShowPayment(true); setPaymentAmount(String(grandTotal)); }}
               disabled={cart.length === 0}
               className="w-full"
               size="lg"
@@ -690,6 +824,23 @@ export function POSPage() {
                     autoFocus
                     className="w-full h-12 pl-10 pr-4 rounded-lg border border-border-light dark:border-gray-600 bg-white dark:bg-card-dark text-text-main dark:text-white focus:border-primary focus:ring-1 focus:ring-primary text-lg font-bold"
                   />
+                </div>
+                {/* Quick amount buttons */}
+                <div className="flex gap-1.5 mt-2 flex-wrap">
+                  {quickAmounts.map(amount => (
+                    <button
+                      key={amount}
+                      type="button"
+                      onClick={() => setPaymentAmount(String(amount))}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${
+                        paymentAmountNum === amount
+                          ? 'bg-primary text-white border-primary'
+                          : 'border-border-light dark:border-gray-600 text-text-sub dark:text-gray-400 hover:border-primary hover:text-primary'
+                      }`}
+                    >
+                      {amount === grandTotal ? 'Pas' : formatCurrency(amount)}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -736,7 +887,7 @@ export function POSPage() {
                 </Button>
                 <Button
                   onClick={handleCheckout}
-                  disabled={createOrder.isPending || cart.length === 0 || !paymentAmount}
+                  disabled={createOrder.isPending || cart.length === 0 || !paymentAmount || paymentAmountNum < grandTotal}
                   className="flex-[2]"
                 >
                   {createOrder.isPending ? (
@@ -753,6 +904,16 @@ export function POSPage() {
           )}
         </div>
       </div>
+
+      {/* Camera Barcode Scanner Modal */}
+      <BarcodeScannerModal
+        isOpen={isCameraScannerOpen}
+        onClose={() => setIsCameraScannerOpen(false)}
+        onScan={barcode => {
+          setIsCameraScannerOpen(false);
+          handleBarcodeScan(barcode);
+        }}
+      />
 
       {/* Variant Picker Modal */}
       {variantPickerProduct && (
@@ -790,7 +951,14 @@ export function POSPage() {
                     className={`p-3 rounded-lg border text-left transition-colors ${oos ? 'border-border-light dark:border-border-dark opacity-60 cursor-not-allowed' : 'border-border-light dark:border-border-dark hover:border-primary hover:bg-primary/5'}`}
                   >
                     <p className="text-sm font-semibold text-text-main dark:text-white">{v.name}</p>
-                    <p className="text-sm text-primary font-bold mt-1">{formatCurrency(v.price)}</p>
+                    {isSaleActive(v) ? (
+                      <div className="mt-1">
+                        <p className="text-xs text-text-sub dark:text-gray-400 line-through">{formatCurrency(v.price)}</p>
+                        <p className="text-sm text-red-600 dark:text-red-400 font-bold">{formatCurrency(getEffectivePrice(v))}</p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-primary font-bold mt-1">{formatCurrency(v.price)}</p>
+                    )}
                     {stock !== undefined && (
                       <p className={`text-xs mt-0.5 ${oos ? 'text-red-500 font-medium' : stock <= 5 ? 'text-amber-500' : 'text-text-sub dark:text-gray-400'}`}>
                         {oos ? 'Habis' : `Stok: ${stock}`}

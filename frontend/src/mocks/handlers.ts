@@ -1,4 +1,18 @@
 import { http, HttpResponse } from 'msw';
+
+interface RawOrderItem {
+  price: number;
+  quantity: number;
+  product_variant_id: number;
+  discount_amount?: number;
+}
+interface RawOrderBody {
+  items: RawOrderItem[];
+  customer_id?: string | null;
+  promo_code?: string;
+  fulfillment_type?: string;
+  payments?: { method: string; amount: number }[];
+}
 import {
   mockUsers,
   mockProducts,
@@ -12,6 +26,20 @@ import {
   variantMinStock,
   mockCompanySettings,
 } from './data';
+
+// Return sale price if active, otherwise normal price
+function getEffectivePrice(v: { price: number; salePrice?: number; saleStart?: string; saleEnd?: string }): number {
+  const now = new Date();
+  if (
+    v.salePrice != null &&
+    v.salePrice < v.price &&
+    (!v.saleStart || new Date(v.saleStart) <= now) &&
+    (!v.saleEnd || new Date(v.saleEnd) >= now)
+  ) {
+    return v.salePrice;
+  }
+  return v.price;
+}
 
 // MSW handlers match the actual axios baseURL
 const API_BASE_URL = 'http://localhost:8080/api/v1';
@@ -195,7 +223,8 @@ export const handlers = [
 
       const qty = item.quantity;
       const discount = item.discount_amount ?? 0;
-      const subtotalItem = (variant.price * qty) - discount;
+      const unitPrice = getEffectivePrice(variant);
+      const subtotalItem = (unitPrice * qty) - discount;
 
       let taxAmount = 0;
       if (settings.tax_enabled) {
@@ -206,7 +235,7 @@ export const handlers = [
         }
       }
 
-      totalAmount += variant.price * qty;
+      totalAmount += unitPrice * qty;
       itemDiscount += discount;
       totalTax += taxAmount;
     }
@@ -253,16 +282,16 @@ export const handlers = [
   }),
 
   http.post(`${API_BASE_URL}/orders`, async ({ request }) => {
-    const body = await request.json() as any;
+    const body = await request.json() as RawOrderBody;
     const newOrder = {
       ...body,
       id: crypto.randomUUID(),
       orderNumber: `ORD-${Math.floor(Math.random() * 100000)}`,
       customerId: `CUST-${Math.floor(Math.random() * 1000)}`,
-      subtotal: body.items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0),
-      tax: body.items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0) * 0.1,
-      total: body.items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0) * 1.1,
-      items: body.items.map((item: any) => ({
+      subtotal: body.items.reduce((sum: number, item: RawOrderItem) => sum + item.price * item.quantity, 0),
+      tax: body.items.reduce((sum: number, item: RawOrderItem) => sum + item.price * item.quantity, 0) * 0.1,
+      total: body.items.reduce((sum: number, item: RawOrderItem) => sum + item.price * item.quantity, 0) * 1.1,
+      items: body.items.map((item: RawOrderItem) => ({
         ...item,
         id: crypto.randomUUID(),
       })),
@@ -270,13 +299,13 @@ export const handlers = [
       updatedAt: new Date().toISOString(),
     };
 
-    mockOrders.unshift(newOrder as Order);
+    mockOrders.unshift(newOrder as unknown as Order);
 
     return HttpResponse.json(newOrder, { status: 201 });
   }),
 
   http.put(`${API_BASE_URL}/orders/:id`, async ({ params, request }) => {
-    const body = await request.json() as any;
+    const body = await request.json() as RawOrderBody;
     const orderIndex = mockOrders.findIndex(o => o.id === params.id);
 
     if (orderIndex === -1) {
@@ -289,17 +318,17 @@ export const handlers = [
       id: mockOrders[orderIndex].id,
       orderNumber: mockOrders[orderIndex].orderNumber,
       customerId: mockOrders[orderIndex].customerId,
-      subtotal: body.items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0),
-      tax: body.items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0) * 0.1,
-      total: body.items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0) * 1.1,
-      items: body.items.map((item: any, index: number) => ({
+      subtotal: body.items.reduce((sum: number, item: RawOrderItem) => sum + item.price * item.quantity, 0),
+      tax: body.items.reduce((sum: number, item: RawOrderItem) => sum + item.price * item.quantity, 0) * 0.1,
+      total: body.items.reduce((sum: number, item: RawOrderItem) => sum + item.price * item.quantity, 0) * 1.1,
+      items: body.items.map((item: RawOrderItem, index: number) => ({
         ...item,
         id: mockOrders[orderIndex].items[index]?.id || crypto.randomUUID(),
       })),
       updatedAt: new Date().toISOString(),
     };
 
-    mockOrders[orderIndex] = updatedOrder as Order;
+    mockOrders[orderIndex] = updatedOrder as unknown as Order;
 
     return HttpResponse.json(updatedOrder);
   }),
