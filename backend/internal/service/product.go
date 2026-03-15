@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/irvanmhndra/nexpos-api/internal/dto"
 	"github.com/irvanmhndra/nexpos-api/internal/model"
@@ -103,6 +104,9 @@ func (s *ProductService) Create(ctx context.Context, companyID int64, req dto.Cr
 			LastPurchaseCost: v.LastPurchaseCost,
 			IsDefault:        isDefault,
 			IsActive:         variantIsActive,
+			SalePrice:        v.SalePrice,
+			SaleStart:        parseOptionalTime(v.SaleStart),
+			SaleEnd:          parseOptionalTime(v.SaleEnd),
 		}
 
 		if err := s.variantRepo.Create(ctx, variant); err != nil {
@@ -281,6 +285,9 @@ func (s *ProductService) Update(ctx context.Context, companyID, id int64, req dt
 			LastPurchaseCost: v.LastPurchaseCost,
 			IsDefault:        v.IsDefault || pos == 0,
 			IsActive:         variantIsActive,
+			SalePrice:        v.SalePrice,
+			SaleStart:        parseOptionalTime(v.SaleStart),
+			SaleEnd:          parseOptionalTime(v.SaleEnd),
 		}
 	}
 
@@ -386,10 +393,24 @@ func (s *ProductService) toResponse(ctx context.Context, companyID int64, p *mod
 			LastPurchaseCost: v.LastPurchaseCost,
 			IsDefault:        v.IsDefault,
 			IsActive:         v.IsActive,
+			SalePrice:        v.SalePrice,
+			SaleStart:        v.SaleStart,
+			SaleEnd:          v.SaleEnd,
 			CreatedAt:        v.CreatedAt,
 			UpdatedAt:        v.UpdatedAt,
 		}
 	}
 
 	return resp
+}
+
+func parseOptionalTime(s *string) *time.Time {
+	if s == nil || *s == "" {
+		return nil
+	}
+	t, err := time.Parse(time.RFC3339, *s)
+	if err != nil {
+		return nil
+	}
+	return &t
 }

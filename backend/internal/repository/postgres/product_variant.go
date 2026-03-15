@@ -18,8 +18,8 @@ func NewProductVariantRepository(db *sqlx.DB) *ProductVariantRepository {
 
 func (r *ProductVariantRepository) Create(ctx context.Context, variant *model.ProductVariant) error {
 	query := `
-		INSERT INTO product_variants (product_id, sku, name, attributes, price, standard_cost, last_purchase_cost, is_default, is_active)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO product_variants (product_id, sku, name, attributes, price, standard_cost, last_purchase_cost, is_default, is_active, sale_price, sale_start, sale_end)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING id, created_at, updated_at
 	`
 	return r.db.QueryRowContext(ctx, query,
@@ -32,6 +32,9 @@ func (r *ProductVariantRepository) Create(ctx context.Context, variant *model.Pr
 		variant.LastPurchaseCost,
 		variant.IsDefault,
 		variant.IsActive,
+		variant.SalePrice,
+		variant.SaleStart,
+		variant.SaleEnd,
 	).Scan(&variant.ID, &variant.CreatedAt, &variant.UpdatedAt)
 }
 
@@ -73,8 +76,8 @@ func (r *ProductVariantRepository) GetBySKU(ctx context.Context, sku string) (*m
 func (r *ProductVariantRepository) Update(ctx context.Context, variant *model.ProductVariant) error {
 	query := `
 		UPDATE product_variants
-		SET sku = $1, name = $2, attributes = $3, price = $4, standard_cost = $5, last_purchase_cost = $6, is_default = $7, is_active = $8, updated_at = NOW()
-		WHERE id = $9
+		SET sku = $1, name = $2, attributes = $3, price = $4, standard_cost = $5, last_purchase_cost = $6, is_default = $7, is_active = $8, sale_price = $9, sale_start = $10, sale_end = $11, updated_at = NOW()
+		WHERE id = $12
 	`
 	result, err := r.db.ExecContext(ctx, query,
 		variant.SKU,
@@ -85,6 +88,9 @@ func (r *ProductVariantRepository) Update(ctx context.Context, variant *model.Pr
 		variant.LastPurchaseCost,
 		variant.IsDefault,
 		variant.IsActive,
+		variant.SalePrice,
+		variant.SaleStart,
+		variant.SaleEnd,
 		variant.ID,
 	)
 	if err != nil {

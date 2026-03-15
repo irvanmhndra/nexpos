@@ -14,6 +14,9 @@ type ProductVariantInput struct {
 	LastPurchaseCost float64                `json:"last_purchase_cost" validate:"gte=0"`
 	IsDefault        bool                   `json:"is_default"`
 	IsActive         *bool                  `json:"is_active"`
+	SalePrice        *float64               `json:"sale_price"`
+	SaleStart        *string                `json:"sale_start"`
+	SaleEnd          *string                `json:"sale_end"`
 }
 
 type ProductVariantResponse struct {
@@ -26,6 +29,9 @@ type ProductVariantResponse struct {
 	LastPurchaseCost float64                `json:"last_purchase_cost"`
 	IsDefault        bool                   `json:"is_default"`
 	IsActive         bool                   `json:"is_active"`
+	SalePrice        *float64               `json:"sale_price,omitempty"`
+	SaleStart        *time.Time             `json:"sale_start,omitempty"`
+	SaleEnd          *time.Time             `json:"sale_end,omitempty"`
 	CreatedAt        time.Time              `json:"created_at"`
 	UpdatedAt        time.Time              `json:"updated_at"`
 }

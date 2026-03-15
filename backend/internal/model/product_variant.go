@@ -17,9 +17,12 @@ type ProductVariant struct {
 	StandardCost     float64   `db:"standard_cost" json:"standard_cost"`
 	LastPurchaseCost float64   `db:"last_purchase_cost" json:"last_purchase_cost"`
 	IsDefault        bool      `db:"is_default" json:"is_default"`
-	IsActive         bool      `db:"is_active" json:"is_active"`
-	CreatedAt        time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt        time.Time `db:"updated_at" json:"updated_at"`
+	IsActive         bool       `db:"is_active" json:"is_active"`
+	SalePrice        *float64   `db:"sale_price" json:"sale_price,omitempty"`
+	SaleStart        *time.Time `db:"sale_start" json:"sale_start,omitempty"`
+	SaleEnd          *time.Time `db:"sale_end" json:"sale_end,omitempty"`
+	CreatedAt        time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt        time.Time  `db:"updated_at" json:"updated_at"`
 }
 
 // JSONMap is a custom type for handling JSONB columns
