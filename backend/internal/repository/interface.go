@@ -114,6 +114,7 @@ type ProductVariantRepository interface {
 	Delete(ctx context.Context, id int64) error
 	DeleteByProductID(ctx context.Context, productID int64) error
 	SKUExists(ctx context.Context, sku string, excludeID int64) (bool, error)
+	SKUExistsInOtherProduct(ctx context.Context, sku string, productID int64) (bool, error)
 }
 
 type OrderRepository interface {
@@ -227,4 +228,19 @@ type PromotionRepository interface {
 	Delete(ctx context.Context, companyID, id int64) error
 	CodeExists(ctx context.Context, companyID int64, code string, excludeID int64) (bool, error)
 	GetActivePromotions(ctx context.Context, companyID int64, now time.Time) ([]*model.Promotion, error)
+	GetByCode(ctx context.Context, companyID int64, code string) (*model.Promotion, error)
+}
+
+type StockRepository interface {
+	GetByVariantAndBranch(ctx context.Context, variantID, branchID int64) (*model.Stock, error)
+	Upsert(ctx context.Context, stock *model.Stock) error
+	UpdateMinQuantity(ctx context.Context, variantID, branchID int64, minQuantity int) error
+	ListInventory(ctx context.Context, companyID, branchID int64, search, category, status string, limit, offset int) ([]*InventoryRow, int, error)
+	GetInventoryStats(ctx context.Context, companyID, branchID int64) (*InventoryStats, error)
+}
+
+type StockMovementRepository interface {
+	Create(ctx context.Context, m *model.StockMovement) error
+	List(ctx context.Context, companyID, branchID int64, movType, search, startDate, endDate string, limit, offset int) ([]*MovementRow, int, error)
+	GetMonthlyStats(ctx context.Context, companyID, branchID int64) (*MovementStats, error)
 }

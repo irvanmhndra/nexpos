@@ -17,6 +17,8 @@ type Handlers struct {
 	Order           *handler.OrderHandler
 	Report          *handler.ReportHandler
 	Promotion       *handler.PromotionHandler
+	Inventory       *handler.InventoryHandler
+	CompanySettings *handler.CompanySettingsHandler
 }
 
 func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator) *Handlers {
@@ -31,5 +33,7 @@ func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator)
 		Order:           handler.NewOrderHandler(services.Order, v),
 		Report:          handler.NewReportHandler(services.Report, v),
 		Promotion:       handler.NewPromotionHandler(services.Promotion, v),
+		Inventory:       handler.NewInventoryHandler(services.Inventory, v),
+		CompanySettings: handler.NewCompanySettingsHandler(services.CompanySettings, v),
 	}
 }

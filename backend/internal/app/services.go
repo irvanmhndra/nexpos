@@ -15,6 +15,8 @@ type Services struct {
 	Order           *service.OrderService
 	Report          *service.ReportService
 	Promotion       *service.PromotionService
+	Inventory       *service.InventoryService
+	CompanySettings *service.CompanySettingsService
 }
 
 func initServices(repos *Repositories, cfg *config.Config) *Services {
@@ -41,8 +43,13 @@ func initServices(repos *Repositories, cfg *config.Config) *Services {
 			repos.Customer,
 			repos.User,
 			repos.CompanySettings,
+			repos.Stock,
+			repos.StockMovement,
+			repos.Promotion,
 		),
-		Report:    service.NewReportService(repos.Report),
-		Promotion: service.NewPromotionService(repos.Promotion),
+		Report:          service.NewReportService(repos.Report),
+		Promotion:       service.NewPromotionService(repos.Promotion),
+		Inventory:       service.NewInventoryService(repos.Stock, repos.StockMovement, repos.ProductVariant, repos.Branch),
+		CompanySettings: service.NewCompanySettingsService(repos.CompanySettings),
 	}
 }

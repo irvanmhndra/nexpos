@@ -16,10 +16,12 @@ type Handlers struct {
 	Order           *handler.OrderHandler
 	Report          *handler.ReportHandler
 	Promotion       *handler.PromotionHandler
+	Inventory       *handler.InventoryHandler
+	CompanySettings *handler.CompanySettingsHandler
 }
 
-func Setup(e *echo.Echo, h *Handlers) {
-	// Health check endpoints
+func Setup(e *echo.Echo, h *Handlers, authMW echo.MiddlewareFunc) {
+	// Health check endpoints (public)
 	e.GET("/health", h.Health.Check)
 	e.GET("/health/live", h.Health.Liveness)
 	e.GET("/health/ready", h.Health.Readiness)
@@ -28,15 +30,18 @@ func Setup(e *echo.Echo, h *Handlers) {
 	api := e.Group("/api")
 	v1 := api.Group("/v1")
 
-	// Auth routes
+	// Auth routes (public)
 	auth := v1.Group("/auth")
 	auth.POST("/login", h.Auth.Login)
 	auth.POST("/register", h.Auth.Register)
 	auth.POST("/refresh", h.Auth.RefreshToken)
 	auth.POST("/logout", h.Auth.Logout)
 
+	// Protected routes
+	protected := v1.Group("", authMW)
+
 	// User routes
-	users := v1.Group("/users")
+	users := protected.Group("/users")
 	users.POST("", h.User.Create)
 	users.GET("", h.User.List)
 	users.GET("/:id", h.User.Get)
@@ -45,7 +50,7 @@ func Setup(e *echo.Echo, h *Handlers) {
 	users.DELETE("/:id", h.User.Delete)
 
 	// Branch routes
-	branches := v1.Group("/branches")
+	branches := protected.Group("/branches")
 	branches.POST("", h.Branch.Create)
 	branches.GET("", h.Branch.List)
 	branches.GET("/:id", h.Branch.Get)
@@ -53,7 +58,7 @@ func Setup(e *echo.Echo, h *Handlers) {
 	branches.DELETE("/:id", h.Branch.Delete)
 
 	// Customer routes
-	customers := v1.Group("/customers")
+	customers := protected.Group("/customers")
 	customers.POST("", h.Customer.Create)
 	customers.GET("", h.Customer.List)
 	customers.GET("/:id", h.Customer.Get)
@@ -61,7 +66,7 @@ func Setup(e *echo.Echo, h *Handlers) {
 	customers.DELETE("/:id", h.Customer.Delete)
 
 	// Product Category routes
-	categories := v1.Group("/product-categories")
+	categories := protected.Group("/product-categories")
 	categories.POST("", h.ProductCategory.Create)
 	categories.GET("", h.ProductCategory.List)
 	categories.GET("/all", h.ProductCategory.ListAll)
@@ -70,7 +75,7 @@ func Setup(e *echo.Echo, h *Handlers) {
 	categories.DELETE("/:id", h.ProductCategory.Delete)
 
 	// Product routes
-	products := v1.Group("/products")
+	products := protected.Group("/products")
 	products.POST("", h.Product.Create)
 	products.GET("", h.Product.List)
 	products.GET("/:id", h.Product.Get)
@@ -78,7 +83,7 @@ func Setup(e *echo.Echo, h *Handlers) {
 	products.DELETE("/:id", h.Product.Delete)
 
 	// Order routes
-	orders := v1.Group("/orders")
+	orders := protected.Group("/orders")
 	orders.POST("", h.Order.Create)
 	orders.GET("", h.Order.List)
 	orders.GET("/:id", h.Order.Get)
@@ -91,7 +96,7 @@ func Setup(e *echo.Echo, h *Handlers) {
 	orders.POST("/:id/refund", h.Order.RefundPayment)
 
 	// Report routes
-	reports := v1.Group("/reports")
+	reports := protected.Group("/reports")
 	reports.GET("/summary", h.Report.GetSummary)
 	reports.GET("/sales-trend", h.Report.GetSalesTrend)
 	reports.GET("/top-products", h.Report.GetTopProducts)
@@ -100,10 +105,26 @@ func Setup(e *echo.Echo, h *Handlers) {
 	reports.GET("/hourly-sales", h.Report.GetHourlySales)
 
 	// Promotion routes
-	promotions := v1.Group("/promotions")
+	promotions := protected.Group("/promotions")
 	promotions.POST("", h.Promotion.Create)
 	promotions.GET("", h.Promotion.List)
 	promotions.GET("/:id", h.Promotion.Get)
 	promotions.PUT("/:id", h.Promotion.Update)
 	promotions.DELETE("/:id", h.Promotion.Delete)
+
+	// Inventory routes
+	inventory := protected.Group("/inventory")
+	inventory.GET("", h.Inventory.ListInventory)
+	inventory.GET("/stats", h.Inventory.GetInventoryStats)
+	inventory.POST("/adjust", h.Inventory.AdjustStock)
+	inventory.PUT("/:variantId/min-stock", h.Inventory.UpdateMinStock)
+
+	// Stock movement routes
+	movements := protected.Group("/inventory/movements")
+	movements.GET("", h.Inventory.ListMovements)
+	movements.GET("/stats", h.Inventory.GetMovementStats)
+
+	// Company settings routes
+	protected.GET("/company-settings", h.CompanySettings.Get)
+	protected.PUT("/company-settings", h.CompanySettings.Update)
 }

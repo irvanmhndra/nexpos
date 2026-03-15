@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/irvanmhndra/nexpos-api/config"
+	authmiddleware "github.com/irvanmhndra/nexpos-api/internal/middleware"
 	"github.com/irvanmhndra/nexpos-api/internal/router"
 	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
 	"github.com/irvanmhndra/nexpos-api/pkg/validator"
@@ -62,7 +63,7 @@ func New(cfg *config.Config) (*App, error) {
 		LogUserAgent:    true,
 		LogStatus:       true,
 		LogResponseSize: true,
-		HandleError:     false, // let ServeHTTP call HTTPErrorHandler exactly once; prevents duplicate responses
+		HandleError:     false,
 		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {
 			if v.Error == nil {
 				slog.Info("request",
@@ -110,7 +111,9 @@ func New(cfg *config.Config) (*App, error) {
 		Order:           handlers.Order,
 		Report:          handlers.Report,
 		Promotion:       handlers.Promotion,
-	})
+		Inventory:       handlers.Inventory,
+		CompanySettings: handlers.CompanySettings,
+	}, authmiddleware.Auth(repos.UserSession))
 
 	return &App{
 		cfg:      cfg,
