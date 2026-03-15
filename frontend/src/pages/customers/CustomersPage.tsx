@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Card, Badge, Button, Input, Dropdown, Icon, Avatar } from '@/components/ui';
 import { DataTable } from '@/components/common';
-import { useCustomers, useCreateCustomer, useDeleteCustomer } from '@/hooks/useCustomers';
+import { useCustomers, useCreateCustomer, useUpdateCustomer, useDeleteCustomer } from '@/hooks/useCustomers';
 import { formatDate } from '@/utils';
 import { isValidEmail, isValidPhoneNumber } from '@/utils/validators';
 import type { Customer, CreateCustomerRequest } from '@/types/customer';
@@ -26,18 +26,20 @@ function CustomerFormModal({
   onClose,
   onSubmit,
   isLoading,
+  initialData,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: CreateCustomerRequest) => void;
   isLoading: boolean;
+  initialData?: Customer;
 }) {
   const [formData, setFormData] = useState<CustomerFormData>({
-    code: '',
-    name: '',
-    email: '',
-    phone: '',
-    is_member: false,
+    code: initialData?.code ?? '',
+    name: initialData?.name ?? '',
+    email: initialData?.email ?? '',
+    phone: initialData?.phone ?? '',
+    is_member: initialData?.is_member ?? false,
   });
   const [errors, setErrors] = useState<CustomerFormErrors>({});
 
@@ -105,10 +107,10 @@ function CustomerFormModal({
           <div className="flex items-center justify-between p-6 border-b border-border-light dark:border-border-dark">
             <div>
               <h2 className="text-xl font-bold text-text-main dark:text-white">
-                Tambah Pelanggan Baru
+                {initialData ? 'Edit Pelanggan' : 'Tambah Pelanggan Baru'}
               </h2>
               <p className="text-sm text-text-sub dark:text-gray-400 mt-1">
-                Isi informasi pelanggan di bawah ini
+                {initialData ? `Edit informasi ${initialData.name}` : 'Isi informasi pelanggan di bawah ini'}
               </p>
             </div>
             <button
@@ -183,7 +185,7 @@ function CustomerFormModal({
                 Batal
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? 'Menyimpan...' : 'Simpan Pelanggan'}
+                {isLoading ? 'Menyimpan...' : initialData ? 'Simpan Perubahan' : 'Simpan Pelanggan'}
               </Button>
             </div>
           </form>
@@ -198,6 +200,7 @@ export function CustomersPage() {
   const [search, setSearch] = useState('');
   const [isMemberFilter, setIsMemberFilter] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
   const { data, isLoading, refetch } = useCustomers({
     page,
@@ -207,15 +210,18 @@ export function CustomersPage() {
   });
 
   const createCustomer = useCreateCustomer();
+  const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
 
   const handleAddCustomer = async (formData: CreateCustomerRequest) => {
-    try {
-      await createCustomer.mutateAsync(formData);
-      setIsModalOpen(false);
-    } catch (error) {
-      console.error('Failed to create customer:', error);
-    }
+    await createCustomer.mutateAsync(formData);
+    setIsModalOpen(false);
+  };
+
+  const handleEditCustomer = async (formData: CreateCustomerRequest) => {
+    if (!editingCustomer) return;
+    await updateCustomer.mutateAsync({ id: editingCustomer.id, customer: formData });
+    setEditingCustomer(null);
   };
 
   const handleDeleteCustomer = async (id: number) => {
@@ -277,7 +283,7 @@ export function CustomersPage() {
             className="p-1.5 hover:bg-background-light dark:hover:bg-background-dark rounded-lg transition-colors"
             onClick={e => {
               e.stopPropagation();
-              console.log('Edit customer:', row.id);
+              setEditingCustomer(row);
             }}
             title="Edit"
           >
@@ -452,6 +458,16 @@ export function CustomersPage() {
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleAddCustomer}
         isLoading={createCustomer.isPending}
+      />
+
+      {/* Edit Customer Modal */}
+      <CustomerFormModal
+        key={editingCustomer?.id}
+        isOpen={!!editingCustomer}
+        onClose={() => setEditingCustomer(null)}
+        onSubmit={handleEditCustomer}
+        isLoading={updateCustomer.isPending}
+        initialData={editingCustomer ?? undefined}
       />
     </div>
   );
