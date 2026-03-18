@@ -127,8 +127,9 @@ func New(cfg *config.Config) (*App, error) {
 
 func (a *App) Run() {
 	server := &http.Server{
-		Addr:    ":" + a.cfg.Server.Port,
-		Handler: a.echo,
+		Addr:              ":" + a.cfg.Server.Port,
+		Handler:           a.echo,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	go func() {

@@ -74,7 +74,7 @@ func (t *TestDB) RunMigrations() error {
 	sort.Strings(upMigrations)
 
 	for _, migration := range upMigrations {
-		content, err := os.ReadFile(filepath.Join(migrationsPath, migration))
+		content, err := os.ReadFile(filepath.Join(migrationsPath, migration)) // #nosec G304 -- migration files from known local path
 		if err != nil {
 			return fmt.Errorf("failed to read migration %s: %w", migration, err)
 		}
