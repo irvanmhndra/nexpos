@@ -26,6 +26,8 @@ func setupBranchTest(t *testing.T) (*BranchService, *repoMocks.MockBranchReposit
 	return service, mockRepo
 }
 
+func strPtr(s string) *string { return &s }
+
 func createTestBranch(id int64, companyID int64, code string) *model.Branch {
 	now := time.Now()
 	return &model.Branch{
@@ -33,8 +35,8 @@ func createTestBranch(id int64, companyID int64, code string) *model.Branch {
 		CompanyID: companyID,
 		Code:      code,
 		Name:      "Test Branch " + code,
-		Address:   "123 Test Street",
-		Phone:     "+1234567890",
+		Address:   strPtr("123 Test Street"),
+		Phone:     strPtr("+1234567890"),
 		IsActive:  true,
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -66,8 +68,8 @@ func TestBranchService_Create_Success(t *testing.T) {
 	req := dto.CreateBranchRequest{
 		Code:     "BR001",
 		Name:     "Main Branch",
-		Address:  "123 Main St",
-		Phone:    "+1234567890",
+		Address:  strPtr("123 Main St"),
+		Phone:    strPtr("+1234567890"),
 		IsActive: true,
 	}
 
@@ -81,8 +83,8 @@ func TestBranchService_Create_Success(t *testing.T) {
 			return b.CompanyID == companyID &&
 				b.Code == req.Code &&
 				b.Name == req.Name &&
-				b.Address == req.Address &&
-				b.Phone == req.Phone &&
+				*b.Address == *req.Address &&
+				*b.Phone == *req.Phone &&
 				b.IsActive == req.IsActive
 		})).
 		Return(nil).
@@ -119,8 +121,8 @@ func TestBranchService_Create_CodeExists(t *testing.T) {
 	req := dto.CreateBranchRequest{
 		Code:     "BR001",
 		Name:     "Main Branch",
-		Address:  "123 Main St",
-		Phone:    "+1234567890",
+		Address:  strPtr("123 Main St"),
+		Phone:    strPtr("+1234567890"),
 		IsActive: true,
 	}
 
@@ -149,8 +151,8 @@ func TestBranchService_Create_CodeExistsCheckError(t *testing.T) {
 	req := dto.CreateBranchRequest{
 		Code:     "BR001",
 		Name:     "Main Branch",
-		Address:  "123 Main St",
-		Phone:    "+1234567890",
+		Address:  strPtr("123 Main St"),
+		Phone:    strPtr("+1234567890"),
 		IsActive: true,
 	}
 
@@ -179,8 +181,8 @@ func TestBranchService_Create_RepositoryError(t *testing.T) {
 	req := dto.CreateBranchRequest{
 		Code:     "BR001",
 		Name:     "Main Branch",
-		Address:  "123 Main St",
-		Phone:    "+1234567890",
+		Address:  strPtr("123 Main St"),
+		Phone:    strPtr("+1234567890"),
 		IsActive: true,
 	}
 
@@ -555,8 +557,8 @@ func TestBranchService_Update_Success(t *testing.T) {
 	req := dto.UpdateBranchRequest{
 		Code:     "BR002",
 		Name:     "Updated Branch",
-		Address:  "456 New Street",
-		Phone:    "+9876543210",
+		Address:  strPtr("456 New Street"),
+		Phone:    strPtr("+9876543210"),
 		IsActive: false,
 	}
 
@@ -576,8 +578,8 @@ func TestBranchService_Update_Success(t *testing.T) {
 				b.CompanyID == companyID &&
 				b.Code == req.Code &&
 				b.Name == req.Name &&
-				b.Address == req.Address &&
-				b.Phone == req.Phone &&
+				*b.Address == *req.Address &&
+				*b.Phone == *req.Phone &&
 				b.IsActive == req.IsActive
 		})).
 		Return(nil).
@@ -608,8 +610,8 @@ func TestBranchService_Update_NotFound(t *testing.T) {
 	req := dto.UpdateBranchRequest{
 		Code:     "BR002",
 		Name:     "Updated Branch",
-		Address:  "456 New Street",
-		Phone:    "+9876543210",
+		Address:  strPtr("456 New Street"),
+		Phone:    strPtr("+9876543210"),
 		IsActive: true,
 	}
 
@@ -642,8 +644,8 @@ func TestBranchService_Update_WrongCompany(t *testing.T) {
 	req := dto.UpdateBranchRequest{
 		Code:     "BR002",
 		Name:     "Updated Branch",
-		Address:  "456 New Street",
-		Phone:    "+9876543210",
+		Address:  strPtr("456 New Street"),
+		Phone:    strPtr("+9876543210"),
 		IsActive: true,
 	}
 
@@ -675,8 +677,8 @@ func TestBranchService_Update_CodeExists(t *testing.T) {
 	req := dto.UpdateBranchRequest{
 		Code:     "BR002", // This code already exists for another branch
 		Name:     "Updated Branch",
-		Address:  "456 New Street",
-		Phone:    "+9876543210",
+		Address:  strPtr("456 New Street"),
+		Phone:    strPtr("+9876543210"),
 		IsActive: true,
 	}
 
@@ -711,8 +713,8 @@ func TestBranchService_Update_GetByIDError(t *testing.T) {
 	req := dto.UpdateBranchRequest{
 		Code:     "BR002",
 		Name:     "Updated Branch",
-		Address:  "456 New Street",
-		Phone:    "+9876543210",
+		Address:  strPtr("456 New Street"),
+		Phone:    strPtr("+9876543210"),
 		IsActive: true,
 	}
 
@@ -744,8 +746,8 @@ func TestBranchService_Update_CodeExistsCheckError(t *testing.T) {
 	req := dto.UpdateBranchRequest{
 		Code:     "BR002",
 		Name:     "Updated Branch",
-		Address:  "456 New Street",
-		Phone:    "+9876543210",
+		Address:  strPtr("456 New Street"),
+		Phone:    strPtr("+9876543210"),
 		IsActive: true,
 	}
 
@@ -782,8 +784,8 @@ func TestBranchService_Update_RepositoryError(t *testing.T) {
 	req := dto.UpdateBranchRequest{
 		Code:     "BR002",
 		Name:     "Updated Branch",
-		Address:  "456 New Street",
-		Phone:    "+9876543210",
+		Address:  strPtr("456 New Street"),
+		Phone:    strPtr("+9876543210"),
 		IsActive: true,
 	}
 
