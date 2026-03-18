@@ -74,7 +74,7 @@ func (t *TestDB) RunMigrations() error {
 	sort.Strings(upMigrations)
 
 	for _, migration := range upMigrations {
-		content, err := os.ReadFile(filepath.Join(migrationsPath, migration))
+		content, err := os.ReadFile(filepath.Join(migrationsPath, migration)) // #nosec G304 -- migration files from known local path
 		if err != nil {
 			return fmt.Errorf("failed to read migration %s: %w", migration, err)
 		}
@@ -106,7 +106,7 @@ func (t *TestDB) TruncateTables(tables ...string) error {
 	return nil
 }
 
-// TruncateAllTables truncates all application tables
+// TruncateAllTables truncates all application tables except seed data (roles, permissions, role_permissions)
 func (t *TestDB) TruncateAllTables() error {
 	tables := []string{
 		"payments",
@@ -119,9 +119,6 @@ func (t *TestDB) TruncateAllTables() error {
 		"user_sessions",
 		"user_branches",
 		"users",
-		"role_permissions",
-		"permissions",
-		"roles",
 		"branches",
 		"companies",
 	}

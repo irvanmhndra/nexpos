@@ -575,7 +575,7 @@ func (s *OrderService) UpdateOrder(ctx context.Context, companyID, id int64, req
 	}
 
 	// Handle items update if provided
-	if req.Items != nil && len(req.Items) > 0 {
+	if len(req.Items) > 0 {
 		// Delete existing items
 		if err := s.orderItemRepo.DeleteByOrderID(ctx, order.ID); err != nil {
 			return nil, apperror.InternalError(err)

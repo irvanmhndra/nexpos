@@ -91,7 +91,7 @@ func (r *ReportRepository) GetSalesTrend(ctx context.Context, companyID int64, d
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []*repository.SalesTrendItem
 	for rows.Next() {
@@ -127,7 +127,7 @@ func (r *ReportRepository) GetTopProducts(ctx context.Context, companyID int64, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []*repository.TopProductItem
 	for rows.Next() {
@@ -164,7 +164,7 @@ func (r *ReportRepository) GetCategoryRevenue(ctx context.Context, companyID int
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []*repository.CategoryRevenueItem
 	for rows.Next() {
@@ -198,7 +198,7 @@ func (r *ReportRepository) GetPaymentMethods(ctx context.Context, companyID int6
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []*repository.PaymentMethodItem
 	for rows.Next() {
@@ -231,7 +231,7 @@ func (r *ReportRepository) GetHourlySales(ctx context.Context, companyID int64, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []*repository.HourlySalesItem
 	for rows.Next() {

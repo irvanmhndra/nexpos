@@ -14,6 +14,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // =======================
@@ -99,7 +100,7 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var response map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &response)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "Login successful", response["message"])
 	assert.NotNil(t, response["data"])
 
@@ -149,7 +150,7 @@ func TestAuthHandler_Login_InvalidJSON(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 
 	var response map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &response)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Contains(t, response["message"], "invalid request body")
 }
 
@@ -208,7 +209,7 @@ func TestAuthHandler_Login_ValidationErrors(t *testing.T) {
 			assert.Equal(t, tt.wantStatus, rec.Code)
 
 			var response map[string]interface{}
-			json.Unmarshal(rec.Body.Bytes(), &response)
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 			assert.Contains(t, response["message"], tt.wantMessage)
 		})
 	}
@@ -261,7 +262,7 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, rec.Code)
 
 	var response map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &response)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "Registration successful", response["message"])
 	assert.NotNil(t, response["data"])
 
@@ -364,7 +365,7 @@ func TestAuthHandler_RefreshToken_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var response map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &response)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "Token refreshed successfully", response["message"])
 
 	mockSvc.AssertExpectations(t)
@@ -451,7 +452,7 @@ func TestAuthHandler_Logout_WithToken(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var response map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &response)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "Logged out successfully", response["message"])
 
 	mockSvc.AssertExpectations(t)
@@ -471,7 +472,7 @@ func TestAuthHandler_Logout_WithoutToken(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var response map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &response)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "Logged out successfully", response["message"])
 }
 

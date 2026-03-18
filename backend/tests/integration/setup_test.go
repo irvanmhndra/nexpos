@@ -86,7 +86,7 @@ func teardown() {
 		testApp.Close()
 	}
 	if testDB != nil {
-		testDB.Close()
+		_ = testDB.Close()
 	}
 }
 

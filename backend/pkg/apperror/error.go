@@ -79,3 +79,25 @@ func UserInactive() *AppError {
 		HTTPStatus: http.StatusForbidden,
 	}
 }
+
+// Error type checkers
+func IsBadRequest(err error) bool {
+	if e, ok := err.(*AppError); ok {
+		return e.HTTPStatus == http.StatusBadRequest
+	}
+	return false
+}
+
+func IsNotFound(err error) bool {
+	if e, ok := err.(*AppError); ok {
+		return e.HTTPStatus == http.StatusNotFound
+	}
+	return false
+}
+
+func IsInternalError(err error) bool {
+	if e, ok := err.(*AppError); ok {
+		return e.HTTPStatus == http.StatusInternalServerError
+	}
+	return false
+}
