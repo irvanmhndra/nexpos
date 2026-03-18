@@ -1,6 +1,6 @@
 module github.com/irvanmhndra/nexpos-api
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/go-playground/validator/v10 v10.24.0
