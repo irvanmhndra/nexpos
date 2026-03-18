@@ -13,12 +13,12 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.26.1'
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.1.0
+          version: v2.11.3
           args: --timeout=5m
 
   test:
@@ -43,7 +43,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.26.1'
 
       - name: Run unit tests
         run: go test -v -race -short ./internal/...
@@ -69,7 +69,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.26.1'
 
       - name: Build binary
         run: CGO_ENABLED=0 GOOS=linux go build -o bin/api ./cmd/api
@@ -82,7 +82,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.26.1'
 
       - name: Run govulncheck
         run: |
@@ -90,6 +90,6 @@ jobs:
           govulncheck ./...
 
       - name: Run gosec
-        uses: securego/gosec@v2.22.4
-        with:
-          args: ./...
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec ./...
