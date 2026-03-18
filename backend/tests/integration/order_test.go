@@ -637,7 +637,7 @@ func TestOrder_PartialPayment(t *testing.T) {
 	orderID := int64(data["id"].(float64))
 
 	// Confirm
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, "")
+	_, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, "")
 	require.NoError(t, err)
 
 	// Pay partial amount (50 out of 100)
