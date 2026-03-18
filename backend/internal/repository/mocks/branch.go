@@ -17,7 +17,7 @@ func NewMockBranchRepository(t interface {
 	Cleanup(func())
 }) *MockBranchRepository {
 	m := &MockBranchRepository{}
-	m.Mock.Test(t)
+	m.Test(t)
 	t.Cleanup(func() { m.AssertExpectations(t) })
 	return m
 }

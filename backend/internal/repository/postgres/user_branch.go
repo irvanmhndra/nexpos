@@ -36,7 +36,7 @@ func (r *UserBranchRepository) SetBranches(ctx context.Context, userID int64, br
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Delete existing branches
 	_, err = tx.ExecContext(ctx, `DELETE FROM user_branches WHERE user_id = $1`, userID)

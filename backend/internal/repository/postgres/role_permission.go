@@ -19,7 +19,7 @@ func (r *RolePermissionRepository) SetPermissions(ctx context.Context, roleID in
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Delete existing permissions
 	_, err = tx.ExecContext(ctx, `DELETE FROM role_permissions WHERE role_id = $1`, roleID)

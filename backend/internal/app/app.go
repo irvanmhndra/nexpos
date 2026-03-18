@@ -158,7 +158,7 @@ func (a *App) Run() {
 
 func (a *App) Close() {
 	if a.db != nil {
-		a.db.Close()
+		_ = a.db.Close()
 	}
 }
 

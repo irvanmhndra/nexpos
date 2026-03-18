@@ -89,12 +89,13 @@ func (r *StockRepository) ListInventory(ctx context.Context, companyID, branchID
 		argIdx++
 	}
 
-	statusFilter := ""
-	if status == "out_of_stock" {
+	var statusFilter string
+	switch status {
+	case "out_of_stock":
 		statusFilter = ` AND COALESCE(s.quantity, 0) <= 0`
-	} else if status == "low" {
+	case "low":
 		statusFilter = ` AND COALESCE(s.quantity, 0) > 0 AND COALESCE(s.quantity, 0) <= COALESCE(s.min_quantity, 0)`
-	} else if status == "normal" {
+	case "normal":
 		statusFilter = ` AND COALESCE(s.quantity, 0) > COALESCE(s.min_quantity, 0)`
 	}
 
