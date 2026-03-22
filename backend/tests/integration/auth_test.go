@@ -23,13 +23,13 @@ func TestAuthFlow_RegisterAndLogin(t *testing.T) {
 
 	resp, err := testServer.POST("/api/v1/auth/register", registerBody, "")
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
 	var registerResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &registerResp)
 	require.NoError(t, err)
 
-	assert.True(t, registerResp["success"].(bool))
+	require.True(t, registerResp["success"].(bool))
 	assert.Equal(t, "Registration successful", registerResp["message"])
 
 	data := registerResp["data"].(map[string]interface{})
@@ -79,7 +79,7 @@ func TestAuthFlow_RefreshToken(t *testing.T) {
 
 	resp, err := testServer.POST("/api/v1/auth/register", registerBody, "")
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
 	var registerResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &registerResp)
@@ -95,13 +95,13 @@ func TestAuthFlow_RefreshToken(t *testing.T) {
 
 	resp, err = testServer.POST("/api/v1/auth/refresh", refreshBody, "")
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "refresh failed: %s", string(resp.Body))
 
 	var refreshResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &refreshResp)
 	require.NoError(t, err)
 
-	assert.True(t, refreshResp["success"].(bool))
+	require.True(t, refreshResp["success"].(bool))
 	assert.Equal(t, "Token refreshed successfully", refreshResp["message"])
 
 	refreshData := refreshResp["data"].(map[string]interface{})
@@ -121,7 +121,7 @@ func TestAuthFlow_Logout(t *testing.T) {
 
 	resp, err := testServer.POST("/api/v1/auth/register", registerBody, "")
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
 	var registerResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &registerResp)
@@ -155,7 +155,7 @@ func TestAuth_LoginWithInvalidCredentials(t *testing.T) {
 
 	resp, err := testServer.POST("/api/v1/auth/register", registerBody, "")
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
 	// Try to login with wrong password
 	loginBody := map[string]interface{}{
@@ -186,7 +186,7 @@ func TestAuth_RegisterDuplicateEmail(t *testing.T) {
 
 	resp, err := testServer.POST("/api/v1/auth/register", registerBody, "")
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
 	// Try to register with same email
 	registerBody2 := map[string]interface{}{

@@ -38,10 +38,9 @@ type BranchFixture struct {
 
 // RoleFixture represents test role data
 type RoleFixture struct {
-	ID        int64
-	CompanyID int64
-	Name      string
-	IsOwner   bool
+	ID   int64
+	Code string
+	Name string
 }
 
 // UserFixture represents test user data
@@ -143,26 +142,18 @@ func (f *Fixtures) CreateBranch(ctx context.Context, companyID int64, name strin
 	}, nil
 }
 
-// CreateRole creates a test role
-func (f *Fixtures) CreateRole(ctx context.Context, companyID int64, name string, isOwner bool) (*RoleFixture, error) {
-	query := `
-		INSERT INTO roles (company_id, name, is_owner, created_at, updated_at)
-		VALUES ($1, $2, $3, NOW(), NOW())
-		RETURNING id
-	`
+// GetSystemRole looks up a system role by code (e.g. "owner", "admin", "staff").
+// System roles are seeded by migrations and preserved across test cleanup.
+func (f *Fixtures) GetSystemRole(ctx context.Context, code string) (*RoleFixture, error) {
+	query := `SELECT id, code, name FROM roles WHERE code = $1 AND company_id IS NULL`
 
-	var id int64
-	err := f.db.QueryRowContext(ctx, query, companyID, name, isOwner).Scan(&id)
+	var role RoleFixture
+	err := f.db.QueryRowContext(ctx, query, code).Scan(&role.ID, &role.Code, &role.Name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create role: %w", err)
+		return nil, fmt.Errorf("failed to get system role %q: %w", code, err)
 	}
 
-	return &RoleFixture{
-		ID:        id,
-		CompanyID: companyID,
-		Name:      name,
-		IsOwner:   isOwner,
-	}, nil
+	return &role, nil
 }
 
 // CreateUser creates a test user
@@ -221,14 +212,15 @@ func (f *Fixtures) CreateCustomer(ctx context.Context, companyID int64, name str
 
 // CreateProductCategory creates a test product category
 func (f *Fixtures) CreateProductCategory(ctx context.Context, companyID int64, name string) (*ProductCategoryFixture, error) {
+	code := fmt.Sprintf("CAT-%d", time.Now().UnixNano())
 	query := `
-		INSERT INTO product_categories (company_id, name, is_active, created_at, updated_at)
-		VALUES ($1, $2, true, NOW(), NOW())
+		INSERT INTO product_categories (company_id, code, name, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, true, NOW(), NOW())
 		RETURNING id
 	`
 
 	var id int64
-	err := f.db.QueryRowContext(ctx, query, companyID, name).Scan(&id)
+	err := f.db.QueryRowContext(ctx, query, companyID, code, name).Scan(&id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create product category: %w", err)
 	}
@@ -330,8 +322,8 @@ func (f *Fixtures) CreateBaseTestData(ctx context.Context) (*TestData, error) {
 		return nil, err
 	}
 
-	// Create owner role
-	role, err := f.CreateRole(ctx, company.ID, "Owner", true)
+	// Get system owner role (seeded by migrations)
+	role, err := f.GetSystemRole(ctx, "owner")
 	if err != nil {
 		return nil, err
 	}
