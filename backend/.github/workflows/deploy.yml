@@ -5,7 +5,95 @@ on:
     branches: [master]
 
 jobs:
+  lint:
+    name: "Lint: golangci-lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.1'
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.11.3
+          args: --timeout=5m
+
+  unit-test:
+    name: "Test: Unit Testing"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.1'
+
+      - name: Run unit tests
+        run: go test -v -race -short ./internal/...
+
+  integration-test:
+    name: "Test: Integration Testing"
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: pos_test_user
+          POSTGRES_PASSWORD: pos_test_password
+          POSTGRES_DB: pos_test_db
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd="pg_isready -U pos_test_user -d pos_test_db"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.1'
+
+      - name: Run integration tests
+        run: go test -v -race ./tests/integration/...
+
+  vulnerability-scan:
+    name: "Security: Vulnerability Scan"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.1'
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  static-analysis:
+    name: "Security: Static Analysis (gosec)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.1'
+
+      - name: Run gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec ./...
+
   deploy:
+    name: "Deploy"
+    needs: [lint, unit-test, integration-test, vulnerability-scan, static-analysis]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
