@@ -12,6 +12,14 @@ type MockOrderService struct {
 	mock.Mock
 }
 
+func (m *MockOrderService) Preview(ctx context.Context, companyID, branchID int64, req dto.PreviewOrderRequest) (*dto.PreviewOrderResponse, error) {
+	args := m.Called(ctx, companyID, branchID, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.PreviewOrderResponse), args.Error(1)
+}
+
 func (m *MockOrderService) Create(ctx context.Context, companyID, branchID, cashierID int64, req dto.CreateOrderRequest) (*dto.OrderResponse, error) {
 	args := m.Called(ctx, companyID, branchID, cashierID, req)
 	if args.Get(0) == nil {
