@@ -55,8 +55,15 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-// RunMigrations runs all database migrations
+// RunMigrations runs all database migrations.
+// It first drops all existing objects to ensure a clean slate, then applies all up migrations.
 func (t *TestDB) RunMigrations() error {
+	// Drop all tables/types so migrations can be re-applied cleanly
+	_, err := t.DB.Exec("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+	if err != nil {
+		return fmt.Errorf("failed to reset schema: %w", err)
+	}
+
 	migrationsPath := getMigrationsPath()
 
 	files, err := os.ReadDir(migrationsPath)

@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,23 +10,71 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// createTestCategory creates a product category via the API and returns its ID.
+func createTestCategory(t *testing.T, token string) int64 {
+	t.Helper()
+	n := uniqueCounter()
+	categoryBody := map[string]interface{}{
+		"code": fmt.Sprintf("CAT-%d", n),
+		"name": fmt.Sprintf("Test Category %d", n),
+	}
+	resp, err := testServer.POST("/api/v1/product-categories", categoryBody, token)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create category failed: %s", string(resp.Body))
+
+	var createResp map[string]interface{}
+	require.NoError(t, json.Unmarshal(resp.Body, &createResp))
+	data := createResp["data"].(map[string]interface{})
+	return int64(data["id"].(float64))
+}
+
+// createTestProduct creates a product with one variant via the API and returns (productID, variantID).
+func createTestProduct(t *testing.T, token string, categoryID int64, name, sku string, price, cost float64) (int64, int64) {
+	t.Helper()
+	productBody := map[string]interface{}{
+		"name":                name,
+		"product_category_id": categoryID,
+		"variants": []map[string]interface{}{
+			{
+				"sku":           sku,
+				"name":          "Default",
+				"price":         price,
+				"standard_cost": cost,
+				"is_default":    true,
+			},
+		},
+	}
+
+	resp, err := testServer.POST("/api/v1/products", productBody, token)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create product failed: %s", string(resp.Body))
+
+	var createResp map[string]interface{}
+	require.NoError(t, json.Unmarshal(resp.Body, &createResp))
+	data := createResp["data"].(map[string]interface{})
+	productID := int64(data["id"].(float64))
+
+	variants := data["variants"].([]interface{})
+	variant := variants[0].(map[string]interface{})
+	variantID := int64(variant["id"].(float64))
+
+	return productID, variantID
+}
+
 func TestProductCategory_CreateAndGet(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
-	_ = testData
+	auth := registerTestUser(t)
 
 	// Create a category
 	categoryBody := map[string]interface{}{
+		"code":        "ELEC",
 		"name":        "Electronics",
 		"description": "Electronic devices and accessories",
 	}
 
-	resp, err := testServer.POST("/api/v1/product-categories", categoryBody, "")
+	resp, err := testServer.POST("/api/v1/product-categories", categoryBody, auth.Token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create category failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -40,7 +87,7 @@ func TestProductCategory_CreateAndGet(t *testing.T) {
 	assert.Equal(t, "Electronics", data["name"])
 
 	// Get the category
-	resp, err = testServer.GET(fmt.Sprintf("/api/v1/product-categories/%d", categoryID), "")
+	resp, err = testServer.GET(fmt.Sprintf("/api/v1/product-categories/%d", categoryID), auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -55,26 +102,27 @@ func TestProductCategory_CreateAndGet(t *testing.T) {
 
 func TestProductCategory_List(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
-	_ = testData
+	auth := registerTestUser(t)
 
 	// Create multiple categories
-	categories := []string{"Food", "Beverages", "Snacks"}
-	for _, name := range categories {
+	categories := []struct{ code, name string }{
+		{"FOOD", "Food"},
+		{"BVRG", "Beverages"},
+		{"SNCK", "Snacks"},
+	}
+	for _, c := range categories {
 		categoryBody := map[string]interface{}{
-			"name": name,
+			"code": c.code,
+			"name": c.name,
 		}
 
-		resp, err := testServer.POST("/api/v1/product-categories", categoryBody, "")
+		resp, err := testServer.POST("/api/v1/product-categories", categoryBody, auth.Token)
 		require.NoError(t, err)
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+		require.Equal(t, http.StatusCreated, resp.StatusCode, "create category failed: %s", string(resp.Body))
 	}
 
 	// List categories
-	resp, err := testServer.GET("/api/v1/product-categories", "")
+	resp, err := testServer.GET("/api/v1/product-categories", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -84,22 +132,19 @@ func TestProductCategory_List(t *testing.T) {
 
 	assert.True(t, listResp["success"].(bool))
 	data := listResp["data"].([]interface{})
-	// 3 created + 1 from base test data
 	assert.GreaterOrEqual(t, len(data), 3)
 }
 
 func TestProduct_CreateAndGet(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
+	auth := registerTestUser(t)
+	categoryID := createTestCategory(t, auth.Token)
 
 	// Create a product
 	productBody := map[string]interface{}{
 		"name":                "Test Product",
 		"description":         "A test product description",
-		"product_category_id": testData.ProductCategory.ID,
+		"product_category_id": categoryID,
 		"variants": []map[string]interface{}{
 			{
 				"sku":           "TEST-001",
@@ -111,9 +156,9 @@ func TestProduct_CreateAndGet(t *testing.T) {
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/products", productBody, "")
+	resp, err := testServer.POST("/api/v1/products", productBody, auth.Token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create product failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -133,23 +178,21 @@ func TestProduct_CreateAndGet(t *testing.T) {
 	assert.Equal(t, 99.99, variant["price"])
 
 	// Get the product
-	resp, err = testServer.GET(fmt.Sprintf("/api/v1/products/%d", productID), "")
+	resp, err = testServer.GET(fmt.Sprintf("/api/v1/products/%d", productID), auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 func TestProduct_List(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
+	auth := registerTestUser(t)
+	categoryID := createTestCategory(t, auth.Token)
 
 	// Create multiple products
 	for i := 0; i < 3; i++ {
 		productBody := map[string]interface{}{
 			"name":                fmt.Sprintf("Product %d", i+1),
-			"product_category_id": testData.ProductCategory.ID,
+			"product_category_id": categoryID,
 			"variants": []map[string]interface{}{
 				{
 					"sku":           fmt.Sprintf("SKU-%d", i+1),
@@ -161,13 +204,13 @@ func TestProduct_List(t *testing.T) {
 			},
 		}
 
-		resp, err := testServer.POST("/api/v1/products", productBody, "")
+		resp, err := testServer.POST("/api/v1/products", productBody, auth.Token)
 		require.NoError(t, err)
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+		require.Equal(t, http.StatusCreated, resp.StatusCode, "create product failed: %s", string(resp.Body))
 	}
 
 	// List products
-	resp, err := testServer.GET("/api/v1/products", "")
+	resp, err := testServer.GET("/api/v1/products", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -177,49 +220,31 @@ func TestProduct_List(t *testing.T) {
 
 	assert.True(t, listResp["success"].(bool))
 	data := listResp["data"].([]interface{})
-	// 3 created + 1 from base test data
 	assert.GreaterOrEqual(t, len(data), 3)
 }
 
 func TestProduct_Update(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
+	auth := registerTestUser(t)
+	categoryID := createTestCategory(t, auth.Token)
+	productID, _ := createTestProduct(t, auth.Token, categoryID, "Original Product", "ORIG-001", 100.00, 50.00)
 
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
-
-	// Create a product
-	productBody := map[string]interface{}{
-		"name":                "Original Product",
-		"product_category_id": testData.ProductCategory.ID,
+	// Update the product (variants are required for update)
+	updateBody := map[string]interface{}{
+		"name":        "Updated Product",
+		"description": "Updated description",
 		"variants": []map[string]interface{}{
 			{
 				"sku":           "ORIG-001",
-				"name":          "Original Variant",
-				"price":         100.00,
-				"standard_cost": 50.00,
+				"name":          "Default",
+				"price":         120.00,
+				"standard_cost": 60.00,
 				"is_default":    true,
 			},
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/products", productBody, "")
-	require.NoError(t, err)
-
-	var createResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &createResp)
-	require.NoError(t, err)
-
-	data := createResp["data"].(map[string]interface{})
-	productID := int64(data["id"].(float64))
-
-	// Update the product
-	updateBody := map[string]interface{}{
-		"name":        "Updated Product",
-		"description": "Updated description",
-	}
-
-	resp, err = testServer.PUT(fmt.Sprintf("/api/v1/products/%d", productID), updateBody, "")
+	resp, err := testServer.PUT(fmt.Sprintf("/api/v1/products/%d", productID), updateBody, auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -235,59 +260,31 @@ func TestProduct_Update(t *testing.T) {
 
 func TestProduct_Delete(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
-
-	// Create a product
-	productBody := map[string]interface{}{
-		"name":                "To Be Deleted",
-		"product_category_id": testData.ProductCategory.ID,
-		"variants": []map[string]interface{}{
-			{
-				"sku":           "DEL-001",
-				"name":          "Default",
-				"price":         100.00,
-				"standard_cost": 50.00,
-				"is_default":    true,
-			},
-		},
-	}
-
-	resp, err := testServer.POST("/api/v1/products", productBody, "")
-	require.NoError(t, err)
-
-	var createResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &createResp)
-	require.NoError(t, err)
-
-	data := createResp["data"].(map[string]interface{})
-	productID := int64(data["id"].(float64))
+	auth := registerTestUser(t)
+	categoryID := createTestCategory(t, auth.Token)
+	productID, _ := createTestProduct(t, auth.Token, categoryID, "To Be Deleted", "DEL-001", 100.00, 50.00)
 
 	// Delete the product
-	resp, err = testServer.DELETE(fmt.Sprintf("/api/v1/products/%d", productID), "")
+	resp, err := testServer.DELETE(fmt.Sprintf("/api/v1/products/%d", productID), auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Verify deletion
-	resp, err = testServer.GET(fmt.Sprintf("/api/v1/products/%d", productID), "")
+	resp, err = testServer.GET(fmt.Sprintf("/api/v1/products/%d", productID), auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
 func TestProduct_WithMultipleVariants(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
+	auth := registerTestUser(t)
+	categoryID := createTestCategory(t, auth.Token)
 
 	// Create a product with multiple variants
 	productBody := map[string]interface{}{
 		"name":                "T-Shirt",
 		"description":         "Cotton T-Shirt",
-		"product_category_id": testData.ProductCategory.ID,
+		"product_category_id": categoryID,
 		"variants": []map[string]interface{}{
 			{
 				"sku":           "SHIRT-S",
@@ -322,9 +319,9 @@ func TestProduct_WithMultipleVariants(t *testing.T) {
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/products", productBody, "")
+	resp, err := testServer.POST("/api/v1/products", productBody, auth.Token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create product failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -348,11 +345,7 @@ func TestProduct_WithMultipleVariants(t *testing.T) {
 
 func TestProduct_ValidationErrors(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
-	_ = testData
+	auth := registerTestUser(t)
 
 	tests := []struct {
 		name       string
@@ -402,7 +395,7 @@ func TestProduct_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := testServer.POST("/api/v1/products", tt.body, "")
+			resp, err := testServer.POST("/api/v1/products", tt.body, auth.Token)
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 		})
@@ -411,20 +404,22 @@ func TestProduct_ValidationErrors(t *testing.T) {
 
 func TestProduct_Search(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
+	auth := registerTestUser(t)
+	categoryID := createTestCategory(t, auth.Token)
 
 	// Create products with distinct names
-	products := []string{"Apple iPhone", "Samsung Galaxy", "Apple Watch"}
-	for i, name := range products {
+	products := []struct{ name, sku string }{
+		{"Apple iPhone", "SEARCH-1"},
+		{"Samsung Galaxy", "SEARCH-2"},
+		{"Apple Watch", "SEARCH-3"},
+	}
+	for _, p := range products {
 		productBody := map[string]interface{}{
-			"name":                name,
-			"product_category_id": testData.ProductCategory.ID,
+			"name":                p.name,
+			"product_category_id": categoryID,
 			"variants": []map[string]interface{}{
 				{
-					"sku":           fmt.Sprintf("SEARCH-%d", i+1),
+					"sku":           p.sku,
 					"name":          "Default",
 					"price":         100.00,
 					"standard_cost": 50.00,
@@ -433,13 +428,13 @@ func TestProduct_Search(t *testing.T) {
 			},
 		}
 
-		resp, err := testServer.POST("/api/v1/products", productBody, "")
+		resp, err := testServer.POST("/api/v1/products", productBody, auth.Token)
 		require.NoError(t, err)
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+		require.Equal(t, http.StatusCreated, resp.StatusCode, "create product failed: %s", string(resp.Body))
 	}
 
 	// Search for "Apple"
-	resp, err := testServer.GET("/api/v1/products?search=Apple", "")
+	resp, err := testServer.GET("/api/v1/products?search=Apple", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 

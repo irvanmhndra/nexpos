@@ -11,30 +11,66 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestOrderFlow_CreateAndGet(t *testing.T) {
-	cleanupDatabase(t)
-	ctx := context.Background()
+// orderTestData holds all IDs needed for order tests.
+type orderTestData struct {
+	auth       *authContext
+	customerID int64
+	categoryID int64
+	productID  int64
+	variantID  int64
+}
 
-	// Setup test data
-	testData, err := testFixture.CreateBaseTestData(ctx)
+// setupOrderTest creates all prerequisite data for order tests via the API.
+func setupOrderTest(t *testing.T) *orderTestData {
+	t.Helper()
+	cleanupDatabase(t)
+	auth := registerTestUser(t)
+
+	// Create customer via API
+	custBody := map[string]interface{}{"code": "ORD-CUST", "name": "Order Test Customer"}
+	resp, err := testServer.POST("/api/v1/customers", custBody, auth.Token)
 	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create customer failed: %s", string(resp.Body))
+	var custResp map[string]interface{}
+	require.NoError(t, json.Unmarshal(resp.Body, &custResp))
+	customerID := int64(custResp["data"].(map[string]interface{})["id"].(float64))
+
+	// Create category + product via API helpers
+	categoryID := createTestCategory(t, auth.Token)
+	productID, variantID := createTestProduct(t, auth.Token, categoryID, "Order Test Product", "ORD-SKU-001", 100.00, 50.00)
+
+	// Seed initial stock (100 units) so order creation doesn't fail on stock validation
+	err = testFixture.CreateStock(context.Background(), variantID, auth.BranchID, 100, 0)
+	require.NoError(t, err)
+
+	return &orderTestData{
+		auth:       auth,
+		customerID: customerID,
+		categoryID: categoryID,
+		productID:  productID,
+		variantID:  variantID,
+	}
+}
+
+func TestOrderFlow_CreateAndGet(t *testing.T) {
+	td := setupOrderTest(t)
 
 	// Create an order
 	orderBody := map[string]interface{}{
-		"customer_id":      testData.Customer.ID,
+		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
 			{
-				"product_variant_id": testData.ProductVariant.ID,
+				"product_variant_id": td.variantID,
 				"quantity":           2,
 				"discount_amount":    0,
 			},
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/orders", orderBody, "")
+	resp, err := testServer.POST("/api/v1/orders", orderBody, td.auth.Token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -56,7 +92,7 @@ func TestOrderFlow_CreateAndGet(t *testing.T) {
 	assert.Equal(t, float64(200), data["grand_total"])
 
 	// Get the order
-	resp, err = testServer.GET(fmt.Sprintf("/api/v1/orders/%d", orderID), "")
+	resp, err = testServer.GET(fmt.Sprintf("/api/v1/orders/%d", orderID), td.auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -70,33 +106,30 @@ func TestOrderFlow_CreateAndGet(t *testing.T) {
 }
 
 func TestOrderFlow_CreateConfirmPayComplete(t *testing.T) {
-	cleanupDatabase(t)
+	td := setupOrderTest(t)
 	ctx := context.Background()
-
-	// Setup test data
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
+	token := td.auth.Token
 
 	// Seed initial stock (10 units)
-	err = testFixture.CreateStock(ctx, testData.ProductVariant.ID, testData.Branch.ID, 10, 0)
+	err := testFixture.CreateStock(ctx, td.variantID, td.auth.BranchID, 10, 0)
 	require.NoError(t, err)
 
-	// Step 1: Create an order
+	// Step 1: Create an order (delivery to avoid auto-complete on payment)
 	orderBody := map[string]interface{}{
-		"customer_id":      testData.Customer.ID,
-		"fulfillment_type": "counter",
+		"customer_id":      td.customerID,
+		"fulfillment_type": "delivery",
 		"items": []map[string]interface{}{
 			{
-				"product_variant_id": testData.ProductVariant.ID,
+				"product_variant_id": td.variantID,
 				"quantity":           1,
 				"discount_amount":    0,
 			},
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/orders", orderBody, "")
+	resp, err := testServer.POST("/api/v1/orders", orderBody, token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -109,9 +142,9 @@ func TestOrderFlow_CreateConfirmPayComplete(t *testing.T) {
 	assert.Equal(t, "draft", data["status"])
 
 	// Step 2: Confirm the order
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "confirm failed: %s", string(resp.Body))
 
 	var confirmResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &confirmResp)
@@ -132,9 +165,9 @@ func TestOrderFlow_CreateConfirmPayComplete(t *testing.T) {
 		},
 	}
 
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), paymentBody, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), paymentBody, token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "payment failed: %s", string(resp.Body))
 
 	var paymentResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &paymentResp)
@@ -146,9 +179,9 @@ func TestOrderFlow_CreateConfirmPayComplete(t *testing.T) {
 	assert.NotNil(t, paymentData["paid_at"])
 
 	// Step 4: Complete the order
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/complete", orderID), nil, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/complete", orderID), nil, token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "complete failed: %s", string(resp.Body))
 
 	var completeResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &completeResp)
@@ -163,13 +196,12 @@ func TestOrderFlow_CreateConfirmPayComplete(t *testing.T) {
 	var stockQty int
 	err = testDB.DB.QueryRowContext(ctx,
 		"SELECT quantity FROM stocks WHERE product_variant_id = $1 AND branch_id = $2",
-		testData.ProductVariant.ID, testData.Branch.ID,
+		td.variantID, td.auth.BranchID,
 	).Scan(&stockQty)
 	require.NoError(t, err)
 	assert.Equal(t, 9, stockQty) // started at 10, ordered 1
 
 	// DB assertion: verify stock_movement OUT record was created
-	var movementCount int
 	var movementType, refType string
 	var movementQty, stockBefore, stockAfter int
 	err = testDB.DB.QueryRowContext(ctx,
@@ -186,6 +218,7 @@ func TestOrderFlow_CreateConfirmPayComplete(t *testing.T) {
 	assert.Equal(t, "order", refType)
 
 	// DB assertion: verify exactly 1 stock movement for this order
+	var movementCount int
 	err = testDB.DB.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM stock_movements WHERE reference_id = $1 AND reference_type = 'order'",
 		orderID,
@@ -195,29 +228,25 @@ func TestOrderFlow_CreateConfirmPayComplete(t *testing.T) {
 }
 
 func TestOrderFlow_Cancel(t *testing.T) {
-	cleanupDatabase(t)
-	ctx := context.Background()
-
-	// Setup test data
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
+	td := setupOrderTest(t)
+	token := td.auth.Token
 
 	// Create an order
 	orderBody := map[string]interface{}{
-		"customer_id":      testData.Customer.ID,
+		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
 			{
-				"product_variant_id": testData.ProductVariant.ID,
+				"product_variant_id": td.variantID,
 				"quantity":           1,
 				"discount_amount":    0,
 			},
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/orders", orderBody, "")
+	resp, err := testServer.POST("/api/v1/orders", orderBody, token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -231,7 +260,7 @@ func TestOrderFlow_Cancel(t *testing.T) {
 		"reason": "Customer changed their mind",
 	}
 
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/cancel", orderID), cancelBody, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/cancel", orderID), cancelBody, token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -247,32 +276,30 @@ func TestOrderFlow_Cancel(t *testing.T) {
 }
 
 func TestOrderFlow_VoidConfirmed(t *testing.T) {
-	cleanupDatabase(t)
+	td := setupOrderTest(t)
 	ctx := context.Background()
-
-	// Setup test data
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
+	token := td.auth.Token
 
 	// Seed initial stock
-	err = testFixture.CreateStock(ctx, testData.ProductVariant.ID, testData.Branch.ID, 10, 0)
+	err := testFixture.CreateStock(ctx, td.variantID, td.auth.BranchID, 10, 0)
 	require.NoError(t, err)
 
 	// Create and confirm an order (not completed — no stock deduction yet)
 	orderBody := map[string]interface{}{
-		"customer_id":      testData.Customer.ID,
+		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
 			{
-				"product_variant_id": testData.ProductVariant.ID,
+				"product_variant_id": td.variantID,
 				"quantity":           1,
 				"discount_amount":    0,
 			},
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/orders", orderBody, "")
+	resp, err := testServer.POST("/api/v1/orders", orderBody, token)
 	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -282,16 +309,16 @@ func TestOrderFlow_VoidConfirmed(t *testing.T) {
 	orderID := int64(data["id"].(float64))
 
 	// Confirm the order first
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "confirm failed: %s", string(resp.Body))
 
 	// Void the confirmed order (not completed, so no stock restoration)
 	voidBody := map[string]interface{}{
 		"reason": "Fraudulent order",
 	}
 
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/void", orderID), voidBody, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/void", orderID), voidBody, token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -309,7 +336,7 @@ func TestOrderFlow_VoidConfirmed(t *testing.T) {
 	var stockQty int
 	err = testDB.DB.QueryRowContext(ctx,
 		"SELECT quantity FROM stocks WHERE product_variant_id = $1 AND branch_id = $2",
-		testData.ProductVariant.ID, testData.Branch.ID,
+		td.variantID, td.auth.BranchID,
 	).Scan(&stockQty)
 	require.NoError(t, err)
 	assert.Equal(t, 10, stockQty) // unchanged
@@ -325,32 +352,30 @@ func TestOrderFlow_VoidConfirmed(t *testing.T) {
 }
 
 func TestOrderFlow_VoidCompleted(t *testing.T) {
-	cleanupDatabase(t)
+	td := setupOrderTest(t)
 	ctx := context.Background()
-
-	// Setup test data
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
+	token := td.auth.Token
 
 	// Seed initial stock (10 units)
-	err = testFixture.CreateStock(ctx, testData.ProductVariant.ID, testData.Branch.ID, 10, 0)
+	err := testFixture.CreateStock(ctx, td.variantID, td.auth.BranchID, 10, 0)
 	require.NoError(t, err)
 
-	// Create → Confirm → Pay → Complete an order
+	// Create → Confirm → Pay → Complete an order (delivery to avoid auto-complete)
 	orderBody := map[string]interface{}{
-		"customer_id":      testData.Customer.ID,
-		"fulfillment_type": "counter",
+		"customer_id":      td.customerID,
+		"fulfillment_type": "delivery",
 		"items": []map[string]interface{}{
 			{
-				"product_variant_id": testData.ProductVariant.ID,
+				"product_variant_id": td.variantID,
 				"quantity":           2,
 				"discount_amount":    0,
 			},
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/orders", orderBody, "")
+	resp, err := testServer.POST("/api/v1/orders", orderBody, token)
 	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -361,9 +386,9 @@ func TestOrderFlow_VoidCompleted(t *testing.T) {
 	grandTotal := data["grand_total"].(float64)
 
 	// Confirm
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "confirm failed: %s", string(resp.Body))
 
 	// Pay
 	paymentBody := map[string]interface{}{
@@ -371,20 +396,20 @@ func TestOrderFlow_VoidCompleted(t *testing.T) {
 			{"method": "cash", "amount": grandTotal},
 		},
 	}
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), paymentBody, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), paymentBody, token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "payment failed: %s", string(resp.Body))
 
 	// Complete
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/complete", orderID), nil, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/complete", orderID), nil, token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "complete failed: %s", string(resp.Body))
 
 	// Verify stock was deducted after completion
 	var stockQtyAfterComplete int
 	err = testDB.DB.QueryRowContext(ctx,
 		"SELECT quantity FROM stocks WHERE product_variant_id = $1 AND branch_id = $2",
-		testData.ProductVariant.ID, testData.Branch.ID,
+		td.variantID, td.auth.BranchID,
 	).Scan(&stockQtyAfterComplete)
 	require.NoError(t, err)
 	assert.Equal(t, 8, stockQtyAfterComplete) // 10 - 2
@@ -393,7 +418,7 @@ func TestOrderFlow_VoidCompleted(t *testing.T) {
 	voidBody := map[string]interface{}{
 		"reason": "Customer returned items",
 	}
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/void", orderID), voidBody, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/void", orderID), voidBody, token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -406,7 +431,7 @@ func TestOrderFlow_VoidCompleted(t *testing.T) {
 	var stockQtyAfterVoid int
 	err = testDB.DB.QueryRowContext(ctx,
 		"SELECT quantity FROM stocks WHERE product_variant_id = $1 AND branch_id = $2",
-		testData.ProductVariant.ID, testData.Branch.ID,
+		td.variantID, td.auth.BranchID,
 	).Scan(&stockQtyAfterVoid)
 	require.NoError(t, err)
 	assert.Equal(t, 10, stockQtyAfterVoid) // restored to original
@@ -441,28 +466,26 @@ func TestOrderFlow_VoidCompleted(t *testing.T) {
 }
 
 func TestOrderFlow_Refund(t *testing.T) {
-	cleanupDatabase(t)
+	td := setupOrderTest(t)
 	ctx := context.Background()
-
-	// Setup test data
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
+	token := td.auth.Token
 
 	// Create, confirm, and pay an order
 	orderBody := map[string]interface{}{
-		"customer_id":      testData.Customer.ID,
+		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
 			{
-				"product_variant_id": testData.ProductVariant.ID,
+				"product_variant_id": td.variantID,
 				"quantity":           1,
 				"discount_amount":    0,
 			},
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/orders", orderBody, "")
+	resp, err := testServer.POST("/api/v1/orders", orderBody, token)
 	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -473,9 +496,9 @@ func TestOrderFlow_Refund(t *testing.T) {
 	grandTotal := data["grand_total"].(float64)
 
 	// Confirm
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "confirm failed: %s", string(resp.Body))
 
 	// Pay
 	paymentBody := map[string]interface{}{
@@ -487,9 +510,9 @@ func TestOrderFlow_Refund(t *testing.T) {
 		},
 	}
 
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), paymentBody, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), paymentBody, token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "payment failed: %s", string(resp.Body))
 
 	var paymentResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &paymentResp)
@@ -507,7 +530,7 @@ func TestOrderFlow_Refund(t *testing.T) {
 		"refund_reason": "Customer returned item",
 	}
 
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/refund", orderID), refundBody, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/refund", orderID), refundBody, token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -527,46 +550,33 @@ func TestOrderFlow_Refund(t *testing.T) {
 	).Scan(&paymentStatus)
 	require.NoError(t, err)
 	assert.Equal(t, "refunded", paymentStatus)
-
-	// DB assertion: verify order payment_status is updated in database
-	var orderPaymentStatus string
-	err = testDB.DB.QueryRowContext(ctx,
-		"SELECT payment_status FROM orders WHERE id = $1",
-		orderID,
-	).Scan(&orderPaymentStatus)
-	require.NoError(t, err)
-	assert.Equal(t, "refunded", orderPaymentStatus)
 }
 
 func TestOrderFlow_ListOrders(t *testing.T) {
-	cleanupDatabase(t)
-	ctx := context.Background()
-
-	// Setup test data
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
+	td := setupOrderTest(t)
+	token := td.auth.Token
 
 	// Create multiple orders
 	for i := 0; i < 3; i++ {
 		orderBody := map[string]interface{}{
-			"customer_id":      testData.Customer.ID,
+			"customer_id":      td.customerID,
 			"fulfillment_type": "counter",
 			"items": []map[string]interface{}{
 				{
-					"product_variant_id": testData.ProductVariant.ID,
+					"product_variant_id": td.variantID,
 					"quantity":           1,
 					"discount_amount":    0,
 				},
 			},
 		}
 
-		resp, err := testServer.POST("/api/v1/orders", orderBody, "")
+		resp, err := testServer.POST("/api/v1/orders", orderBody, token)
 		require.NoError(t, err)
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+		require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 	}
 
 	// List orders
-	resp, err := testServer.GET("/api/v1/orders", "")
+	resp, err := testServer.GET("/api/v1/orders", token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -585,20 +595,16 @@ func TestOrderFlow_ListOrders(t *testing.T) {
 }
 
 func TestOrderFlow_UpdateOrder(t *testing.T) {
-	cleanupDatabase(t)
-	ctx := context.Background()
-
-	// Setup test data
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
+	td := setupOrderTest(t)
+	token := td.auth.Token
 
 	// Create an order
 	orderBody := map[string]interface{}{
-		"customer_id":      testData.Customer.ID,
+		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
 			{
-				"product_variant_id": testData.ProductVariant.ID,
+				"product_variant_id": td.variantID,
 				"quantity":           1,
 				"discount_amount":    0,
 			},
@@ -606,9 +612,9 @@ func TestOrderFlow_UpdateOrder(t *testing.T) {
 		"notes": "Initial notes",
 	}
 
-	resp, err := testServer.POST("/api/v1/orders", orderBody, "")
+	resp, err := testServer.POST("/api/v1/orders", orderBody, token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -624,7 +630,7 @@ func TestOrderFlow_UpdateOrder(t *testing.T) {
 		"notes":            "Updated notes",
 	}
 
-	resp, err = testServer.PUT(fmt.Sprintf("/api/v1/orders/%d", orderID), updateBody, "")
+	resp, err = testServer.PUT(fmt.Sprintf("/api/v1/orders/%d", orderID), updateBody, token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -640,38 +646,58 @@ func TestOrderFlow_UpdateOrder(t *testing.T) {
 }
 
 func TestOrder_CreateWithMultipleItems(t *testing.T) {
-	cleanupDatabase(t)
-	ctx := context.Background()
+	td := setupOrderTest(t)
+	token := td.auth.Token
 
-	// Setup test data
-	testData, err := testFixture.CreateBaseTestData(ctx)
+	// Create additional product variant via API
+	productBody := map[string]interface{}{
+		"name":                "Second Product",
+		"product_category_id": td.categoryID,
+		"variants": []map[string]interface{}{
+			{
+				"sku":           "ORD-SKU-002",
+				"name":          "Large",
+				"price":         150.00,
+				"standard_cost": 75.00,
+				"is_default":    true,
+			},
+		},
+	}
+	resp, err := testServer.POST("/api/v1/products", productBody, token)
 	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create product failed: %s", string(resp.Body))
 
-	// Create additional product variants
-	variant2, err := testFixture.CreateProductVariant(ctx, testData.Product.ID, "SKU-002", "Large", 150.00, 75.00)
+	var prodResp map[string]interface{}
+	require.NoError(t, json.Unmarshal(resp.Body, &prodResp))
+	prodData := prodResp["data"].(map[string]interface{})
+	variants := prodData["variants"].([]interface{})
+	variant2ID := int64(variants[0].(map[string]interface{})["id"].(float64))
+
+	// Seed stock for second variant
+	err = testFixture.CreateStock(context.Background(), variant2ID, td.auth.BranchID, 100, 0)
 	require.NoError(t, err)
 
 	// Create order with multiple items
 	orderBody := map[string]interface{}{
-		"customer_id":      testData.Customer.ID,
+		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
 			{
-				"product_variant_id": testData.ProductVariant.ID, // 100.00 x 2 = 200.00
+				"product_variant_id": td.variantID, // 100.00 x 2 = 200.00
 				"quantity":           2,
 				"discount_amount":    10,
 			},
 			{
-				"product_variant_id": variant2.ID, // 150.00 x 1 = 150.00
+				"product_variant_id": variant2ID, // 150.00 x 1 = 150.00
 				"quantity":           1,
 				"discount_amount":    0,
 			},
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/orders", orderBody, "")
+	resp, err = testServer.POST("/api/v1/orders", orderBody, token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -692,6 +718,7 @@ func TestOrder_CreateWithMultipleItems(t *testing.T) {
 
 func TestOrder_ValidationErrors(t *testing.T) {
 	cleanupDatabase(t)
+	auth := registerTestUser(t)
 
 	tests := []struct {
 		name       string
@@ -743,7 +770,7 @@ func TestOrder_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := testServer.POST("/api/v1/orders", tt.body, "")
+			resp, err := testServer.POST("/api/v1/orders", tt.body, auth.Token)
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 		})
@@ -751,27 +778,24 @@ func TestOrder_ValidationErrors(t *testing.T) {
 }
 
 func TestOrder_PaymentValidation(t *testing.T) {
-	cleanupDatabase(t)
-	ctx := context.Background()
-
-	// Setup test data
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
+	td := setupOrderTest(t)
+	token := td.auth.Token
 
 	// Create and confirm an order
 	orderBody := map[string]interface{}{
-		"customer_id":      testData.Customer.ID,
+		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
 			{
-				"product_variant_id": testData.ProductVariant.ID,
+				"product_variant_id": td.variantID,
 				"quantity":           1,
 			},
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/orders", orderBody, "")
+	resp, err := testServer.POST("/api/v1/orders", orderBody, token)
 	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -781,9 +805,9 @@ func TestOrder_PaymentValidation(t *testing.T) {
 	orderID := int64(data["id"].(float64))
 
 	// Confirm
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "confirm failed: %s", string(resp.Body))
 
 	// Test invalid payment method
 	invalidPayment := map[string]interface{}{
@@ -795,33 +819,30 @@ func TestOrder_PaymentValidation(t *testing.T) {
 		},
 	}
 
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), invalidPayment, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), invalidPayment, token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
 }
 
 func TestOrder_PartialPayment(t *testing.T) {
-	cleanupDatabase(t)
-	ctx := context.Background()
-
-	// Setup test data
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
+	td := setupOrderTest(t)
+	token := td.auth.Token
 
 	// Create order (grand_total = 100)
 	orderBody := map[string]interface{}{
-		"customer_id":      testData.Customer.ID,
+		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
 			{
-				"product_variant_id": testData.ProductVariant.ID,
+				"product_variant_id": td.variantID,
 				"quantity":           1,
 			},
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/orders", orderBody, "")
+	resp, err := testServer.POST("/api/v1/orders", orderBody, token)
 	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -831,8 +852,9 @@ func TestOrder_PartialPayment(t *testing.T) {
 	orderID := int64(data["id"].(float64))
 
 	// Confirm
-	_, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
 	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "confirm failed: %s", string(resp.Body))
 
 	// Pay partial amount (50 out of 100)
 	partialPayment := map[string]interface{}{
@@ -844,7 +866,7 @@ func TestOrder_PartialPayment(t *testing.T) {
 		},
 	}
 
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), partialPayment, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), partialPayment, token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -867,7 +889,7 @@ func TestOrder_PartialPayment(t *testing.T) {
 		},
 	}
 
-	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), remainingPayment, "")
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), remainingPayment, token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 

@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,24 +12,20 @@ import (
 
 func TestCustomer_CreateAndGet(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	// Create base test data (company, branch, etc.)
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
-	_ = testData // Company ID is used internally
+	auth := registerTestUser(t)
 
 	// Create a customer
 	customerBody := map[string]interface{}{
+		"code":      "CUST-001",
 		"name":      "John Customer",
 		"phone":     "+1234567890",
 		"email":     "john.customer@example.com",
 		"is_member": true,
 	}
 
-	resp, err := testServer.POST("/api/v1/customers", customerBody, "")
+	resp, err := testServer.POST("/api/v1/customers", customerBody, auth.Token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create customer failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -44,7 +39,7 @@ func TestCustomer_CreateAndGet(t *testing.T) {
 	assert.NotEmpty(t, data["code"])
 
 	// Get the customer
-	resp, err = testServer.GET(fmt.Sprintf("/api/v1/customers/%d", customerID), "")
+	resp, err = testServer.GET(fmt.Sprintf("/api/v1/customers/%d", customerID), auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -60,22 +55,19 @@ func TestCustomer_CreateAndGet(t *testing.T) {
 
 func TestCustomer_Update(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
-	_ = testData
+	auth := registerTestUser(t)
 
 	// Create a customer
 	customerBody := map[string]interface{}{
+		"code":      "CUST-UPD",
 		"name":      "Original Name",
 		"phone":     "+1111111111",
 		"is_member": false,
 	}
 
-	resp, err := testServer.POST("/api/v1/customers", customerBody, "")
+	resp, err := testServer.POST("/api/v1/customers", customerBody, auth.Token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create customer failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -86,13 +78,14 @@ func TestCustomer_Update(t *testing.T) {
 
 	// Update the customer
 	updateBody := map[string]interface{}{
+		"code":      "CUST-UPD",
 		"name":      "Updated Name",
 		"phone":     "+2222222222",
 		"email":     "updated@example.com",
 		"is_member": true,
 	}
 
-	resp, err = testServer.PUT(fmt.Sprintf("/api/v1/customers/%d", customerID), updateBody, "")
+	resp, err = testServer.PUT(fmt.Sprintf("/api/v1/customers/%d", customerID), updateBody, auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -110,20 +103,17 @@ func TestCustomer_Update(t *testing.T) {
 
 func TestCustomer_Delete(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
-	_ = testData
+	auth := registerTestUser(t)
 
 	// Create a customer
 	customerBody := map[string]interface{}{
+		"code": "CUST-DEL",
 		"name": "To Be Deleted",
 	}
 
-	resp, err := testServer.POST("/api/v1/customers", customerBody, "")
+	resp, err := testServer.POST("/api/v1/customers", customerBody, auth.Token)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "create customer failed: %s", string(resp.Body))
 
 	var createResp map[string]interface{}
 	err = json.Unmarshal(resp.Body, &createResp)
@@ -133,37 +123,34 @@ func TestCustomer_Delete(t *testing.T) {
 	customerID := int64(data["id"].(float64))
 
 	// Delete the customer
-	resp, err = testServer.DELETE(fmt.Sprintf("/api/v1/customers/%d", customerID), "")
+	resp, err = testServer.DELETE(fmt.Sprintf("/api/v1/customers/%d", customerID), auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Verify deletion
-	resp, err = testServer.GET(fmt.Sprintf("/api/v1/customers/%d", customerID), "")
+	resp, err = testServer.GET(fmt.Sprintf("/api/v1/customers/%d", customerID), auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
 func TestCustomer_List(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
-	_ = testData
+	auth := registerTestUser(t)
 
 	// Create multiple customers
 	for i := 0; i < 5; i++ {
 		customerBody := map[string]interface{}{
+			"code": fmt.Sprintf("CUST-L%d", i+1),
 			"name": fmt.Sprintf("Customer %d", i+1),
 		}
 
-		resp, err := testServer.POST("/api/v1/customers", customerBody, "")
+		resp, err := testServer.POST("/api/v1/customers", customerBody, auth.Token)
 		require.NoError(t, err)
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+		require.Equal(t, http.StatusCreated, resp.StatusCode, "create customer failed: %s", string(resp.Body))
 	}
 
 	// List customers
-	resp, err := testServer.GET("/api/v1/customers", "")
+	resp, err := testServer.GET("/api/v1/customers", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -173,7 +160,6 @@ func TestCustomer_List(t *testing.T) {
 
 	assert.True(t, listResp["success"].(bool))
 	data := listResp["data"].([]interface{})
-	// 5 created + 1 from base test data
 	assert.GreaterOrEqual(t, len(data), 5)
 
 	// Verify pagination
@@ -184,11 +170,7 @@ func TestCustomer_List(t *testing.T) {
 
 func TestCustomer_ValidationErrors(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
-	_ = testData
+	auth := registerTestUser(t)
 
 	tests := []struct {
 		name       string
@@ -198,6 +180,7 @@ func TestCustomer_ValidationErrors(t *testing.T) {
 		{
 			name: "empty name",
 			body: map[string]interface{}{
+				"code": "CUST-VAL1",
 				"name": "",
 			},
 			wantStatus: http.StatusUnprocessableEntity,
@@ -205,6 +188,7 @@ func TestCustomer_ValidationErrors(t *testing.T) {
 		{
 			name: "invalid email",
 			body: map[string]interface{}{
+				"code":  "CUST-VAL2",
 				"name":  "Valid Name",
 				"email": "not-an-email",
 			},
@@ -214,7 +198,7 @@ func TestCustomer_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := testServer.POST("/api/v1/customers", tt.body, "")
+			resp, err := testServer.POST("/api/v1/customers", tt.body, auth.Token)
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 		})
@@ -223,33 +207,31 @@ func TestCustomer_ValidationErrors(t *testing.T) {
 
 func TestCustomer_NotFound(t *testing.T) {
 	cleanupDatabase(t)
+	auth := registerTestUser(t)
 
-	resp, err := testServer.GET("/api/v1/customers/99999", "")
+	resp, err := testServer.GET("/api/v1/customers/99999", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
 func TestCustomer_ListWithPagination(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
-	_ = testData
+	auth := registerTestUser(t)
 
 	// Create 15 customers
 	for i := 0; i < 15; i++ {
 		customerBody := map[string]interface{}{
+			"code": fmt.Sprintf("CUST-P%02d", i+1),
 			"name": fmt.Sprintf("Paginated Customer %d", i+1),
 		}
 
-		resp, err := testServer.POST("/api/v1/customers", customerBody, "")
+		resp, err := testServer.POST("/api/v1/customers", customerBody, auth.Token)
 		require.NoError(t, err)
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+		require.Equal(t, http.StatusCreated, resp.StatusCode, "create customer failed: %s", string(resp.Body))
 	}
 
 	// List first page
-	resp, err := testServer.GET("/api/v1/customers?page=1&per_page=5", "")
+	resp, err := testServer.GET("/api/v1/customers?page=1&per_page=5", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -267,7 +249,7 @@ func TestCustomer_ListWithPagination(t *testing.T) {
 	assert.NotNil(t, pagination["next_page"])
 
 	// List second page
-	resp, err = testServer.GET("/api/v1/customers?page=2&per_page=5", "")
+	resp, err = testServer.GET("/api/v1/customers?page=2&per_page=5", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -282,26 +264,27 @@ func TestCustomer_ListWithPagination(t *testing.T) {
 
 func TestCustomer_Search(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
-
-	testData, err := testFixture.CreateBaseTestData(ctx)
-	require.NoError(t, err)
-	_ = testData
+	auth := registerTestUser(t)
 
 	// Create customers with distinct names
-	customers := []string{"Alice Smith", "Bob Johnson", "Alice Williams"}
-	for _, name := range customers {
+	customers := []struct{ code, name string }{
+		{"CUST-AS", "Alice Smith"},
+		{"CUST-BJ", "Bob Johnson"},
+		{"CUST-AW", "Alice Williams"},
+	}
+	for _, c := range customers {
 		customerBody := map[string]interface{}{
-			"name": name,
+			"code": c.code,
+			"name": c.name,
 		}
 
-		resp, err := testServer.POST("/api/v1/customers", customerBody, "")
+		resp, err := testServer.POST("/api/v1/customers", customerBody, auth.Token)
 		require.NoError(t, err)
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+		require.Equal(t, http.StatusCreated, resp.StatusCode, "create customer failed: %s", string(resp.Body))
 	}
 
 	// Search for "Alice"
-	resp, err := testServer.GET("/api/v1/customers?search=Alice", "")
+	resp, err := testServer.GET("/api/v1/customers?search=Alice", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
