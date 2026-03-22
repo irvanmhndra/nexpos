@@ -13,11 +13,11 @@ import (
 )
 
 type InventoryHandler struct {
-	inventorySvc *service.InventoryService
+	inventorySvc service.InventoryServiceInterface
 	validator    *validator.CustomValidator
 }
 
-func NewInventoryHandler(inventorySvc *service.InventoryService, v *validator.CustomValidator) *InventoryHandler {
+func NewInventoryHandler(inventorySvc service.InventoryServiceInterface, v *validator.CustomValidator) *InventoryHandler {
 	return &InventoryHandler{
 		inventorySvc: inventorySvc,
 		validator:    v,

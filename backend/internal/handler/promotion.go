@@ -13,11 +13,11 @@ import (
 )
 
 type PromotionHandler struct {
-	promotionSvc *service.PromotionService
+	promotionSvc service.PromotionServiceInterface
 	validator    *validator.CustomValidator
 }
 
-func NewPromotionHandler(promotionSvc *service.PromotionService, validator *validator.CustomValidator) *PromotionHandler {
+func NewPromotionHandler(promotionSvc service.PromotionServiceInterface, validator *validator.CustomValidator) *PromotionHandler {
 	return &PromotionHandler{
 		promotionSvc: promotionSvc,
 		validator:    validator,

@@ -13,11 +13,11 @@ import (
 )
 
 type ReportHandler struct {
-	reportSvc *service.ReportService
+	reportSvc service.ReportServiceInterface
 	validator *validator.CustomValidator
 }
 
-func NewReportHandler(reportSvc *service.ReportService, validator *validator.CustomValidator) *ReportHandler {
+func NewReportHandler(reportSvc service.ReportServiceInterface, validator *validator.CustomValidator) *ReportHandler {
 	return &ReportHandler{
 		reportSvc: reportSvc,
 		validator: validator,

@@ -13,11 +13,11 @@ import (
 )
 
 type BranchHandler struct {
-	branchSvc *service.BranchService
+	branchSvc service.BranchServiceInterface
 	validator *validator.CustomValidator
 }
 
-func NewBranchHandler(branchSvc *service.BranchService, validator *validator.CustomValidator) *BranchHandler {
+func NewBranchHandler(branchSvc service.BranchServiceInterface, validator *validator.CustomValidator) *BranchHandler {
 	return &BranchHandler{
 		branchSvc: branchSvc,
 		validator: validator,

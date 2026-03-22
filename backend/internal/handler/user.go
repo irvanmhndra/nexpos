@@ -13,11 +13,11 @@ import (
 )
 
 type UserHandler struct {
-	userSvc   *service.UserService
+	userSvc   service.UserServiceInterface
 	validator *validator.CustomValidator
 }
 
-func NewUserHandler(userSvc *service.UserService, validator *validator.CustomValidator) *UserHandler {
+func NewUserHandler(userSvc service.UserServiceInterface, validator *validator.CustomValidator) *UserHandler {
 	return &UserHandler{
 		userSvc:   userSvc,
 		validator: validator,

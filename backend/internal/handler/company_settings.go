@@ -12,11 +12,11 @@ import (
 )
 
 type CompanySettingsHandler struct {
-	settingsSvc *service.CompanySettingsService
+	settingsSvc service.CompanySettingsServiceInterface
 	validator   *validator.CustomValidator
 }
 
-func NewCompanySettingsHandler(settingsSvc *service.CompanySettingsService, v *validator.CustomValidator) *CompanySettingsHandler {
+func NewCompanySettingsHandler(settingsSvc service.CompanySettingsServiceInterface, v *validator.CustomValidator) *CompanySettingsHandler {
 	return &CompanySettingsHandler{settingsSvc: settingsSvc, validator: v}
 }
 

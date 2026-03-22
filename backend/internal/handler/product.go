@@ -13,11 +13,11 @@ import (
 )
 
 type ProductHandler struct {
-	productSvc *service.ProductService
+	productSvc service.ProductServiceInterface
 	validator  *validator.CustomValidator
 }
 
-func NewProductHandler(productSvc *service.ProductService, validator *validator.CustomValidator) *ProductHandler {
+func NewProductHandler(productSvc service.ProductServiceInterface, validator *validator.CustomValidator) *ProductHandler {
 	return &ProductHandler{
 		productSvc: productSvc,
 		validator:  validator,

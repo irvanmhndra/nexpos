@@ -56,6 +56,7 @@ type ProductServiceInterface interface {
 
 // OrderServiceInterface defines the contract for order operations
 type OrderServiceInterface interface {
+	Preview(ctx context.Context, companyID, branchID int64, req dto.PreviewOrderRequest) (*dto.PreviewOrderResponse, error)
 	Create(ctx context.Context, companyID, branchID, cashierID int64, req dto.CreateOrderRequest) (*dto.OrderResponse, error)
 	GetByID(ctx context.Context, companyID, id int64) (*dto.OrderResponse, error)
 	List(ctx context.Context, companyID int64, req dto.ListOrderRequest) (*dto.OrderListResponse, error)
@@ -96,6 +97,22 @@ type ReportServiceInterface interface {
 	GetHourlySales(ctx context.Context, companyID int64, dateFrom, dateTo string) (*dto.HourlySalesResponse, error)
 }
 
+// CompanySettingsServiceInterface defines the contract for company settings operations
+type CompanySettingsServiceInterface interface {
+	Get(ctx context.Context, companyID int64) (*dto.CompanySettingsResponse, error)
+	Update(ctx context.Context, companyID int64, req dto.UpdateCompanySettingsRequest) (*dto.CompanySettingsResponse, error)
+}
+
+// InventoryServiceInterface defines the contract for inventory operations
+type InventoryServiceInterface interface {
+	AdjustStock(ctx context.Context, companyID int64, createdBy *int64, req dto.AdjustStockRequest) error
+	GetInventoryStats(ctx context.Context, companyID, branchID int64) (*dto.InventoryStatsResponse, error)
+	GetMovementStats(ctx context.Context, companyID, branchID int64) (*dto.MovementStatsResponse, error)
+	ListInventory(ctx context.Context, companyID int64, req dto.ListInventoryRequest) (*dto.InventoryListResponse, error)
+	ListMovements(ctx context.Context, companyID int64, req dto.ListMovementsRequest) (*dto.MovementListResponse, error)
+	UpdateMinStock(ctx context.Context, companyID, variantID, branchID int64, req dto.UpdateMinStockRequest) error
+}
+
 // Ensure concrete types implement interfaces
 var _ AuthServiceInterface = (*AuthService)(nil)
 var _ UserServiceInterface = (*UserService)(nil)
@@ -106,3 +123,5 @@ var _ OrderServiceInterface = (*OrderService)(nil)
 var _ BranchServiceInterface = (*BranchService)(nil)
 var _ PromotionServiceInterface = (*PromotionService)(nil)
 var _ ReportServiceInterface = (*ReportService)(nil)
+var _ CompanySettingsServiceInterface = (*CompanySettingsService)(nil)
+var _ InventoryServiceInterface = (*InventoryService)(nil)

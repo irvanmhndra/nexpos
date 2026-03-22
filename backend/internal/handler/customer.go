@@ -13,11 +13,11 @@ import (
 )
 
 type CustomerHandler struct {
-	customerSvc *service.CustomerService
+	customerSvc service.CustomerServiceInterface
 	validator   *validator.CustomValidator
 }
 
-func NewCustomerHandler(customerSvc *service.CustomerService, validator *validator.CustomValidator) *CustomerHandler {
+func NewCustomerHandler(customerSvc service.CustomerServiceInterface, validator *validator.CustomValidator) *CustomerHandler {
 	return &CustomerHandler{
 		customerSvc: customerSvc,
 		validator:   validator,

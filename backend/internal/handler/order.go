@@ -13,11 +13,11 @@ import (
 )
 
 type OrderHandler struct {
-	orderSvc  *service.OrderService
+	orderSvc  service.OrderServiceInterface
 	validator *validator.CustomValidator
 }
 
-func NewOrderHandler(orderSvc *service.OrderService, validator *validator.CustomValidator) *OrderHandler {
+func NewOrderHandler(orderSvc service.OrderServiceInterface, validator *validator.CustomValidator) *OrderHandler {
 	return &OrderHandler{
 		orderSvc:  orderSvc,
 		validator: validator,
