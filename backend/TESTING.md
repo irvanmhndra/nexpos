@@ -1,464 +1,372 @@
 # Testing Guide
 
-## File Naming Convention
+## Testing Strategy
 
-Kami menggunakan **standard Go convention**:
+This project uses a layered testing approach:
 
 ```
-handler/
-  ├── auth.go              # Implementation
-  ├── auth_test.go         # Tests
-  ├── customer.go
-  ├── customer_test.go
-  ├── product.go
-  ├── product_test.go
+┌──────────────────────────────────────────────────┐
+│  Integration Tests (tests/integration/)          │
+│  Real HTTP requests → full stack → real database │
+│  Tests: auth, customer, product, order, health   │
+└──────────────────────┬───────────────────────────┘
+                       │
+┌──────────────────────┴───────────────────────────┐
+│  Handler Unit Tests (internal/handler/*_test.go) │
+│  Mock services, test HTTP binding & validation   │
+│  Tests: all handlers                             │
+└──────────────────────┬───────────────────────────┘
+                       │
+┌──────────────────────┴───────────────────────────┐
+│  Service Unit Tests (internal/service/*_test.go) │
+│  Mock repositories, test business logic          │
+│  Tests: all services                             │
+└──────────────────────────────────────────────────┘
 ```
 
-### ❌ JANGAN gunakan:
+### Why this structure?
+
+| Layer | What it tests | Mock boundary | Value |
+|-------|--------------|---------------|-------|
+| **Service unit tests** | Business logic, validation, error handling | Repository interfaces | **High** — this is where the real logic lives |
+| **Handler unit tests** | HTTP binding, validation, status codes, response format | Service interfaces | **Medium** — handlers are thin, but catches HTTP-level bugs without a database |
+| **Integration tests** | Full request → response → database flow, including side effects | Nothing (real stack) | **High** — verifies everything works together |
+
+### Key design decisions
+
+1. **Handlers use service interfaces** (`service.XxxServiceInterface`) — enables mocking for handler unit tests
+2. **Services use repository interfaces** — enables mocking for service unit tests
+3. **Integration tests live in `tests/integration/`** — a separate package is required because integration tests need to import `internal/app` to boot the real application, but `internal/app` already imports `internal/handler`. Placing integration tests inside `internal/handler/` would create a circular import (`handler_test → app → handler`). The separate package can import anything without this issue, giving it access to the real app, database, middleware, and route registration
+4. **Integration tests share setup via `TestMain`** in `setup_test.go` — database, app, and test server are initialized once
+5. **Integration tests use DB assertions for side effects** — when an operation produces database changes not visible in the API response (e.g. stock movements, payment status transitions), we query the database directly to verify
+
+## Project Test Structure
+
 ```
-handler/
-  ├── auth_handler.go
-  ├── auth_handler_test.go   # Terlalu verbose
+internal/
+  handler/
+    auth.go
+    auth_test.go          ← handler unit test (mocks service)
+    customer.go
+    customer_test.go
+    ...
+  service/
+    branch.go
+    branch_test.go        ← service unit test (mocks repository)
+    customer.go
+    customer_test.go
+    ...
+    mocks/                ← service mocks (for handler tests)
+      auth.go
+      customer.go
+      ...
+  repository/
+    mocks/                ← repository mocks (for service tests)
+      branch.go
+      customer.go
+      ...
+tests/
+  integration/
+    setup_test.go         ← TestMain: DB + app setup/teardown
+    auth_test.go          ← full-stack integration tests
+    customer_test.go
+    order_test.go         ← includes DB assertions for stock/payment
+    ...
+    testutil/
+      db.go               ← test database utilities (truncate, tx)
+      http.go             ← test HTTP client (GET, POST, PUT, DELETE)
+      fixtures.go         ← test data factories (company, branch, user, product, stock, etc.)
 ```
-
-## Test Package Strategy
-
-### Option 1: Same Package (White Box Testing)
-```go
-package handler
-
-func TestAuthHandler_Login(t *testing.T) {
-    // Dapat access private methods/fields
-    // Gunakan untuk test internal logic
-}
-```
-
-**Pros:**
-- Access ke private methods
-- Detail testing
-
-**Cons:**
-- Tight coupling
-
-### Option 2: Separate Package (Black Box Testing) ⭐ **RECOMMENDED**
-```go
-package handler_test
-
-import "github.com/irvanmhndra/pos-core-api/internal/handler"
-
-func TestAuthHandler_Login(t *testing.T) {
-    // Test hanya public API
-}
-```
-
-**Pros:**
-- Test public interface only
-- Better design
-- Easier refactoring
-- Mencegah test implementation details
-
-## Test Structure
-
-### 1. Test Organization
-```go
-// =======================
-// Test Helpers
-// =======================
-
-func createTestContext(method, path, body string) (*echo.Context, *httptest.ResponseRecorder) {
-    // ... helper code
-}
-
-// =======================
-// Constructor Tests
-// =======================
-
-func TestNewAuthHandler(t *testing.T) {
-    // Test constructor
-}
-
-// =======================
-// Login Tests
-// =======================
-
-func TestAuthHandler_Login_Success(t *testing.T) {
-    // ... test code
-}
-
-func TestAuthHandler_Login_InvalidJSON(t *testing.T) {
-    // ... test code
-}
-```
-
-### 2. Test Naming Convention
-Format: `Test<Handler>_<Method>_<Scenario>`
-
-**Examples:**
-```go
-func TestAuthHandler_Login_Success(t *testing.T)
-func TestAuthHandler_Login_InvalidEmail(t *testing.T)
-func TestAuthHandler_Login_EmptyPassword(t *testing.T)
-func TestProductHandler_Create_ValidationError(t *testing.T)
-```
-
-### 3. Arrange-Act-Assert Pattern
-```go
-func TestAuthHandler_Login_InvalidJSON(t *testing.T) {
-    // Arrange - Setup test data & dependencies
-    v := validator.New()
-    h := NewAuthHandler(nil, v)
-    c, rec := createTestContext(http.MethodPost, "/login", "{invalid json}")
-
-    // Act - Execute the function being tested
-    err := h.Login(c)
-
-    // Assert - Verify the results
-    assert.NoError(t, err)
-    assert.Equal(t, http.StatusBadRequest, rec.Code)
-}
-```
-
-## Testing Patterns
-
-### 1. Table-Driven Tests ⭐ **RECOMMENDED for multiple scenarios**
-
-```go
-func TestAuthHandler_Login_ValidationErrors(t *testing.T) {
-    tests := []struct {
-        name        string
-        requestBody string
-        wantStatus  int
-        wantMessage string
-    }{
-        {
-            name:        "empty email",
-            requestBody: `{"email": "", "password": "pass123"}`,
-            wantStatus:  http.StatusUnprocessableEntity,
-            wantMessage: "Validation failed",
-        },
-        {
-            name:        "empty password",
-            requestBody: `{"email": "test@example.com", "password": ""}`,
-            wantStatus:  http.StatusUnprocessableEntity,
-            wantMessage: "Validation failed",
-        },
-        // ... more test cases
-    }
-
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            // Arrange
-            v := validator.New()
-            h := NewAuthHandler(nil, v)
-            c, rec := createTestContext(http.MethodPost, "/login", tt.requestBody)
-
-            // Act
-            err := h.Login(c)
-
-            // Assert
-            assert.NoError(t, err)
-            assert.Equal(t, tt.wantStatus, rec.Code)
-        })
-    }
-}
-```
-
-**Benefits:**
-- DRY (Don't Repeat Yourself)
-- Easy to add new test cases
-- Clear test documentation
-- Parallel test execution support
-
-### 2. Individual Tests (for complex scenarios)
-
-```go
-func TestAuthHandler_Login_InvalidJSON(t *testing.T) {
-    v := validator.New()
-    h := NewAuthHandler(nil, v)
-    c, rec := createTestContext(http.MethodPost, "/login", "{invalid json}")
-
-    err := h.Login(c)
-
-    assert.NoError(t, err)
-    assert.Equal(t, http.StatusBadRequest, rec.Code)
-
-    var response map[string]interface{}
-    json.Unmarshal(rec.Body.Bytes(), &response)
-    assert.Contains(t, response["message"], "invalid request body")
-}
-```
-
-## What to Test in Handlers
-
-### ✅ DO Test:
-1. **Input Validation**
-   - Missing required fields
-   - Invalid field formats
-   - Malformed JSON
-   - Field length constraints
-
-2. **HTTP Response**
-   - Status codes
-   - Response structure
-   - Error messages
-
-3. **Edge Cases**
-   - Empty strings
-   - Null values
-   - Boundary values
-
-### ❌ DON'T Test (without mocks):
-1. **Business Logic** - Test di service layer
-2. **Database Operations** - Test di repository layer
-3. **External API Calls** - Requires mocks
 
 ## Running Tests
 
-### Run all tests
+### Unit tests only (fast, no database needed)
+```bash
+go test -short ./internal/...
+```
+
+### Unit tests with race detection
+```bash
+go test -race -short ./internal/...
+```
+
+### Integration tests (requires test database)
+```bash
+# Start test database
+docker-compose -f docker-compose.test.yml up -d
+
+# Run integration tests
+go test -v ./tests/integration/...
+
+# Stop test database
+docker-compose -f docker-compose.test.yml down
+```
+
+### All tests
 ```bash
 go test ./...
 ```
 
-### Run specific package
+### Specific package
 ```bash
-go test ./internal/handler
+go test -v ./internal/service/...
+go test -v ./internal/handler/...
 ```
 
-### Run with verbose output
+### Specific test
 ```bash
-go test ./internal/handler -v
+go test -v ./internal/service/ -run TestCustomerService_Create
 ```
 
-### Run specific test
+### Coverage report
 ```bash
-go test ./internal/handler -run TestAuthHandler_Login
-```
-
-### Run with coverage
-```bash
-go test ./internal/handler -cover
-```
-
-### Generate coverage report
-```bash
-go test ./internal/handler -coverprofile=coverage.out
+go test -coverprofile=coverage.out ./internal/...
 go tool cover -html=coverage.out -o coverage.html
 ```
 
-### Run tests in parallel
-```bash
-go test ./... -parallel=4
-```
+## Writing Tests
 
-## Test Coverage Goals
+### Service unit test pattern
 
-- **Handlers:** 80%+ (focus on validation, input parsing)
-- **Services:** 90%+ (business logic critical)
-- **Repositories:** 70%+ (mostly integration tests)
-- **Utils/Helpers:** 100% (small, pure functions)
-
-## Advanced Topics (Future Implementation)
-
-### 1. Mocking with Interfaces
-
-Create service interfaces for better testability:
+Service tests mock repository dependencies using `testify/mock`:
 
 ```go
-// internal/service/interface.go
-type AuthServiceInterface interface {
-    Login(ctx context.Context, req dto.LoginRequest, ip, ua string) (*dto.LoginResponse, error)
-    Register(ctx context.Context, req dto.RegisterRequest, ip, ua string) (*dto.LoginResponse, error)
-    // ... other methods
+package service
+
+func setupCustomerTest(t *testing.T) (*CustomerService, *repoMocks.MockCustomerRepository) {
+    t.Helper()
+    mockRepo := repoMocks.NewMockCustomerRepository(t)
+    svc := NewCustomerService(mockRepo)
+    return svc, mockRepo
 }
 
-// Handler depends on interface, not concrete type
-type AuthHandler struct {
-    authSvc   AuthServiceInterface  // Interface, not *AuthService
-    validator *validator.CustomValidator
-}
-```
+func TestCustomerService_Create_Success(t *testing.T) {
+    svc, mockRepo := setupCustomerTest(t)
 
-Then use testify/mock:
+    // Arrange
+    mockRepo.EXPECT().GetByCode(mock.Anything, int64(1), "CUST-001").
+        Return(nil, nil)
+    mockRepo.EXPECT().Create(mock.Anything, mock.AnythingOfType("*model.Customer")).
+        Return(nil)
 
-```go
-type MockAuthService struct {
-    mock.Mock
-}
+    // Act
+    result, err := svc.Create(ctx, 1, dto.CreateCustomerRequest{
+        Code: "CUST-001",
+        Name: "Test",
+    })
 
-func (m *MockAuthService) Login(ctx context.Context, req dto.LoginRequest, ip, ua string) (*dto.LoginResponse, error) {
-    args := m.Called(ctx, req, ip, ua)
-    if args.Get(0) == nil {
-        return nil, args.Error(1)
-    }
-    return args.Get(0).(*dto.LoginResponse), args.Error(1)
-}
-
-// In test
-mockSvc := new(MockAuthService)
-mockSvc.On("Login", mock.Anything, mock.AnythingOfType("dto.LoginRequest"), mock.Anything, mock.Anything).
-    Return(&dto.LoginResponse{AccessToken: "token"}, nil)
-
-h := handler.NewAuthHandler(mockSvc, v)
-// ... test with mock
-mockSvc.AssertExpectations(t)
-```
-
-### 2. Integration Tests
-
-```go
-// tests/integration/auth_test.go
-func TestAuthFlow_EndToEnd(t *testing.T) {
-    // Setup test database
-    // Create real dependencies
-    // Test full flow: Register -> Login -> API Call -> Logout
+    // Assert
+    require.NoError(t, err)
+    assert.Equal(t, "CUST-001", result.Code)
 }
 ```
 
-### 3. Test Fixtures
+### Handler unit test pattern
 
-```go
-// internal/handler/fixtures_test.go
-func validLoginRequest() string {
-    return `{"email": "test@example.com", "password": "password123"}`
-}
-
-func invalidEmailRequest() string {
-    return `{"email": "invalid", "password": "password123"}`
-}
-```
-
-## Best Practices
-
-1. **Test one thing per test**
-   - Each test should verify one specific behavior
-
-2. **Use descriptive test names**
-   - Name should describe what is being tested and expected outcome
-
-3. **Keep tests independent**
-   - Tests should not depend on each other
-   - Use setup/teardown if needed
-
-4. **Test behavior, not implementation**
-   - Don't test private methods directly
-   - Focus on public API
-
-5. **Use table-driven tests for similar scenarios**
-   - Reduces code duplication
-   - Makes adding test cases easier
-
-6. **Mock external dependencies**
-   - Database calls
-   - External APIs
-   - Time-dependent code
-
-7. **Clean up test resources**
-   - Use t.Cleanup() or defer
-
-8. **Run tests in CI/CD**
-   - Automated testing on every commit
-
-## Common Pitfalls to Avoid
-
-❌ **Testing implementation details**
-```go
-// Bad - testing internal field
-assert.NotNil(t, handler.authSvc)
-```
-
-❌ **Not testing error cases**
-```go
-// Bad - only testing happy path
-func TestCreate_Success(t *testing.T) { ... }
-// Missing: TestCreate_ValidationError, TestCreate_DBError, etc.
-```
-
-❌ **Hardcoding values without context**
-```go
-// Bad
-assert.Equal(t, 200, rec.Code)
-
-// Good
-assert.Equal(t, http.StatusOK, rec.Code)
-```
-
-❌ **Not using test helpers**
-```go
-// Bad - repeating setup code in every test
-e := echo.New()
-req := httptest.NewRequest(...)
-// ...
-
-// Good - use helper function
-c, rec := createTestContext(method, path, body)
-```
-
-## HTTP Status Codes Reference
-
-- `200 OK` - Success
-- `201 Created` - Resource created
-- `400 Bad Request` - Malformed request (JSON parsing error)
-- `401 Unauthorized` - Authentication required/failed
-- `404 Not Found` - Resource not found
-- `422 Unprocessable Entity` - Validation error (correct data format, invalid values)
-- `500 Internal Server Error` - Server error
-
-## Example: Complete Test File Structure
+Handler tests mock service dependencies:
 
 ```go
 package handler
 
-import (
-    "testing"
-    // ... imports
-)
-
-// =======================
-// Test Helpers
-// =======================
-
-func createTestContext(...) { }
-
-// =======================
-// Constructor Tests
-// =======================
-
-func TestNewHandler(t *testing.T) { }
-
-// =======================
-// Create Tests
-// =======================
-
-func TestHandler_Create_Success(t *testing.T) { }
-func TestHandler_Create_ValidationError(t *testing.T) { }
-func TestHandler_Create_Errors(t *testing.T) {
-    // Table-driven tests for multiple error cases
+func setupCustomerHandler(t *testing.T) (*CustomerHandler, *mocks.MockCustomerService) {
+    t.Helper()
+    v := validator.New()
+    mockSvc := new(mocks.MockCustomerService)
+    h := NewCustomerHandler(mockSvc, v)
+    return h, mockSvc
 }
 
-// =======================
-// List Tests
-// =======================
+func createCustomerContext(method, path, body string) (*echo.Context, *httptest.ResponseRecorder) {
+    e := echo.New()
+    req := httptest.NewRequest(method, path, strings.NewReader(body))
+    req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+    rec := httptest.NewRecorder()
+    c := e.NewContext(req, rec)
+    c.Set("company_id", int64(1))
+    return c, rec
+}
 
-func TestHandler_List_Success(t *testing.T) { }
-func TestHandler_List_WithFilters(t *testing.T) { }
+func TestCustomerHandler_Create_Success(t *testing.T) {
+    h, mockSvc := setupCustomerHandler(t)
 
-// =======================
-// Update Tests
-// =======================
+    mockSvc.On("Create", mock.Anything, int64(1), mock.AnythingOfType("dto.CreateCustomerRequest")).
+        Return(&dto.CustomerResponse{ID: 1, Name: "Test"}, nil)
 
-func TestHandler_Update_Success(t *testing.T) { }
-func TestHandler_Update_NotFound(t *testing.T) { }
+    body := `{"code": "CUST-001", "name": "Test"}`
+    c, rec := createCustomerContext(http.MethodPost, "/api/v1/customers", body)
 
-// =======================
-// Delete Tests
-// =======================
-
-func TestHandler_Delete_Success(t *testing.T) { }
+    err := h.Create(c)
+    assert.NoError(t, err)
+    assert.Equal(t, http.StatusCreated, rec.Code)
+    mockSvc.AssertExpectations(t)
+}
 ```
 
-## Resources
+### Echo v5 path parameters
 
-- [Go Testing](https://golang.org/pkg/testing/)
-- [Testify](https://github.com/stretchr/testify)
-- [Echo Testing](https://echo.labstack.com/docs/testing)
-- [Table Driven Tests](https://dave.cheney.net/2019/05/07/prefer-table-driven-tests)
+Use `SetPathValues` (not `SetPathParams`) for Echo v5:
+
+```go
+c, rec := createContext(http.MethodGet, "/api/v1/items/1", "")
+c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
+```
+
+### Integration test pattern
+
+Integration tests use the real HTTP stack and database:
+
+```go
+package integration
+
+func TestCustomer_CreateAndGet(t *testing.T) {
+    cleanupDatabase(t)
+    ctx := context.Background()
+
+    testData, err := testFixture.CreateBaseTestData(ctx)
+    require.NoError(t, err)
+
+    // Create
+    body := map[string]interface{}{"name": "John", "phone": "+123"}
+    resp, err := testServer.POST("/api/v1/customers", body, "")
+    require.NoError(t, err)
+    assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+    // Get
+    resp, err = testServer.GET("/api/v1/customers/1", "")
+    require.NoError(t, err)
+    assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+```
+
+### Integration test with DB assertions
+
+Use direct database queries to verify side effects not visible in API responses:
+
+```go
+func TestOrderFlow_Complete_StockDeduction(t *testing.T) {
+    cleanupDatabase(t)
+    ctx := context.Background()
+
+    testData, err := testFixture.CreateBaseTestData(ctx)
+    require.NoError(t, err)
+
+    // Seed initial stock
+    err = testFixture.CreateStock(ctx, testData.ProductVariant.ID, testData.Branch.ID, 10, 0)
+    require.NoError(t, err)
+
+    // ... create, confirm, pay, complete order ...
+
+    // DB assertion: verify stock was deducted
+    var stockQty int
+    err = testDB.DB.QueryRowContext(ctx,
+        "SELECT quantity FROM stocks WHERE product_variant_id = $1 AND branch_id = $2",
+        testData.ProductVariant.ID, testData.Branch.ID,
+    ).Scan(&stockQty)
+    require.NoError(t, err)
+    assert.Equal(t, 9, stockQty) // started at 10, ordered 1
+
+    // DB assertion: verify stock movement record
+    var movementType string
+    var movementQty int
+    err = testDB.DB.QueryRowContext(ctx,
+        `SELECT type, quantity FROM stock_movements
+         WHERE reference_id = $1 AND reference_type = 'order'`,
+        orderID,
+    ).Scan(&movementType, &movementQty)
+    require.NoError(t, err)
+    assert.Equal(t, "OUT", movementType)
+    assert.Equal(t, 1, movementQty)
+}
+```
+
+### When to use DB assertions
+
+Most integration tests only need to verify via HTTP responses (POST then GET back). Use direct DB assertions when:
+
+| Scenario | Why DB assertion is needed |
+|----------|--------------------------|
+| **Stock deduction on order complete** | Stock changes are best-effort side effects, not returned in the order response |
+| **Stock restoration on order void** | Need to verify IN movements were created and stock quantity restored |
+| **Payment refund status** | Payment status transitions happen in a separate table, verify the actual DB state |
+| **No stock change on non-completed void** | Verify that voiding a confirmed (not completed) order does NOT create stock movements |
+
+### When NOT to use DB assertions
+
+- CRUD operations — verify through GET after POST/PUT/DELETE
+- Pagination, filtering, search — verify through the list API response
+- Validation errors — verify HTTP status code is sufficient
+- Authentication flows — verify token and response status
+
+## Naming Convention
+
+Format: `Test<Type>_<Method>_<Scenario>`
+
+```go
+// Service tests
+func TestCustomerService_Create_Success(t *testing.T)
+func TestCustomerService_Create_CodeExists(t *testing.T)
+func TestCustomerService_Create_RepoError(t *testing.T)
+
+// Handler tests
+func TestCustomerHandler_Create_Success(t *testing.T)
+func TestCustomerHandler_Create_InvalidJSON(t *testing.T)
+func TestCustomerHandler_Create_ValidationError(t *testing.T)
+
+// Integration tests (flow-based naming)
+func TestOrderFlow_CreateAndGet(t *testing.T)
+func TestOrderFlow_CreateConfirmPayComplete(t *testing.T)
+func TestOrderFlow_VoidCompleted(t *testing.T)
+func TestOrder_ValidationErrors(t *testing.T)
+```
+
+## What to test at each layer
+
+### Service tests — focus on:
+- Business logic and validation rules
+- Error handling (not found, conflict, repo errors)
+- Edge cases (nil values, boundary conditions)
+- State transitions (order lifecycle)
+
+### Handler tests — focus on:
+- JSON binding (valid/invalid)
+- Validation errors (required fields, format constraints)
+- Path/query parameter parsing
+- HTTP status codes
+- Response message format
+
+### Integration tests — focus on:
+- End-to-end flows (create → get → update → delete)
+- Database constraints (unique, foreign keys)
+- Pagination and search
+- Authentication flows
+- Side effects via DB assertions (stock movements, payment status)
+
+## Test Utilities
+
+### `testutil/db.go`
+- `NewTestDB()` — creates a database connection to the test PostgreSQL instance
+- `RunMigrations()` — applies all migration files
+- `TruncateAllTables()` — truncates all tables (including `stock_movements`, `stocks`) in FK-safe order
+- `TruncateTables(tables...)` — truncates specific tables
+- `BeginTx(ctx)` — starts a transaction for test isolation
+
+### `testutil/fixtures.go`
+- `CreateBaseTestData(ctx)` — creates a complete set: company, branch, role, user, customer, category, product, variant
+- `CreateCompany/Branch/Role/User/Customer/ProductCategory/Product/ProductVariant` — individual fixture creators
+- `CreateStock(ctx, variantID, branchID, quantity, minQuantity)` — seeds initial stock for a variant at a branch (upsert)
+
+### `testutil/http.go`
+- `TestServer` — wraps Echo for HTTP testing via `ServeHTTP`
+- `GET/POST/PUT/DELETE(path, body/token)` — convenience methods
+- `Response.ParseResponse()` — parses standard API response
+- `Response.ParseData(v)` — parses response data into a struct
+
+## Mock Structure
+
+### Repository mocks (`internal/repository/mocks/`)
+- Use EXPECT() builder pattern with auto-cleanup
+- Created with `NewMockXxxRepository(t)` constructor
+
+### Service mocks (`internal/service/mocks/`)
+- Simple `testify/mock` with `.On().Return()` pattern
+- Created with `new(mocks.MockXxxService)`
