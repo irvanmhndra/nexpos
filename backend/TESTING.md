@@ -213,70 +213,95 @@ c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 
 ### Integration test pattern
 
-Integration tests use the real HTTP stack and database:
+Integration tests use the real HTTP stack and database. All protected routes require authentication via `registerTestUser()`, which registers a user via the API and returns an `authContext` with tokens and IDs:
 
 ```go
 package integration
 
 func TestCustomer_CreateAndGet(t *testing.T) {
     cleanupDatabase(t)
-    ctx := context.Background()
+    auth := registerTestUser(t)
 
-    testData, err := testFixture.CreateBaseTestData(ctx)
-    require.NoError(t, err)
-
-    // Create
-    body := map[string]interface{}{"name": "John", "phone": "+123"}
-    resp, err := testServer.POST("/api/v1/customers", body, "")
+    // Create (all API calls pass auth.Token)
+    body := map[string]interface{}{
+        "code": "CUST-001",
+        "name": "John Customer",
+        "phone": "+1234567890",
+    }
+    resp, err := testServer.POST("/api/v1/customers", body, auth.Token)
     require.NoError(t, err)
     assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
+    // Parse ID from response
+    var createResp map[string]interface{}
+    json.Unmarshal(resp.Body, &createResp)
+    data := createResp["data"].(map[string]interface{})
+    customerID := int64(data["id"].(float64))
+
     // Get
-    resp, err = testServer.GET("/api/v1/customers/1", "")
+    resp, err = testServer.GET(fmt.Sprintf("/api/v1/customers/%d", customerID), auth.Token)
     require.NoError(t, err)
     assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 ```
 
-### Integration test with DB assertions
+### Integration test with order setup and DB assertions
 
-Use direct database queries to verify side effects not visible in API responses:
+Order tests require stock to be seeded before creating orders (the API validates stock availability). Use `setupOrderTest()` which creates all prerequisites via the API and seeds stock directly in the database:
 
 ```go
-func TestOrderFlow_Complete_StockDeduction(t *testing.T) {
-    cleanupDatabase(t)
-    ctx := context.Background()
-
-    testData, err := testFixture.CreateBaseTestData(ctx)
-    require.NoError(t, err)
-
-    // Seed initial stock
-    err = testFixture.CreateStock(ctx, testData.ProductVariant.ID, testData.Branch.ID, 10, 0)
-    require.NoError(t, err)
-
-    // ... create, confirm, pay, complete order ...
-
-    // DB assertion: verify stock was deducted
-    var stockQty int
-    err = testDB.DB.QueryRowContext(ctx,
-        "SELECT quantity FROM stocks WHERE product_variant_id = $1 AND branch_id = $2",
-        testData.ProductVariant.ID, testData.Branch.ID,
-    ).Scan(&stockQty)
-    require.NoError(t, err)
-    assert.Equal(t, 9, stockQty) // started at 10, ordered 1
-
-    // DB assertion: verify stock movement record
-    var movementType string
-    var movementQty int
-    err = testDB.DB.QueryRowContext(ctx,
-        `SELECT type, quantity FROM stock_movements
-         WHERE reference_id = $1 AND reference_type = 'order'`,
-        orderID,
-    ).Scan(&movementType, &movementQty)
-    require.NoError(t, err)
-    assert.Equal(t, "OUT", movementType)
-    assert.Equal(t, 1, movementQty)
+type orderTestData struct {
+    auth       *authContext
+    customerID int64
+    categoryID int64
+    productID  int64
+    variantID  int64
 }
+
+func setupOrderTest(t *testing.T) *orderTestData {
+    cleanupDatabase(t)
+    auth := registerTestUser(t)
+
+    // Create customer, category, product via API
+    customerID := createTestCustomer(t, auth.Token)
+    categoryID := createTestCategory(t, auth.Token)
+    productID, variantID := createTestProduct(t, auth.Token, categoryID, "Test Product", "SKU-001", 100.00, 50.00)
+
+    // Seed stock (required — order creation validates stock availability)
+    _, err := testDB.DB.Exec(
+        `INSERT INTO stocks (product_variant_id, branch_id, quantity, min_quantity)
+         VALUES ($1, $2, 100, 0)
+         ON CONFLICT (product_variant_id, branch_id) DO UPDATE SET quantity = 100`,
+        variantID, auth.BranchID,
+    )
+    require.NoError(t, err)
+
+    return &orderTestData{auth: auth, customerID: customerID, ...}
+}
+```
+
+**Important: Auto-complete counter orders.** By default, `CompanySettings.AutoCompleteCounterOrders` is `true`. When a counter-type order is fully paid, the system auto-completes it. To test the explicit confirm → pay → complete flow, use `"delivery"` as the fulfillment type:
+
+```go
+// Use "delivery" to test explicit complete step (counter orders auto-complete on payment)
+orderBody := map[string]interface{}{
+    "fulfillment_type": "delivery",
+    "items": []map[string]interface{}{...},
+}
+```
+
+For DB assertions (stock movements, payment status), query the database directly:
+
+```go
+// DB assertion: verify stock was deducted
+var stockQty int
+err = testDB.DB.QueryRowContext(ctx,
+    "SELECT quantity FROM stocks WHERE product_variant_id = $1 AND branch_id = $2",
+    variantID, auth.BranchID,
+).Scan(&stockQty)
+require.NoError(t, err)
+assert.Equal(t, 9, stockQty) // started at 10, ordered 1
+```
 ```
 
 ### When to use DB assertions
@@ -345,21 +370,39 @@ func TestOrder_ValidationErrors(t *testing.T)
 
 ### `testutil/db.go`
 - `NewTestDB()` — creates a database connection to the test PostgreSQL instance
-- `RunMigrations()` — applies all migration files
-- `TruncateAllTables()` — truncates all tables (including `stock_movements`, `stocks`) in FK-safe order
+- `RunMigrations()` — drops and recreates the `public` schema, then applies all `.up.sql` migration files in order. The schema reset ensures migrations can be re-applied cleanly across test runs
+- `TruncateAllTables()` — truncates all tables (including `stock_movements`, `stocks`) in FK-safe order, then re-seeds system data (roles, permissions, role_permissions)
 - `TruncateTables(tables...)` — truncates specific tables
 - `BeginTx(ctx)` — starts a transaction for test isolation
 
 ### `testutil/fixtures.go`
-- `CreateBaseTestData(ctx)` — creates a complete set: company, branch, role, user, customer, category, product, variant
+- `CreateBaseTestData(ctx)` — creates a complete set: company, branch, role, user, customer, category, product, variant (used for DB-level fixture creation; prefer API-based setup for integration tests)
 - `CreateCompany/Branch/Role/User/Customer/ProductCategory/Product/ProductVariant` — individual fixture creators
 - `CreateStock(ctx, variantID, branchID, quantity, minQuantity)` — seeds initial stock for a variant at a branch (upsert)
+
+### `setup_test.go` helpers (integration package)
+- `registerTestUser(t)` — registers a user via the API, returns `authContext` with `Token`, `RefreshToken`, `UserID`, `CompanyID`, `BranchID`
+- `cleanupDatabase(t)` — truncates all tables and re-seeds system data between tests
+- `createTestCategory(t, token)` — creates a product category via API, returns its ID
+- `createTestProduct(t, token, categoryID, name, sku, price, cost)` — creates a product with one variant via API, returns `(productID, variantID)`
+- `uniqueCounter()` — atomic counter for generating unique test data codes/names
 
 ### `testutil/http.go`
 - `TestServer` — wraps Echo for HTTP testing via `ServeHTTP`
 - `GET/POST/PUT/DELETE(path, body/token)` — convenience methods
 - `Response.ParseResponse()` — parses standard API response
 - `Response.ParseData(v)` — parses response data into a struct
+
+## Common Pitfalls
+
+| Pitfall | Solution |
+|---------|----------|
+| **401 on all protected routes** | Pass `auth.Token` from `registerTestUser(t)` to all API calls |
+| **422 "code is required"** | `CreateCustomerRequest` and `CreateProductCategoryRequest` require a `code` field |
+| **422 "variants is required"** | `UpdateProductRequest` requires `variants` even for name-only updates |
+| **422 "Stok tidak cukup"** | Seed stock in the database before creating orders |
+| **"Only confirmed orders can be completed"** | Counter orders auto-complete on full payment; use `"delivery"` fulfillment to test explicit complete |
+| **"refresh token expired"** | JWT config must set `AccessTokenExpiry` and `RefreshTokenExpiry` duration fields (not just int fields) |
 
 ## Mock Structure
 
