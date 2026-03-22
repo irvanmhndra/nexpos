@@ -109,6 +109,8 @@ func (t *TestDB) TruncateTables(tables ...string) error {
 // TruncateAllTables truncates all application tables except seed data (roles, permissions, role_permissions)
 func (t *TestDB) TruncateAllTables() error {
 	tables := []string{
+		"stock_movements",
+		"stocks",
 		"payments",
 		"order_items",
 		"orders",

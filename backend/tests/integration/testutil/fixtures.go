@@ -290,6 +290,20 @@ func (f *Fixtures) CreateProductVariant(ctx context.Context, productID int64, sk
 	}, nil
 }
 
+// CreateStock creates an initial stock record for a product variant at a branch
+func (f *Fixtures) CreateStock(ctx context.Context, variantID, branchID int64, quantity, minQuantity int) error {
+	query := `
+		INSERT INTO stocks (product_variant_id, branch_id, quantity, min_quantity, updated_at)
+		VALUES ($1, $2, $3, $4, NOW())
+		ON CONFLICT (product_variant_id, branch_id) DO UPDATE SET quantity = $3, min_quantity = $4, updated_at = NOW()
+	`
+	_, err := f.db.ExecContext(ctx, query, variantID, branchID, quantity, minQuantity)
+	if err != nil {
+		return fmt.Errorf("failed to create stock: %w", err)
+	}
+	return nil
+}
+
 // TestData holds all created test fixtures
 type TestData struct {
 	Company         *CompanyFixture

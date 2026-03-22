@@ -77,6 +77,10 @@ func TestOrderFlow_CreateConfirmPayComplete(t *testing.T) {
 	testData, err := testFixture.CreateBaseTestData(ctx)
 	require.NoError(t, err)
 
+	// Seed initial stock (10 units)
+	err = testFixture.CreateStock(ctx, testData.ProductVariant.ID, testData.Branch.ID, 10, 0)
+	require.NoError(t, err)
+
 	// Step 1: Create an order
 	orderBody := map[string]interface{}{
 		"customer_id":      testData.Customer.ID,
@@ -154,6 +158,40 @@ func TestOrderFlow_CreateConfirmPayComplete(t *testing.T) {
 	completeData := completeResp["data"].(map[string]interface{})
 	assert.Equal(t, "completed", completeData["status"])
 	assert.NotNil(t, completeData["completed_at"])
+
+	// DB assertion: verify stock was deducted
+	var stockQty int
+	err = testDB.DB.QueryRowContext(ctx,
+		"SELECT quantity FROM stocks WHERE product_variant_id = $1 AND branch_id = $2",
+		testData.ProductVariant.ID, testData.Branch.ID,
+	).Scan(&stockQty)
+	require.NoError(t, err)
+	assert.Equal(t, 9, stockQty) // started at 10, ordered 1
+
+	// DB assertion: verify stock_movement OUT record was created
+	var movementCount int
+	var movementType, refType string
+	var movementQty, stockBefore, stockAfter int
+	err = testDB.DB.QueryRowContext(ctx,
+		`SELECT type, quantity, stock_before, stock_after, reference_type
+		 FROM stock_movements
+		 WHERE reference_id = $1 AND reference_type = 'order'`,
+		orderID,
+	).Scan(&movementType, &movementQty, &stockBefore, &stockAfter, &refType)
+	require.NoError(t, err)
+	assert.Equal(t, "OUT", movementType)
+	assert.Equal(t, 1, movementQty)
+	assert.Equal(t, 10, stockBefore)
+	assert.Equal(t, 9, stockAfter)
+	assert.Equal(t, "order", refType)
+
+	// DB assertion: verify exactly 1 stock movement for this order
+	err = testDB.DB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM stock_movements WHERE reference_id = $1 AND reference_type = 'order'",
+		orderID,
+	).Scan(&movementCount)
+	require.NoError(t, err)
+	assert.Equal(t, 1, movementCount)
 }
 
 func TestOrderFlow_Cancel(t *testing.T) {
@@ -208,7 +246,7 @@ func TestOrderFlow_Cancel(t *testing.T) {
 	assert.NotNil(t, cancelData["cancelled_at"])
 }
 
-func TestOrderFlow_Void(t *testing.T) {
+func TestOrderFlow_VoidConfirmed(t *testing.T) {
 	cleanupDatabase(t)
 	ctx := context.Background()
 
@@ -216,7 +254,11 @@ func TestOrderFlow_Void(t *testing.T) {
 	testData, err := testFixture.CreateBaseTestData(ctx)
 	require.NoError(t, err)
 
-	// Create and confirm an order
+	// Seed initial stock
+	err = testFixture.CreateStock(ctx, testData.ProductVariant.ID, testData.Branch.ID, 10, 0)
+	require.NoError(t, err)
+
+	// Create and confirm an order (not completed — no stock deduction yet)
 	orderBody := map[string]interface{}{
 		"customer_id":      testData.Customer.ID,
 		"fulfillment_type": "counter",
@@ -244,7 +286,7 @@ func TestOrderFlow_Void(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	// Void the order
+	// Void the confirmed order (not completed, so no stock restoration)
 	voidBody := map[string]interface{}{
 		"reason": "Fraudulent order",
 	}
@@ -262,6 +304,140 @@ func TestOrderFlow_Void(t *testing.T) {
 	assert.Equal(t, "voided", voidData["status"])
 	assert.Equal(t, "Fraudulent order", voidData["void_reason"])
 	assert.NotNil(t, voidData["voided_at"])
+
+	// DB assertion: stock should remain unchanged (no deduction happened for confirmed-only orders)
+	var stockQty int
+	err = testDB.DB.QueryRowContext(ctx,
+		"SELECT quantity FROM stocks WHERE product_variant_id = $1 AND branch_id = $2",
+		testData.ProductVariant.ID, testData.Branch.ID,
+	).Scan(&stockQty)
+	require.NoError(t, err)
+	assert.Equal(t, 10, stockQty) // unchanged
+
+	// DB assertion: no stock movements should exist
+	var movementCount int
+	err = testDB.DB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM stock_movements WHERE reference_id = $1",
+		orderID,
+	).Scan(&movementCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, movementCount)
+}
+
+func TestOrderFlow_VoidCompleted(t *testing.T) {
+	cleanupDatabase(t)
+	ctx := context.Background()
+
+	// Setup test data
+	testData, err := testFixture.CreateBaseTestData(ctx)
+	require.NoError(t, err)
+
+	// Seed initial stock (10 units)
+	err = testFixture.CreateStock(ctx, testData.ProductVariant.ID, testData.Branch.ID, 10, 0)
+	require.NoError(t, err)
+
+	// Create → Confirm → Pay → Complete an order
+	orderBody := map[string]interface{}{
+		"customer_id":      testData.Customer.ID,
+		"fulfillment_type": "counter",
+		"items": []map[string]interface{}{
+			{
+				"product_variant_id": testData.ProductVariant.ID,
+				"quantity":           2,
+				"discount_amount":    0,
+			},
+		},
+	}
+
+	resp, err := testServer.POST("/api/v1/orders", orderBody, "")
+	require.NoError(t, err)
+
+	var createResp map[string]interface{}
+	err = json.Unmarshal(resp.Body, &createResp)
+	require.NoError(t, err)
+
+	data := createResp["data"].(map[string]interface{})
+	orderID := int64(data["id"].(float64))
+	grandTotal := data["grand_total"].(float64)
+
+	// Confirm
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, "")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Pay
+	paymentBody := map[string]interface{}{
+		"payments": []map[string]interface{}{
+			{"method": "cash", "amount": grandTotal},
+		},
+	}
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), paymentBody, "")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Complete
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/complete", orderID), nil, "")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Verify stock was deducted after completion
+	var stockQtyAfterComplete int
+	err = testDB.DB.QueryRowContext(ctx,
+		"SELECT quantity FROM stocks WHERE product_variant_id = $1 AND branch_id = $2",
+		testData.ProductVariant.ID, testData.Branch.ID,
+	).Scan(&stockQtyAfterComplete)
+	require.NoError(t, err)
+	assert.Equal(t, 8, stockQtyAfterComplete) // 10 - 2
+
+	// Now void the completed order
+	voidBody := map[string]interface{}{
+		"reason": "Customer returned items",
+	}
+	resp, err = testServer.POST(fmt.Sprintf("/api/v1/orders/%d/void", orderID), voidBody, "")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var voidResp map[string]interface{}
+	err = json.Unmarshal(resp.Body, &voidResp)
+	require.NoError(t, err)
+	assert.Equal(t, "voided", voidResp["data"].(map[string]interface{})["status"])
+
+	// DB assertion: stock should be restored
+	var stockQtyAfterVoid int
+	err = testDB.DB.QueryRowContext(ctx,
+		"SELECT quantity FROM stocks WHERE product_variant_id = $1 AND branch_id = $2",
+		testData.ProductVariant.ID, testData.Branch.ID,
+	).Scan(&stockQtyAfterVoid)
+	require.NoError(t, err)
+	assert.Equal(t, 10, stockQtyAfterVoid) // restored to original
+
+	// DB assertion: should have both OUT (order) and IN (order_void) movements
+	var outCount, inCount int
+	err = testDB.DB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM stock_movements WHERE reference_id = $1 AND reference_type = 'order' AND type = 'OUT'",
+		orderID,
+	).Scan(&outCount)
+	require.NoError(t, err)
+	assert.Equal(t, 1, outCount)
+
+	err = testDB.DB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM stock_movements WHERE reference_id = $1 AND reference_type = 'order_void' AND type = 'IN'",
+		orderID,
+	).Scan(&inCount)
+	require.NoError(t, err)
+	assert.Equal(t, 1, inCount)
+
+	// DB assertion: IN movement should show correct stock restoration
+	var inMovementQty, inStockBefore, inStockAfter int
+	err = testDB.DB.QueryRowContext(ctx,
+		`SELECT quantity, stock_before, stock_after FROM stock_movements
+		 WHERE reference_id = $1 AND reference_type = 'order_void'`,
+		orderID,
+	).Scan(&inMovementQty, &inStockBefore, &inStockAfter)
+	require.NoError(t, err)
+	assert.Equal(t, 2, inMovementQty)
+	assert.Equal(t, 8, inStockBefore)
+	assert.Equal(t, 10, inStockAfter)
 }
 
 func TestOrderFlow_Refund(t *testing.T) {
@@ -342,6 +518,24 @@ func TestOrderFlow_Refund(t *testing.T) {
 	assert.True(t, refundResp["success"].(bool))
 	refundData := refundResp["data"].(map[string]interface{})
 	assert.Equal(t, grandTotal, refundData["refunded_total"])
+
+	// DB assertion: verify payment status is 'refunded' in database
+	var paymentStatus string
+	err = testDB.DB.QueryRowContext(ctx,
+		"SELECT status FROM payments WHERE id = $1",
+		paymentID,
+	).Scan(&paymentStatus)
+	require.NoError(t, err)
+	assert.Equal(t, "refunded", paymentStatus)
+
+	// DB assertion: verify order payment_status is updated in database
+	var orderPaymentStatus string
+	err = testDB.DB.QueryRowContext(ctx,
+		"SELECT payment_status FROM orders WHERE id = $1",
+		orderID,
+	).Scan(&orderPaymentStatus)
+	require.NoError(t, err)
+	assert.Equal(t, "refunded", orderPaymentStatus)
 }
 
 func TestOrderFlow_ListOrders(t *testing.T) {
