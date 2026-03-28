@@ -39,6 +39,21 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    title: 'Pembelian',
+    items: [
+      { label: 'Supplier', icon: 'local_shipping', path: '/suppliers' },
+      { label: 'Purchase Order', icon: 'shopping_bag', path: '/purchase-orders' },
+    ],
+  },
+  {
+    title: 'Keuangan',
+    items: [
+      { label: 'Shift', icon: 'schedule', path: '/shifts' },
+      { label: 'Pengeluaran', icon: 'receipt', path: '/expenses' },
+      { label: 'Kategori Pengeluaran', icon: 'label', path: '/expense-categories' },
+    ],
+  },
+  {
     title: 'Lainnya',
     items: [
       { label: 'Laporan', icon: 'bar_chart', path: '/reports' },

@@ -16,6 +16,13 @@ import { StockOverviewPage } from './pages/inventory/StockOverviewPage';
 import { StockMovementPage } from './pages/inventory/StockMovementPage';
 import { POSPage } from './pages/pos/POSPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { SuppliersPage } from './pages/suppliers/SuppliersPage';
+import { PurchaseOrdersPage } from './pages/purchase-orders/PurchaseOrdersPage';
+import { PurchaseOrderFormPage } from './pages/purchase-orders/PurchaseOrderFormPage';
+import { PurchaseOrderDetailPage } from './pages/purchase-orders/PurchaseOrderDetailPage';
+import { ShiftsPage } from './pages/shifts/ShiftsPage';
+import { ExpensesPage } from './pages/expenses/ExpensesPage';
+import { ExpenseCategoriesPage } from './pages/expenses/ExpenseCategoriesPage';
 
 export const router = createBrowserRouter([
   // Auth routes
@@ -107,6 +114,37 @@ export const router = createBrowserRouter([
       {
         path: '/settings',
         element: <SettingsPage />,
+      },
+      // Suppliers & Purchase Orders
+      {
+        path: '/suppliers',
+        element: <SuppliersPage />,
+      },
+      {
+        path: '/purchase-orders',
+        element: <PurchaseOrdersPage />,
+      },
+      {
+        path: '/purchase-orders/new',
+        element: <PurchaseOrderFormPage />,
+      },
+      {
+        path: '/purchase-orders/:id',
+        element: <PurchaseOrderDetailPage />,
+      },
+      // Shifts
+      {
+        path: '/shifts',
+        element: <ShiftsPage />,
+      },
+      // Expenses
+      {
+        path: '/expenses',
+        element: <ExpensesPage />,
+      },
+      {
+        path: '/expense-categories',
+        element: <ExpenseCategoriesPage />,
       },
     ],
   },
