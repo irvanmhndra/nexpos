@@ -23,6 +23,9 @@ A multi-tenant Point of Sale (POS) backend API built with Go, designed for retai
 - **Customer Management** — Customer profiles
 - **Sales Reports** — Summary metrics, trends, top products, category revenue, hourly sales
 - **User Management** — Role-based access control
+- **Supplier & Purchase Orders** — Supplier CRUD, PO lifecycle (Draft → Ordered → Partial/Received), receive items auto-creates stock movements and updates variant last purchase cost
+- **Shift Management** — Open/close cashier shifts with opening float; close calculates expected cash from payments, records actual cash and difference
+- **Expense Tracking** — Expense categories and expense records with date-range summary grouped by category
 
 ## Prerequisites
 
@@ -215,6 +218,55 @@ All protected routes require `Authorization: Bearer <token>` header.
 | GET | `/api/v1/company-settings` | Get company settings |
 | PUT | `/api/v1/company-settings` | Update company settings |
 
+### Suppliers
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/suppliers` | Create supplier |
+| GET | `/api/v1/suppliers` | List suppliers (paginated) |
+| GET | `/api/v1/suppliers/:id` | Get supplier details |
+| PUT | `/api/v1/suppliers/:id` | Update supplier |
+| DELETE | `/api/v1/suppliers/:id` | Delete supplier |
+
+### Purchase Orders
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/purchase-orders` | Create purchase order |
+| GET | `/api/v1/purchase-orders` | List purchase orders (filterable by status, supplier) |
+| GET | `/api/v1/purchase-orders/:id` | Get purchase order with items |
+| POST | `/api/v1/purchase-orders/:id/receive` | Receive items (creates IN stock movements, updates last purchase cost) |
+
+### Shifts
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/shifts` | Open a new shift |
+| GET | `/api/v1/shifts` | List shifts (filterable by branch, cashier, status) |
+| GET | `/api/v1/shifts/current` | Get current open shift for authenticated user |
+| GET | `/api/v1/shifts/:id` | Get shift details |
+| POST | `/api/v1/shifts/:id/close` | Close shift (records actual cash, calculates difference) |
+
+### Expense Categories
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/expense-categories` | Create expense category |
+| GET | `/api/v1/expense-categories` | List expense categories |
+| PUT | `/api/v1/expense-categories/:id` | Update expense category |
+| DELETE | `/api/v1/expense-categories/:id` | Delete expense category |
+
+### Expenses
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/expenses` | Record an expense |
+| GET | `/api/v1/expenses` | List expenses (filterable by branch, category, date range) |
+| GET | `/api/v1/expenses/:id` | Get expense details |
+| PUT | `/api/v1/expenses/:id` | Update expense |
+| DELETE | `/api/v1/expenses/:id` | Delete expense |
+| GET | `/api/v1/expenses/summary` | Expense totals grouped by category for a date range |
+
 ## Project Structure
 
 ```
@@ -239,7 +291,7 @@ nexpos-api/
 │   ├── validator/           # Request validation
 │   ├── logger/              # Logging
 │   └── pagination/          # Pagination helpers
-├── migrations/              # Database migrations (26 migrations)
+├── migrations/              # Database migrations (30 migrations)
 ├── docs/                    # Documentation
 ├── docker-compose.yml
 ├── makefile

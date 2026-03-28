@@ -1,7 +1,7 @@
 # Comprehensive Testing Implementation Plan - POS Core API
 
-> **Document Version:** 1.0
-> **Date:** 2026-02-22
+> **Document Version:** 2.0
+> **Date:** 2026-03-28
 > **Goal:** Achieve 90%+ service coverage, 80%+ handler coverage, 70%+ repository coverage
 
 ---
@@ -20,10 +20,22 @@
 
 ## Current State Analysis
 
-### ✅ What We Have
+### ✅ What We Have (as of 2026-03-28)
 
-- **1 Handler Test File:** `internal/handler/auth_test.go` (500+ lines)
-- **5 Integration Tests:**
+- **18 Repository Mocks** — all interfaces mocked in `internal/repository/mocks/`
+- **11 Service Unit Test Files — ALL PASSING (198 tests):**
+  - `internal/service/auth_test.go`
+  - `internal/service/branch_test.go`
+  - `internal/service/company_settings_test.go`
+  - `internal/service/customer_test.go`
+  - `internal/service/inventory_test.go` ✅ (added 2026-03-28)
+  - `internal/service/order_test.go` ✅ (added 2026-03-28)
+  - `internal/service/product_category_test.go`
+  - `internal/service/product_test.go`
+  - `internal/service/promotion_test.go`
+  - `internal/service/report_test.go`
+  - `internal/service/user_test.go`
+- **5 Integration Tests** (require live DB via Docker):
   - `tests/integration/auth_test.go`
   - `tests/integration/customer_test.go`
   - `tests/integration/product_test.go`
@@ -36,12 +48,11 @@
   - Makefile with test targets
   - `TESTING.md` documentation with best practices
 
-### ❌ What's Missing
+### ❌ What's Still Missing
 
-- **0 Service Unit Tests** (9 services need tests)
-- **10 Handler Test Files** (only auth_test.go exists)
-- **No Repository Mocks** for dependency injection testing
-- **5 Integration Test Files** needed for full coverage
+- **Handler Unit Tests** — intentionally skipped (covered by integration tests per team decision)
+- **Integration tests for newer features** — suppliers, purchase orders, shifts, expenses not yet covered
+- **Service tests for new features** — `purchase_order_test.go`, `shift_test.go`, `expense_test.go` not yet written
 
 ---
 
@@ -199,11 +210,10 @@ func TestService_Method_RepositoryError(t *testing.T) {
 
 ## Implementation Phases
 
-### Phase 1: Mock Generation Foundation (CRITICAL Priority)
+### Phase 1: Mock Generation Foundation ✅ COMPLETE
 
-**Estimated Time:** 1-2 days
-**Complexity:** Low
-**Dependencies:** None
+**Completed:** 2026-03-28
+**Result:** 18 repository mocks generated in `internal/repository/mocks/`
 
 #### 1.1 Update .mockery.yaml
 
@@ -345,11 +355,10 @@ go test ./...
 
 ---
 
-### Phase 2: Service Unit Tests (HIGH Priority)
+### Phase 2: Service Unit Tests ✅ COMPLETE
 
-**Estimated Time:** 1-2 weeks
-**Complexity:** High
-**Dependencies:** Phase 1 complete
+**Completed:** 2026-03-28
+**Result:** 198 tests across 11 service files — all passing
 
 Create comprehensive unit tests for all 9 services with mocked repositories.
 
@@ -381,11 +390,9 @@ Create comprehensive unit tests for all 9 services with mocked repositories.
 
 ---
 
-### Phase 3: Handler Unit Tests (MEDIUM Priority)
+### Phase 3: Handler Unit Tests ⏭️ SKIPPED (by design)
 
-**Estimated Time:** 1 week
-**Complexity:** Medium
-**Dependencies:** Phase 2 complete (for understanding patterns)
+**Decision:** Handler layer is covered by integration tests. No handler unit tests beyond `auth_test.go`.
 
 Create unit tests for all handlers with mocked services.
 
@@ -873,5 +880,5 @@ go tool cover -func=coverage.out | grep -E "(service|handler|repository)"
 ---
 
 **Document Owner:** Testing Implementation Team
-**Last Updated:** 2026-02-22
-**Status:** Ready for Implementation
+**Last Updated:** 2026-03-28
+**Status:** Phases 1 & 2 complete. Phase 3 skipped by design. Phases 4 & 5 pending.
