@@ -113,6 +113,42 @@ type InventoryServiceInterface interface {
 	UpdateMinStock(ctx context.Context, companyID, variantID, branchID int64, req dto.UpdateMinStockRequest) error
 }
 
+// PurchaseOrderServiceInterface defines the contract for purchase order and supplier operations
+type PurchaseOrderServiceInterface interface {
+	CreateSupplier(ctx context.Context, companyID int64, req dto.CreateSupplierRequest) (*dto.SupplierResponse, error)
+	GetSupplier(ctx context.Context, companyID, id int64) (*dto.SupplierResponse, error)
+	ListSuppliers(ctx context.Context, companyID int64, req dto.ListSupplierRequest) (*dto.SupplierListResponse, error)
+	UpdateSupplier(ctx context.Context, companyID, id int64, req dto.UpdateSupplierRequest) (*dto.SupplierResponse, error)
+	DeleteSupplier(ctx context.Context, companyID, id int64) error
+	CreatePO(ctx context.Context, companyID, branchID, userID int64, req dto.CreatePurchaseOrderRequest) (*dto.PurchaseOrderResponse, error)
+	GetPO(ctx context.Context, companyID, id int64) (*dto.PurchaseOrderResponse, error)
+	ListPOs(ctx context.Context, companyID int64, req dto.ListPurchaseOrderRequest) (*dto.PurchaseOrderListResponse, error)
+	ReceivePO(ctx context.Context, companyID, poID int64, req dto.ReceivePurchaseOrderRequest) (*dto.PurchaseOrderResponse, error)
+}
+
+// ShiftServiceInterface defines the contract for shift management operations
+type ShiftServiceInterface interface {
+	OpenShift(ctx context.Context, companyID, branchID, cashierID int64, req dto.OpenShiftRequest) (*dto.ShiftResponse, error)
+	GetCurrentShift(ctx context.Context, companyID, branchID, cashierID int64) (*dto.ShiftResponse, error)
+	CloseShift(ctx context.Context, companyID, shiftID int64, req dto.CloseShiftRequest) (*dto.ShiftResponse, error)
+	GetShift(ctx context.Context, companyID, id int64) (*dto.ShiftResponse, error)
+	ListShifts(ctx context.Context, companyID int64, req dto.ListShiftRequest) (*dto.ShiftListResponse, error)
+}
+
+// ExpenseServiceInterface defines the contract for expense tracking operations
+type ExpenseServiceInterface interface {
+	CreateCategory(ctx context.Context, companyID int64, req dto.CreateExpenseCategoryRequest) (*dto.ExpenseCategoryResponse, error)
+	ListCategories(ctx context.Context, companyID int64, req dto.ListExpenseCategoryRequest) (*dto.ExpenseCategoryListResponse, error)
+	UpdateCategory(ctx context.Context, companyID, id int64, req dto.UpdateExpenseCategoryRequest) (*dto.ExpenseCategoryResponse, error)
+	DeleteCategory(ctx context.Context, companyID, id int64) error
+	CreateExpense(ctx context.Context, companyID int64, recordedBy *int64, req dto.CreateExpenseRequest) (*dto.ExpenseResponse, error)
+	GetExpense(ctx context.Context, companyID, id int64) (*dto.ExpenseResponse, error)
+	ListExpenses(ctx context.Context, companyID int64, req dto.ListExpenseRequest) (*dto.ExpenseListResponse, error)
+	UpdateExpense(ctx context.Context, companyID, id int64, req dto.UpdateExpenseRequest) (*dto.ExpenseResponse, error)
+	DeleteExpense(ctx context.Context, companyID, id int64) error
+	GetExpenseSummary(ctx context.Context, companyID int64, req dto.ExpenseSummaryRequest) (*dto.ExpenseSummaryResponse, error)
+}
+
 // Ensure concrete types implement interfaces
 var _ AuthServiceInterface = (*AuthService)(nil)
 var _ UserServiceInterface = (*UserService)(nil)
@@ -125,3 +161,6 @@ var _ PromotionServiceInterface = (*PromotionService)(nil)
 var _ ReportServiceInterface = (*ReportService)(nil)
 var _ CompanySettingsServiceInterface = (*CompanySettingsService)(nil)
 var _ InventoryServiceInterface = (*InventoryService)(nil)
+var _ PurchaseOrderServiceInterface = (*PurchaseOrderService)(nil)
+var _ ShiftServiceInterface = (*ShiftService)(nil)
+var _ ExpenseServiceInterface = (*ExpenseService)(nil)

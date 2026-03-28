@@ -17,6 +17,9 @@ type Services struct {
 	Promotion       *service.PromotionService
 	Inventory       *service.InventoryService
 	CompanySettings *service.CompanySettingsService
+	PurchaseOrder   *service.PurchaseOrderService
+	Shift           *service.ShiftService
+	Expense         *service.ExpenseService
 }
 
 func initServices(repos *Repositories, cfg *config.Config) *Services {
@@ -51,5 +54,14 @@ func initServices(repos *Repositories, cfg *config.Config) *Services {
 		Promotion:       service.NewPromotionService(repos.Promotion),
 		Inventory:       service.NewInventoryService(repos.Stock, repos.StockMovement, repos.ProductVariant, repos.Branch),
 		CompanySettings: service.NewCompanySettingsService(repos.CompanySettings),
+		PurchaseOrder: service.NewPurchaseOrderService(
+			repos.Supplier,
+			repos.PurchaseOrder,
+			repos.Stock,
+			repos.StockMovement,
+			repos.ProductVariant,
+		),
+		Shift:   service.NewShiftService(repos.Shift, repos.Payment),
+		Expense: service.NewExpenseService(repos.Expense, repos.ExpenseCategory),
 	}
 }

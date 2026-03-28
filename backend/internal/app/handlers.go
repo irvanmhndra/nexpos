@@ -19,6 +19,11 @@ type Handlers struct {
 	Promotion       *handler.PromotionHandler
 	Inventory       *handler.InventoryHandler
 	CompanySettings *handler.CompanySettingsHandler
+	Supplier        *handler.SupplierHandler
+	PurchaseOrder   *handler.PurchaseOrderHandler
+	Shift           *handler.ShiftHandler
+	ExpenseCategory *handler.ExpenseCategoryHandler
+	Expense         *handler.ExpenseHandler
 }
 
 func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator) *Handlers {
@@ -35,5 +40,10 @@ func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator)
 		Promotion:       handler.NewPromotionHandler(services.Promotion, v),
 		Inventory:       handler.NewInventoryHandler(services.Inventory, v),
 		CompanySettings: handler.NewCompanySettingsHandler(services.CompanySettings, v),
+		Supplier:        handler.NewSupplierHandler(services.PurchaseOrder, v),
+		PurchaseOrder:   handler.NewPurchaseOrderHandler(services.PurchaseOrder, v),
+		Shift:           handler.NewShiftHandler(services.Shift, v),
+		ExpenseCategory: handler.NewExpenseCategoryHandler(services.Expense, v),
+		Expense:         handler.NewExpenseHandler(services.Expense, v),
 	}
 }

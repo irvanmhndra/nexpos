@@ -27,6 +27,11 @@ type Repositories struct {
 	Promotion       repository.PromotionRepository
 	Stock           repository.StockRepository
 	StockMovement   repository.StockMovementRepository
+	Supplier        repository.SupplierRepository
+	PurchaseOrder   repository.PurchaseOrderRepository
+	Shift           repository.ShiftRepository
+	ExpenseCategory repository.ExpenseCategoryRepository
+	Expense         repository.ExpenseRepository
 }
 
 func initRepositories(db *sqlx.DB) *Repositories {
@@ -51,5 +56,10 @@ func initRepositories(db *sqlx.DB) *Repositories {
 		Promotion:       postgres.NewPromotionRepository(db),
 		Stock:           postgres.NewStockRepository(db),
 		StockMovement:   postgres.NewStockMovementRepository(db),
+		Supplier:        postgres.NewSupplierRepository(db),
+		PurchaseOrder:   postgres.NewPurchaseOrderRepository(db),
+		Shift:           postgres.NewShiftRepository(db),
+		ExpenseCategory: postgres.NewExpenseCategoryRepository(db),
+		Expense:         postgres.NewExpenseRepository(db),
 	}
 }

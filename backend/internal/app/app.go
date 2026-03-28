@@ -113,6 +113,11 @@ func New(cfg *config.Config) (*App, error) {
 		Promotion:       handlers.Promotion,
 		Inventory:       handlers.Inventory,
 		CompanySettings: handlers.CompanySettings,
+		Supplier:        handlers.Supplier,
+		PurchaseOrder:   handlers.PurchaseOrder,
+		Shift:           handlers.Shift,
+		ExpenseCategory: handlers.ExpenseCategory,
+		Expense:         handlers.Expense,
 	}, authmiddleware.Auth(repos.UserSession))
 
 	return &App{

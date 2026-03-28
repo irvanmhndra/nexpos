@@ -18,6 +18,11 @@ type Handlers struct {
 	Promotion       *handler.PromotionHandler
 	Inventory       *handler.InventoryHandler
 	CompanySettings *handler.CompanySettingsHandler
+	Supplier        *handler.SupplierHandler
+	PurchaseOrder   *handler.PurchaseOrderHandler
+	Shift           *handler.ShiftHandler
+	ExpenseCategory *handler.ExpenseCategoryHandler
+	Expense         *handler.ExpenseHandler
 }
 
 func Setup(e *echo.Echo, h *Handlers, authMW echo.MiddlewareFunc) {
@@ -128,4 +133,43 @@ func Setup(e *echo.Echo, h *Handlers, authMW echo.MiddlewareFunc) {
 	// Company settings routes
 	protected.GET("/company-settings", h.CompanySettings.Get)
 	protected.PUT("/company-settings", h.CompanySettings.Update)
+
+	// Supplier routes
+	suppliers := protected.Group("/suppliers")
+	suppliers.POST("", h.Supplier.Create)
+	suppliers.GET("", h.Supplier.List)
+	suppliers.GET("/:id", h.Supplier.Get)
+	suppliers.PUT("/:id", h.Supplier.Update)
+	suppliers.DELETE("/:id", h.Supplier.Delete)
+
+	// Purchase order routes
+	purchaseOrders := protected.Group("/purchase-orders")
+	purchaseOrders.POST("", h.PurchaseOrder.Create)
+	purchaseOrders.GET("", h.PurchaseOrder.List)
+	purchaseOrders.GET("/:id", h.PurchaseOrder.Get)
+	purchaseOrders.POST("/:id/receive", h.PurchaseOrder.Receive)
+
+	// Shift routes
+	shifts := protected.Group("/shifts")
+	shifts.POST("", h.Shift.Open)
+	shifts.GET("", h.Shift.List)
+	shifts.GET("/current", h.Shift.GetCurrent)
+	shifts.GET("/:id", h.Shift.Get)
+	shifts.POST("/:id/close", h.Shift.Close)
+
+	// Expense category routes
+	expenseCategories := protected.Group("/expense-categories")
+	expenseCategories.POST("", h.ExpenseCategory.Create)
+	expenseCategories.GET("", h.ExpenseCategory.List)
+	expenseCategories.PUT("/:id", h.ExpenseCategory.Update)
+	expenseCategories.DELETE("/:id", h.ExpenseCategory.Delete)
+
+	// Expense routes
+	expenses := protected.Group("/expenses")
+	expenses.POST("", h.Expense.Create)
+	expenses.GET("", h.Expense.List)
+	expenses.GET("/summary", h.Expense.Summary)
+	expenses.GET("/:id", h.Expense.Get)
+	expenses.PUT("/:id", h.Expense.Update)
+	expenses.DELETE("/:id", h.Expense.Delete)
 }

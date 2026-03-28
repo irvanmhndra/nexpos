@@ -7,6 +7,80 @@ import (
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 )
 
+type SupplierRepository interface {
+	Create(ctx context.Context, supplier *model.Supplier) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.Supplier, error)
+	GetByCode(ctx context.Context, companyID int64, code string) (*model.Supplier, error)
+	List(ctx context.Context, companyID int64, search string, isActive *bool, limit, offset int) ([]*model.Supplier, int, error)
+	Update(ctx context.Context, supplier *model.Supplier) error
+	Delete(ctx context.Context, companyID, id int64) error
+}
+
+type PurchaseOrderRepository interface {
+	Create(ctx context.Context, po *model.PurchaseOrder) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.PurchaseOrder, error)
+	GeneratePONumber(ctx context.Context, companyID int64) (string, error)
+	List(ctx context.Context, companyID int64, params *POListParams) ([]*model.PurchaseOrder, int, error)
+	Update(ctx context.Context, po *model.PurchaseOrder) error
+	GetItems(ctx context.Context, poID int64) ([]*model.PurchaseOrderItem, error)
+	CreateItem(ctx context.Context, item *model.PurchaseOrderItem) error
+	UpdateItem(ctx context.Context, item *model.PurchaseOrderItem) error
+}
+
+// POListParams for filtering purchase orders
+type POListParams struct {
+	Status     string
+	SupplierID *int64
+	Limit      int
+	Offset     int
+}
+
+type ShiftRepository interface {
+	Create(ctx context.Context, shift *model.Shift) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.Shift, error)
+	GetOpenShift(ctx context.Context, companyID, branchID, cashierID int64) (*model.Shift, error)
+	List(ctx context.Context, companyID int64, params *ShiftListParams) ([]*model.Shift, int, error)
+	Update(ctx context.Context, shift *model.Shift) error
+}
+
+// ShiftListParams for filtering shifts
+type ShiftListParams struct {
+	BranchID   *int64
+	CashierID  *int64
+	Status     string
+	DateFrom   string
+	DateTo     string
+	Limit      int
+	Offset     int
+}
+
+type ExpenseCategoryRepository interface {
+	Create(ctx context.Context, category *model.ExpenseCategory) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.ExpenseCategory, error)
+	List(ctx context.Context, companyID int64, search string, limit, offset int) ([]*model.ExpenseCategory, int, error)
+	Update(ctx context.Context, category *model.ExpenseCategory) error
+	Delete(ctx context.Context, companyID, id int64) error
+}
+
+type ExpenseRepository interface {
+	Create(ctx context.Context, expense *model.Expense) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.Expense, error)
+	List(ctx context.Context, companyID int64, params *ExpenseListParams) ([]*model.Expense, int, error)
+	Update(ctx context.Context, expense *model.Expense) error
+	Delete(ctx context.Context, companyID, id int64) error
+	GetTotalByDateRange(ctx context.Context, companyID int64, branchID *int64, from, to string) (float64, error)
+}
+
+// ExpenseListParams for filtering expenses
+type ExpenseListParams struct {
+	BranchID   *int64
+	CategoryID *int64
+	DateFrom   string
+	DateTo     string
+	Limit      int
+	Offset     int
+}
+
 type UserRepository interface {
 	Create(ctx context.Context, user *model.User) error
 	GetByID(ctx context.Context, companyID, id int64) (*model.User, error)
@@ -156,6 +230,7 @@ type PaymentRepository interface {
 	DeleteByOrderID(ctx context.Context, orderID int64) error
 	GetTotalPaidByOrderID(ctx context.Context, orderID int64) (float64, error)
 	GetTotalRefundedByOrderID(ctx context.Context, orderID int64) (float64, error)
+	GetCashTotalByPeriod(ctx context.Context, branchID int64, from, to time.Time) (float64, error)
 }
 
 type CompanySettingsRepository interface {
