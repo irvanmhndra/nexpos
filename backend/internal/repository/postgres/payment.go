@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/jmoiron/sqlx"
@@ -100,6 +101,24 @@ func (r *PaymentRepository) GetTotalRefundedByOrderID(ctx context.Context, order
 	var total float64
 	query := `SELECT COALESCE(SUM(refunded_amount), 0) FROM payments WHERE order_id = $1`
 	if err := r.db.GetContext(ctx, &total, query, orderID); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (r *PaymentRepository) GetCashTotalByPeriod(ctx context.Context, branchID int64, from, to time.Time) (float64, error) {
+	var total float64
+	query := `
+		SELECT COALESCE(SUM(p.amount - p.refunded_amount), 0)
+		FROM payments p
+		JOIN orders o ON o.id = p.order_id
+		WHERE o.branch_id = $1
+		  AND p.method = 'cash'
+		  AND p.status != 'failed'
+		  AND p.paid_at >= $2
+		  AND p.paid_at < $3
+	`
+	if err := r.db.GetContext(ctx, &total, query, branchID, from, to); err != nil {
 		return 0, err
 	}
 	return total, nil

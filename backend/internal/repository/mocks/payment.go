@@ -2,6 +2,7 @@ package mocks
 
 import (
 	"context"
+	"time"
 
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/stretchr/testify/mock"
@@ -69,6 +70,11 @@ func (m *MockPaymentRepository) GetTotalRefundedByOrderID(ctx context.Context, o
 	return ret.Get(0).(float64), ret.Error(1)
 }
 
+func (m *MockPaymentRepository) GetCashTotalByPeriod(ctx context.Context, branchID int64, from, to time.Time) (float64, error) {
+	ret := m.Called(ctx, branchID, from, to)
+	return ret.Get(0).(float64), ret.Error(1)
+}
+
 // MockPaymentRepositoryExpectation is the expectation builder for MockPaymentRepository.
 type MockPaymentRepositoryExpectation struct {
 	mock *MockPaymentRepository
@@ -100,4 +106,8 @@ func (e *MockPaymentRepositoryExpectation) GetTotalPaidByOrderID(ctx context.Con
 
 func (e *MockPaymentRepositoryExpectation) GetTotalRefundedByOrderID(ctx context.Context, orderID int64) *mock.Call {
 	return e.mock.On("GetTotalRefundedByOrderID", ctx, orderID)
+}
+
+func (e *MockPaymentRepositoryExpectation) GetCashTotalByPeriod(ctx context.Context, branchID int64, from, to time.Time) *mock.Call {
+	return e.mock.On("GetCashTotalByPeriod", ctx, branchID, from, to)
 }
