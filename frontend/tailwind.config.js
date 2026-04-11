@@ -30,6 +30,7 @@ export default {
       animation: {
         float: "float 3s ease-in-out infinite",
         "scan-line": "scan-line 2s linear infinite",
+        progress: "progress 1.2s ease-in-out infinite",
       },
       keyframes: {
         float: {
@@ -40,6 +41,10 @@ export default {
           "0%": { top: "8px" },
           "50%": { top: "calc(100% - 8px)" },
           "100%": { top: "8px" },
+        },
+        progress: {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(350%)" },
         },
       },
     },

@@ -23,4 +23,19 @@ export default defineConfig({
     port: 5173,
     open: true,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react':  ['react', 'react-dom', 'react-router-dom'],
+          'vendor-query':  ['@tanstack/react-query'],
+          'vendor-ui':     ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select', '@radix-ui/react-switch', '@radix-ui/react-tabs', '@radix-ui/react-tooltip'],
+          'vendor-forms':  ['react-hook-form', '@hookform/resolvers', 'zod'],
+          'vendor-charts': ['recharts'],
+          'vendor-zxing':  ['@zxing/browser', '@zxing/library'],
+          'vendor-utils':  ['axios', 'date-fns', 'clsx', 'tailwind-merge', 'zustand'],
+        },
+      },
+    },
+  },
 });

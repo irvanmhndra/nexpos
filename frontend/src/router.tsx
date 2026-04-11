@@ -1,28 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { MainLayout, AuthLayout, POSLayout } from './components/layout';
-import { DashboardPage } from './pages/dashboard/DashboardPage';
-import { ProductsPage } from './pages/products/ProductsPage';
-import { ProductFormPage } from './pages/products/ProductFormPage';
-import { ProductCategoriesPage } from './pages/categories/ProductCategoriesPage';
-import { OrdersPage } from './pages/orders/OrdersPage';
-import { CustomersPage } from './pages/customers/CustomersPage';
-import { BranchesPage } from './pages/branches/BranchesPage';
-import { PromotionsPage } from './pages/promotions/PromotionsPage';
-import { ReportsPage } from './pages/reports/ReportsPage';
-import { SettingsPage } from './pages/settings/SettingsPage';
-import { LoginPage } from './pages/auth/LoginPage';
-import { RegisterPage } from './pages/auth/RegisterPage';
-import { StockOverviewPage } from './pages/inventory/StockOverviewPage';
-import { StockMovementPage } from './pages/inventory/StockMovementPage';
-import { POSPage } from './pages/pos/POSPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { SuppliersPage } from './pages/suppliers/SuppliersPage';
-import { PurchaseOrdersPage } from './pages/purchase-orders/PurchaseOrdersPage';
-import { PurchaseOrderFormPage } from './pages/purchase-orders/PurchaseOrderFormPage';
-import { PurchaseOrderDetailPage } from './pages/purchase-orders/PurchaseOrderDetailPage';
-import { ShiftsPage } from './pages/shifts/ShiftsPage';
-import { ExpensesPage } from './pages/expenses/ExpensesPage';
-import { ExpenseCategoriesPage } from './pages/expenses/ExpenseCategoriesPage';
 
 export const router = createBrowserRouter([
   // Auth routes
@@ -31,11 +9,17 @@ export const router = createBrowserRouter([
     children: [
       {
         path: '/login',
-        element: <LoginPage />,
+        lazy: async () => {
+          const { LoginPage } = await import('./pages/auth/LoginPage');
+          return { Component: LoginPage };
+        },
       },
       {
         path: '/register',
-        element: <RegisterPage />,
+        lazy: async () => {
+          const { RegisterPage } = await import('./pages/auth/RegisterPage');
+          return { Component: RegisterPage };
+        },
       },
     ],
   },
@@ -50,7 +34,10 @@ export const router = createBrowserRouter([
     children: [
       {
         path: '/pos',
-        element: <POSPage />,
+        lazy: async () => {
+          const { POSPage } = await import('./pages/pos/POSPage');
+          return { Component: POSPage };
+        },
       },
     ],
   },
@@ -65,86 +52,143 @@ export const router = createBrowserRouter([
     children: [
       {
         path: '/',
-        element: <DashboardPage />,
+        lazy: async () => {
+          const { DashboardPage } = await import('./pages/dashboard/DashboardPage');
+          return { Component: DashboardPage };
+        },
       },
       {
         path: '/products',
-        element: <ProductsPage />,
+        lazy: async () => {
+          const { ProductsPage } = await import('./pages/products/ProductsPage');
+          return { Component: ProductsPage };
+        },
       },
       {
         path: '/products/new',
-        element: <ProductFormPage />,
+        lazy: async () => {
+          const { ProductFormPage } = await import('./pages/products/ProductFormPage');
+          return { Component: ProductFormPage };
+        },
       },
       {
         path: '/products/:id/edit',
-        element: <ProductFormPage />,
+        lazy: async () => {
+          const { ProductFormPage } = await import('./pages/products/ProductFormPage');
+          return { Component: ProductFormPage };
+        },
       },
       {
         path: '/categories',
-        element: <ProductCategoriesPage />,
+        lazy: async () => {
+          const { ProductCategoriesPage } = await import('./pages/categories/ProductCategoriesPage');
+          return { Component: ProductCategoriesPage };
+        },
       },
       {
         path: '/inventory',
-        element: <StockOverviewPage />,
+        lazy: async () => {
+          const { StockOverviewPage } = await import('./pages/inventory/StockOverviewPage');
+          return { Component: StockOverviewPage };
+        },
       },
       {
         path: '/inventory/movements',
-        element: <StockMovementPage />,
+        lazy: async () => {
+          const { StockMovementPage } = await import('./pages/inventory/StockMovementPage');
+          return { Component: StockMovementPage };
+        },
       },
       {
         path: '/orders',
-        element: <OrdersPage />,
+        lazy: async () => {
+          const { OrdersPage } = await import('./pages/orders/OrdersPage');
+          return { Component: OrdersPage };
+        },
       },
       {
         path: '/customers',
-        element: <CustomersPage />,
+        lazy: async () => {
+          const { CustomersPage } = await import('./pages/customers/CustomersPage');
+          return { Component: CustomersPage };
+        },
       },
       {
         path: '/branches',
-        element: <BranchesPage />,
+        lazy: async () => {
+          const { BranchesPage } = await import('./pages/branches/BranchesPage');
+          return { Component: BranchesPage };
+        },
       },
       {
         path: '/promotions',
-        element: <PromotionsPage />,
+        lazy: async () => {
+          const { PromotionsPage } = await import('./pages/promotions/PromotionsPage');
+          return { Component: PromotionsPage };
+        },
       },
       {
         path: '/reports',
-        element: <ReportsPage />,
+        lazy: async () => {
+          const { ReportsPage } = await import('./pages/reports/ReportsPage');
+          return { Component: ReportsPage };
+        },
       },
       {
         path: '/settings',
-        element: <SettingsPage />,
+        lazy: async () => {
+          const { SettingsPage } = await import('./pages/settings/SettingsPage');
+          return { Component: SettingsPage };
+        },
       },
-      // Suppliers & Purchase Orders
       {
         path: '/suppliers',
-        element: <SuppliersPage />,
+        lazy: async () => {
+          const { SuppliersPage } = await import('./pages/suppliers/SuppliersPage');
+          return { Component: SuppliersPage };
+        },
       },
       {
         path: '/purchase-orders',
-        element: <PurchaseOrdersPage />,
+        lazy: async () => {
+          const { PurchaseOrdersPage } = await import('./pages/purchase-orders/PurchaseOrdersPage');
+          return { Component: PurchaseOrdersPage };
+        },
       },
       {
         path: '/purchase-orders/new',
-        element: <PurchaseOrderFormPage />,
+        lazy: async () => {
+          const { PurchaseOrderFormPage } = await import('./pages/purchase-orders/PurchaseOrderFormPage');
+          return { Component: PurchaseOrderFormPage };
+        },
       },
       {
         path: '/purchase-orders/:id',
-        element: <PurchaseOrderDetailPage />,
+        lazy: async () => {
+          const { PurchaseOrderDetailPage } = await import('./pages/purchase-orders/PurchaseOrderDetailPage');
+          return { Component: PurchaseOrderDetailPage };
+        },
       },
-      // Shifts
       {
         path: '/shifts',
-        element: <ShiftsPage />,
+        lazy: async () => {
+          const { ShiftsPage } = await import('./pages/shifts/ShiftsPage');
+          return { Component: ShiftsPage };
+        },
       },
-      // Expenses
       {
         path: '/expenses',
-        element: <ExpensesPage />,
+        lazy: async () => {
+          const { ExpensesPage } = await import('./pages/expenses/ExpensesPage');
+          return { Component: ExpensesPage };
+        },
       },
       {
         path: '/expense-categories',
-        element: <ExpenseCategoriesPage />,
+        lazy: async () => {
+          const { ExpenseCategoriesPage } = await import('./pages/expenses/ExpenseCategoriesPage');
+          return { Component: ExpenseCategoriesPage };
+        },
       },
     ],
   },

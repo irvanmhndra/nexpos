@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { cn } from '@/utils';
@@ -10,6 +10,8 @@ interface MainLayoutProps {
 
 export function MainLayout({ title }: MainLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const navigation = useNavigation();
+  const isLoading = navigation.state === 'loading';
 
   return (
     <div className="flex h-screen w-full overflow-hidden">
@@ -36,6 +38,11 @@ export function MainLayout({ title }: MainLayoutProps) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+        {isLoading && (
+          <div className="absolute top-0 left-0 right-0 z-50 h-0.5 bg-blue-100 dark:bg-blue-950 overflow-hidden">
+            <div className="h-full bg-blue-500 animate-[progress_1.2s_ease-in-out_infinite]" style={{ width: '40%' }} />
+          </div>
+        )}
         <Header title={title} onMenuClick={() => setSidebarOpen(true)} />
 
         {/* Page Content */}
