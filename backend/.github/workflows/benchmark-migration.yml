@@ -1,0 +1,72 @@
+name: Benchmark Schema Migration
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'sqldump/**'
+
+jobs:
+  benchmark:
+    name: "MySQL Schema Import Benchmark"
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: benchmark
+          MYSQL_DATABASE: benchmark_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pbenchmark"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Wait for MySQL to be ready
+        run: |
+          until mysqladmin ping -h 127.0.0.1 -P 3306 -pbenchmark --silent 2>/dev/null; do
+            echo "Waiting for MySQL..."
+            sleep 2
+          done
+          echo "MySQL is ready"
+
+      - name: Run schema migration and measure time
+        run: |
+          DUMP_FILE="sqldump/schema_dump_for_other_project.sql"
+
+          echo "=========================================="
+          echo "File: $DUMP_FILE"
+          echo "Size: $(du -h $DUMP_FILE | cut -f1)"
+          echo "Lines: $(wc -l < $DUMP_FILE)"
+          echo "Tables: $(grep -c '^create table ' $DUMP_FILE)"
+          echo "Indexes: $(grep -c '^create index ' $DUMP_FILE)"
+          echo "=========================================="
+          echo ""
+
+          echo "⏱️  Starting schema import..."
+          START=$(date +%s%N)
+
+          mysql -h 127.0.0.1 -P 3306 -u root -pbenchmark benchmark_db < "$DUMP_FILE"
+
+          END=$(date +%s%N)
+          ELAPSED_MS=$(( (END - START) / 1000000 ))
+          ELAPSED_S=$(echo "scale=3; $ELAPSED_MS / 1000" | bc)
+
+          echo ""
+          echo "=========================================="
+          echo "✅ Schema import completed"
+          echo "⏱️  Duration: ${ELAPSED_S}s (${ELAPSED_MS}ms)"
+          echo "=========================================="
+
+      - name: Verify table count
+        run: |
+          TABLE_COUNT=$(mysql -h 127.0.0.1 -P 3306 -u root -pbenchmark benchmark_db \
+            -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'benchmark_db';")
+          echo "Tables created in DB: $TABLE_COUNT"
