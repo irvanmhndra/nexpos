@@ -6,6 +6,7 @@ on:
     branches: [master]
     paths:
       - 'sqldump/**'
+      - '.github/workflows/benchmark-migration.yml'
 
 jobs:
   benchmark:
