@@ -71,3 +71,76 @@ jobs:
           TABLE_COUNT=$(mysql -h 127.0.0.1 -P 3306 -u root -pbenchmark benchmark_db \
             -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'benchmark_db';")
           echo "Tables created in DB: $TABLE_COUNT"
+
+      - name: Storage estimation
+        run: |
+          MYSQL="mysql -h 127.0.0.1 -P 3306 -u root -pbenchmark"
+
+          echo "=========================================="
+          echo "📦 Storage Estimation"
+          echo "=========================================="
+          echo ""
+
+          # Summary
+          $MYSQL benchmark_db -N -e "
+            SELECT
+              CONCAT('Tables:          ', COUNT(*)),
+              CONCAT('Data size:       ', ROUND(SUM(data_length) / 1024 / 1024, 2), ' MB'),
+              CONCAT('Index size:      ', ROUND(SUM(index_length) / 1024 / 1024, 2), ' MB'),
+              CONCAT('Total (schema):  ', ROUND(SUM(data_length + index_length) / 1024 / 1024, 2), ' MB'),
+              CONCAT('Avg per table:   ', ROUND(AVG(data_length + index_length) / 1024, 2), ' KB')
+            FROM information_schema.tables
+            WHERE table_schema = 'benchmark_db'
+              AND table_type = 'BASE TABLE';
+          " | tr '\t' '\n'
+
+          echo ""
+
+          # Index breakdown
+          INDEX_COUNT=$($MYSQL benchmark_db -N -e "
+            SELECT COUNT(DISTINCT index_name, table_name)
+            FROM information_schema.statistics
+            WHERE table_schema = 'benchmark_db';
+          ")
+          echo "Total indexes:   $INDEX_COUNT"
+
+          # Index types
+          echo ""
+          echo "Indexes by type:"
+          $MYSQL benchmark_db -e "
+            SELECT
+              CASE
+                WHEN index_name = 'PRIMARY' THEN 'PRIMARY KEY'
+                WHEN non_unique = 0 THEN 'UNIQUE'
+                ELSE 'INDEX'
+              END AS type,
+              COUNT(DISTINCT index_name, table_name) AS count
+            FROM information_schema.statistics
+            WHERE table_schema = 'benchmark_db'
+            GROUP BY type
+            ORDER BY count DESC;
+          "
+
+          # Top 20 largest tables by overhead
+          echo ""
+          echo "Top 20 tables by storage overhead:"
+          $MYSQL benchmark_db -e "
+            SELECT
+              table_name,
+              CONCAT(ROUND((data_length + index_length) / 1024, 1), ' KB') AS total_size,
+              CONCAT(ROUND(data_length / 1024, 1), ' KB') AS data_size,
+              CONCAT(ROUND(index_length / 1024, 1), ' KB') AS index_size,
+              (SELECT COUNT(DISTINCT index_name)
+               FROM information_schema.statistics s
+               WHERE s.table_schema = t.table_schema AND s.table_name = t.table_name) AS index_count
+            FROM information_schema.tables t
+            WHERE table_schema = 'benchmark_db'
+              AND table_type = 'BASE TABLE'
+            ORDER BY (data_length + index_length) DESC
+            LIMIT 20;
+          "
+
+          # Actual disk usage
+          echo ""
+          DATA_DIR=$($MYSQL -N -e "SELECT @@datadir;")
+          echo "MySQL data directory: $DATA_DIR"
