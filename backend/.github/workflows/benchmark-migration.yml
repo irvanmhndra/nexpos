@@ -51,7 +51,7 @@ jobs:
           echo "=========================================="
           echo ""
 
-          echo "⏱️  Starting schema import..."
+          echo "Starting schema import..."
           START=$(date +%s%N)
 
           grep -v '^grant ' "$DUMP_FILE" | mysql -h 127.0.0.1 -P 3306 -u root -pbenchmark benchmark_db
@@ -62,8 +62,8 @@ jobs:
 
           echo ""
           echo "=========================================="
-          echo "✅ Schema import completed"
-          echo "⏱️  Duration: ${ELAPSED_S}s (${ELAPSED_MS}ms)"
+          echo "Schema import completed"
+          echo "Duration: ${ELAPSED_S}s (${ELAPSED_MS}ms)"
           echo "=========================================="
 
       - name: Verify table count
@@ -77,7 +77,7 @@ jobs:
           MYSQL="mysql -h 127.0.0.1 -P 3306 -u root -pbenchmark"
 
           echo "=========================================="
-          echo "📦 Storage Estimation"
+          echo "Storage Estimation"
           echo "=========================================="
           echo ""
 
