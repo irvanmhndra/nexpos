@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/irvanmhndra/nexpos-api/tests/integration/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,7 +14,7 @@ import (
 // createTestCategory creates a product category via the API and returns its ID.
 func createTestCategory(t *testing.T, token string) int64 {
 	t.Helper()
-	n := uniqueCounter()
+	n := testutil.UniqueCounter()
 	categoryBody := map[string]interface{}{
 		"code": fmt.Sprintf("CAT-%d", n),
 		"name": fmt.Sprintf("Test Category %d", n),

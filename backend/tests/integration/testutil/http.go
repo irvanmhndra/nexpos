@@ -10,14 +10,19 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
-// TestServer wraps an Echo instance for testing
+// TestServer wraps an httptest.Server for integration testing
 type TestServer struct {
-	Echo *echo.Echo
+	server *httptest.Server
 }
 
-// NewTestServer creates a test server
+// NewTestServer creates a real HTTP test server
 func NewTestServer(e *echo.Echo) *TestServer {
-	return &TestServer{Echo: e}
+	return &TestServer{server: httptest.NewServer(e)}
+}
+
+// Close shuts down the test server
+func (s *TestServer) Close() {
+	s.server.Close()
 }
 
 // Request represents a test HTTP request
@@ -36,7 +41,7 @@ type Response struct {
 	Headers    http.Header
 }
 
-// Do executes a test request
+// Do executes a test request against the real HTTP server
 func (s *TestServer) Do(req Request) (*Response, error) {
 	var bodyReader io.Reader
 	if req.Body != nil {
@@ -47,26 +52,36 @@ func (s *TestServer) Do(req Request) (*Response, error) {
 		bodyReader = bytes.NewReader(bodyBytes)
 	}
 
-	httpReq := httptest.NewRequest(req.Method, req.Path, bodyReader)
-	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	url := s.server.URL + req.Path
+	httpReq, err := http.NewRequest(req.Method, url, bodyReader)
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
 
-	// Set custom headers
 	for key, value := range req.Headers {
 		httpReq.Header.Set(key, value)
 	}
 
-	// Set auth token if provided
 	if req.Token != "" {
 		httpReq.Header.Set("Authorization", "Bearer "+req.Token)
 	}
 
-	rec := httptest.NewRecorder()
-	s.Echo.ServeHTTP(rec, httpReq)
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Response{
-		StatusCode: rec.Code,
-		Body:       rec.Body.Bytes(),
-		Headers:    rec.Header(),
+		StatusCode: resp.StatusCode,
+		Body:       body,
+		Headers:    resp.Header,
 	}, nil
 }
 

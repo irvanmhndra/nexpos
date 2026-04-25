@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -86,6 +85,9 @@ func setup() error {
 }
 
 func teardown() {
+	if testServer != nil {
+		testServer.Close()
+	}
 	if testApp != nil {
 		testApp.Close()
 	}
@@ -100,13 +102,6 @@ func cleanupDatabase(t *testing.T) {
 	if err := testDB.TruncateAllTables(); err != nil {
 		t.Fatalf("Failed to cleanup database: %v", err)
 	}
-}
-
-var counter atomic.Int64
-
-// uniqueCounter returns a monotonically increasing integer for unique test data.
-func uniqueCounter() int64 {
-	return counter.Add(1)
 }
 
 // authContext holds the authenticated user's context for integration tests.
