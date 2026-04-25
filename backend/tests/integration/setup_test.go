@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -37,8 +38,10 @@ func TestMain(m *testing.M) {
 }
 
 func setup() error {
-	// Create test database connection
-	db, err := testutil.NewTestDB()
+	ctx := context.Background()
+
+	// Start testcontainer and connect
+	db, err := testutil.NewTestDB(ctx)
 	if err != nil {
 		return err
 	}
@@ -49,19 +52,14 @@ func setup() error {
 		return err
 	}
 
-	// Create test config
+	// Create test config using DSN from container
 	cfg := &config.Config{
 		Server: config.ServerConfig{
 			Port: "8081",
 			Env:  "test",
 		},
 		Postgres: config.PostgresConfig{
-			Host:     getEnv("TEST_POSTGRES_HOST", "localhost"),
-			Port:     getEnv("TEST_POSTGRES_PORT", "5433"),
-			User:     getEnv("TEST_POSTGRES_USER", "pos_test_user"),
-			Password: getEnv("TEST_POSTGRES_PASSWORD", "pos_test_password"),
-			DB:       getEnv("TEST_POSTGRES_DB", "pos_test_db"),
-			SSLMode:  "disable",
+			DSNOverride: testDB.DSN,
 		},
 		JWT: config.JWTConfig{
 			Secret:             "test-secret-key-for-integration-tests",
@@ -94,13 +92,6 @@ func teardown() {
 	if testDB != nil {
 		_ = testDB.Close()
 	}
-}
-
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
 }
 
 // cleanupDatabase truncates all tables before each test
