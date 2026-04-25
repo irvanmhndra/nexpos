@@ -18,15 +18,19 @@ type ServerConfig struct {
 }
 
 type PostgresConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	DB       string
-	SSLMode  string
+	Host        string
+	Port        string
+	User        string
+	Password    string
+	DB          string
+	SSLMode     string
+	DSNOverride string // used in tests to pass a testcontainer DSN directly
 }
 
 func (p PostgresConfig) DSN() string {
+	if p.DSNOverride != "" {
+		return p.DSNOverride
+	}
 	return "postgres://" + p.User + ":" + p.Password + "@" + p.Host + ":" + p.Port + "/" + p.DB + "?sslmode=" + p.SSLMode
 }
 
