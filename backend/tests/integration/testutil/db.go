@@ -44,13 +44,13 @@ func NewTestDB(ctx context.Context) (*TestDB, error) {
 
 	dsn, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
-		pgContainer.Terminate(ctx)
+		_ = pgContainer.Terminate(ctx) // #nosec G104 -- best-effort cleanup on error path
 		return nil, fmt.Errorf("get connection string: %w", err)
 	}
 
 	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
-		pgContainer.Terminate(ctx)
+		_ = pgContainer.Terminate(ctx) // #nosec G104 -- best-effort cleanup on error path
 		return nil, fmt.Errorf("connect to test database: %w", err)
 	}
 
