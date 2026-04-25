@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
-	"sort"
-	"strings"
+	"sync/atomic"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/testcontainers/testcontainers-go"
@@ -75,42 +76,39 @@ func (t *TestDB) RunMigrations() error {
 		return fmt.Errorf("failed to reset schema: %w", err)
 	}
 
-	migrationsPath := getMigrationsPath()
-
-	files, err := os.ReadDir(migrationsPath)
+	migrationsDir, err := findMigrationsDir()
 	if err != nil {
-		return fmt.Errorf("failed to read migrations directory: %w", err)
+		return fmt.Errorf("find migrations dir: %w", err)
 	}
 
-	// Filter and sort up migrations
-	var upMigrations []string
-	for _, f := range files {
-		if strings.HasSuffix(f.Name(), ".up.sql") {
-			upMigrations = append(upMigrations, f.Name())
-		}
+	m, err := migrate.New("file://"+migrationsDir, t.DSN)
+	if err != nil {
+		return fmt.Errorf("create migrator: %w", err)
 	}
-	sort.Strings(upMigrations)
-
-	for _, migration := range upMigrations {
-		content, err := os.ReadFile(filepath.Join(migrationsPath, migration)) // #nosec G304 -- migration files from known local path
-		if err != nil {
-			return fmt.Errorf("failed to read migration %s: %w", migration, err)
-		}
-
-		_, err = t.DB.Exec(string(content))
-		if err != nil {
-			return fmt.Errorf("failed to run migration %s: %w", migration, err)
-		}
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("run migrations: %w", err)
 	}
 
 	return nil
 }
 
-// getMigrationsPath returns the path to migrations directory
-func getMigrationsPath() string {
-	_, filename, _, _ := runtime.Caller(0)
-	dir := filepath.Dir(filename)
-	return filepath.Join(dir, "..", "..", "..", "migrations")
+// findMigrationsDir walks up from the working directory until it finds go.mod,
+// then returns the migrations/ directory next to it.
+func findMigrationsDir() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return filepath.Join(dir, "migrations"), nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("go.mod not found from %s", dir)
+		}
+		dir = parent
+	}
 }
 
 // TruncateTables truncates specified tables
@@ -212,4 +210,11 @@ func (t *TestDB) Close() error {
 // BeginTx starts a transaction for test isolation
 func (t *TestDB) BeginTx(ctx context.Context) (*sqlx.Tx, error) {
 	return t.DB.BeginTxx(ctx, nil)
+}
+
+var counter atomic.Int64
+
+// UniqueCounter returns a monotonically increasing integer for unique test data.
+func UniqueCounter() int64 {
+	return counter.Add(1)
 }
