@@ -37,20 +37,6 @@ jobs:
   integration-test:
     name: "Test: Integration Testing"
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: pos_test_user
-          POSTGRES_PASSWORD: pos_test_password
-          POSTGRES_DB: pos_test_db
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd="pg_isready -U pos_test_user -d pos_test_db"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
     steps:
       - uses: actions/checkout@v5
 
