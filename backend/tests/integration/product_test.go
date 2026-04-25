@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/irvanmhndra/nexpos-api/tests/integration/testutil"
+	"github.com/irvanmhndra/nexpos-api/tests/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

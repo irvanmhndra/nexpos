@@ -11,7 +11,7 @@ import (
 
 	"github.com/irvanmhndra/nexpos-api/config"
 	"github.com/irvanmhndra/nexpos-api/internal/app"
-	"github.com/irvanmhndra/nexpos-api/tests/integration/testutil"
+	"github.com/irvanmhndra/nexpos-api/tests/testutil"
 )
 
 var (
