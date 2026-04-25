@@ -12,47 +12,58 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 // TestDB wraps a database connection for testing
 type TestDB struct {
-	DB *sqlx.DB
+	DB        *sqlx.DB
+	DSN       string
+	container *postgres.PostgresContainer
+	ctx       context.Context
 }
 
-// NewTestDB creates a new test database connection
-func NewTestDB() (*TestDB, error) {
-	dsn := getTestDSN()
+// NewTestDB starts a PostgreSQL testcontainer and returns a connected TestDB.
+func NewTestDB(ctx context.Context) (*TestDB, error) {
+	pgContainer, err := postgres.RunContainer(ctx,
+		testcontainers.WithImage("postgres:18-alpine"),
+		postgres.WithDatabase("pos_test_db"),
+		postgres.WithUsername("pos_test_user"),
+		postgres.WithPassword("pos_test_password"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(60*time.Second),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("start postgres container: %w", err)
+	}
+
+	dsn, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		pgContainer.Terminate(ctx)
+		return nil, fmt.Errorf("get connection string: %w", err)
+	}
 
 	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to test database: %w", err)
+		pgContainer.Terminate(ctx)
+		return nil, fmt.Errorf("connect to test database: %w", err)
 	}
 
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(5 * time.Minute)
 
-	return &TestDB{DB: db}, nil
-}
-
-// getTestDSN returns the test database connection string
-func getTestDSN() string {
-	host := getEnv("TEST_POSTGRES_HOST", "localhost")
-	port := getEnv("TEST_POSTGRES_PORT", "5433")
-	user := getEnv("TEST_POSTGRES_USER", "pos_test_user")
-	password := getEnv("TEST_POSTGRES_PASSWORD", "pos_test_password")
-	dbName := getEnv("TEST_POSTGRES_DB", "pos_test_db")
-	sslMode := getEnv("TEST_POSTGRES_SSLMODE", "disable")
-
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		user, password, host, port, dbName, sslMode)
-}
-
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
+	return &TestDB{
+		DB:        db,
+		DSN:       dsn,
+		container: pgContainer,
+		ctx:       ctx,
+	}, nil
 }
 
 // RunMigrations runs all database migrations.
@@ -190,9 +201,12 @@ func (t *TestDB) TruncateAllTables() error {
 	return nil
 }
 
-// Close closes the database connection
+// Close closes the database connection and terminates the container.
 func (t *TestDB) Close() error {
-	return t.DB.Close()
+	if err := t.DB.Close(); err != nil {
+		return err
+	}
+	return t.container.Terminate(t.ctx)
 }
 
 // BeginTx starts a transaction for test isolation
