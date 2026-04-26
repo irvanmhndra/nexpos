@@ -6,8 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-
-	"github.com/labstack/echo/v5"
 )
 
 // TestServer wraps an httptest.Server for integration testing
@@ -16,8 +14,8 @@ type TestServer struct {
 }
 
 // NewTestServer creates a real HTTP test server
-func NewTestServer(e *echo.Echo) *TestServer {
-	return &TestServer{server: httptest.NewServer(e)}
+func NewTestServer(handler http.Handler) *TestServer {
+	return &TestServer{server: httptest.NewServer(handler)}
 }
 
 // Close shuts down the test server
@@ -125,12 +123,12 @@ func (s *TestServer) DELETE(path string, token string) (*Response, error) {
 
 // APIResponse represents the standard API response structure
 type APIResponse struct {
-	Success   bool                   `json:"success"`
-	Message   string                 `json:"message"`
-	Data      map[string]interface{} `json:"data,omitempty"`
-	ErrorCode string                 `json:"error_code,omitempty"`
-	Errors    interface{}            `json:"errors,omitempty"`
-	Meta      map[string]interface{} `json:"meta,omitempty"`
+	Success   bool            `json:"success"`
+	Message   string          `json:"message"`
+	ErrorCode string          `json:"error_code,omitempty"`
+	Data      json.RawMessage `json:"data,omitempty"`
+	Errors    json.RawMessage `json:"errors,omitempty"`
+	Meta      json.RawMessage `json:"meta,omitempty"`
 }
 
 // ParseResponse parses the response body into APIResponse
@@ -156,21 +154,18 @@ func (r *Response) ParseData(v interface{}) error {
 
 // ParseList parses the response data as a list
 func (r *Response) ParseList(key string) ([]map[string]interface{}, error) {
-	var resp map[string]interface{}
-	if err := json.Unmarshal(r.Body, &resp); err != nil {
+	resp, err := r.ParseResponse()
+	if err != nil {
 		return nil, err
 	}
-
-	data, ok := resp["data"].(map[string]interface{})
+	var dataMap map[string]interface{}
+	if err := json.Unmarshal(resp.Data, &dataMap); err != nil {
+		return nil, err
+	}
+	items, ok := dataMap[key].([]interface{})
 	if !ok {
 		return nil, nil
 	}
-
-	items, ok := data[key].([]interface{})
-	if !ok {
-		return nil, nil
-	}
-
 	result := make([]map[string]interface{}, len(items))
 	for i, item := range items {
 		result[i] = item.(map[string]interface{})

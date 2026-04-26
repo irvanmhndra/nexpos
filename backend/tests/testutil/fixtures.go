@@ -9,6 +9,15 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// AuthContext holds authentication details for test requests.
+type AuthContext struct {
+	Token        string
+	RefreshToken string
+	UserID       int64
+	CompanyID    int64
+	BranchID     int64
+}
+
 // Fixtures provides test data creation utilities
 type Fixtures struct {
 	db *sqlx.DB
