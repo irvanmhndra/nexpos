@@ -10,7 +10,7 @@ import (
 )
 
 func TestHealth_Check(t *testing.T) {
-	resp, err := testServer.GET("/health", "")
+	resp, err := testEnv.Server.GET("/health", "")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -22,20 +22,20 @@ func TestHealth_Check(t *testing.T) {
 }
 
 func TestHealth_Liveness(t *testing.T) {
-	resp, err := testServer.GET("/health/live", "")
+	resp, err := testEnv.Server.GET("/health/live", "")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 func TestHealth_Readiness(t *testing.T) {
-	resp, err := testServer.GET("/health/ready", "")
+	resp, err := testEnv.Server.GET("/health/ready", "")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 func TestHealth_RootEndpoint(t *testing.T) {
 	// Root endpoint is not registered; expect 404 or 405
-	resp, err := testServer.GET("/", "")
+	resp, err := testEnv.Server.GET("/", "")
 	require.NoError(t, err)
 	assert.True(t, resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed)
 }

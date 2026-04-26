@@ -7,99 +7,31 @@ import (
 	"net/http"
 	"os"
 	"testing"
-	"time"
 
-	"github.com/irvanmhndra/nexpos-api/config"
-	"github.com/irvanmhndra/nexpos-api/internal/app"
 	"github.com/irvanmhndra/nexpos-api/tests/testutil"
 )
 
-var (
-	testDB      *testutil.TestDB
-	testApp     *app.App
-	testServer  *testutil.TestServer
-	testFixture *testutil.Fixtures
-)
+var testEnv *testutil.TestEnv
 
 func TestMain(m *testing.M) {
-	// Setup
-	if err := setup(); err != nil {
-		log.Fatalf("Failed to setup tests: %v", err)
-	}
-
-	// Run tests
-	code := m.Run()
-
-	// Teardown
-	teardown()
-
-	os.Exit(code)
-}
-
-func setup() error {
 	ctx := context.Background()
 
-	// Start testcontainer and connect
-	db, err := testutil.NewTestDB(ctx)
+	env, err := testutil.SetupTestEnv(ctx)
 	if err != nil {
-		return err
+		log.Fatalf("Failed to setup tests: %v", err)
 	}
-	testDB = db
+	testEnv = env
 
-	// Run migrations
-	if err := testDB.RunMigrations(); err != nil {
-		return err
-	}
+	code := m.Run()
 
-	// Create test config using DSN from container
-	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Port: "8081",
-			Env:  "test",
-		},
-		Postgres: config.PostgresConfig{
-			DSNOverride: testDB.DSN,
-		},
-		JWT: config.JWTConfig{
-			Secret:             "test-secret-key-for-integration-tests",
-			AccessExpiresHours: 2,
-			RefreshExpiresDays: 7,
-			AccessTokenExpiry:  2 * time.Hour,
-			RefreshTokenExpiry: 7 * 24 * time.Hour,
-		},
-	}
-
-	// Create app
-	testApp, err = app.New(cfg)
-	if err != nil {
-		return err
-	}
-
-	// Create test server
-	testServer = testutil.NewTestServer(testApp.Echo())
-
-	// Create fixtures utility
-	testFixture = testutil.NewFixtures(testDB.DB)
-
-	return nil
-}
-
-func teardown() {
-	if testServer != nil {
-		testServer.Close()
-	}
-	if testApp != nil {
-		testApp.Close()
-	}
-	if testDB != nil {
-		_ = testDB.Close()
-	}
+	env.Cleanup()
+	os.Exit(code)
 }
 
 // cleanupDatabase truncates all tables before each test
 func cleanupDatabase(t *testing.T) {
 	t.Helper()
-	if err := testDB.TruncateAllTables(); err != nil {
+	if err := testEnv.TestDB.TruncateAllTables(); err != nil {
 		t.Fatalf("Failed to cleanup database: %v", err)
 	}
 }
@@ -114,8 +46,6 @@ type authContext struct {
 }
 
 // registerTestUser registers a new user via the API and returns the auth context.
-// This is used by integration tests that need to access protected routes.
-// The register API creates a company, branch, user, and session automatically.
 func registerTestUser(t *testing.T) *authContext {
 	t.Helper()
 
@@ -125,7 +55,7 @@ func registerTestUser(t *testing.T) *authContext {
 		"password": "password123",
 	}
 
-	resp, err := testServer.POST("/api/v1/auth/register", registerBody, "")
+	resp, err := testEnv.Server.POST("/api/v1/auth/register", registerBody, "")
 	if err != nil {
 		t.Fatalf("Failed to register test user: %v", err)
 	}
@@ -145,7 +75,7 @@ func registerTestUser(t *testing.T) *authContext {
 	// Look up branch ID (register creates an "HQ" branch)
 	var branchID int64
 	companyID := int64(company["id"].(float64))
-	err = testDB.DB.QueryRow(
+	err = testEnv.DB.QueryRow(
 		"SELECT id FROM branches WHERE company_id = $1 AND code = 'HQ'",
 		companyID,
 	).Scan(&branchID)

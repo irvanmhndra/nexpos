@@ -23,7 +23,7 @@ func TestCustomer_CreateAndGet(t *testing.T) {
 		"is_member": true,
 	}
 
-	resp, err := testServer.POST("/api/v1/customers", customerBody, auth.Token)
+	resp, err := testEnv.Server.POST("/api/v1/customers", customerBody, auth.Token)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create customer failed: %s", string(resp.Body))
 
@@ -39,7 +39,7 @@ func TestCustomer_CreateAndGet(t *testing.T) {
 	assert.NotEmpty(t, data["code"])
 
 	// Get the customer
-	resp, err = testServer.GET(fmt.Sprintf("/api/v1/customers/%d", customerID), auth.Token)
+	resp, err = testEnv.Server.GET(fmt.Sprintf("/api/v1/customers/%d", customerID), auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -65,7 +65,7 @@ func TestCustomer_Update(t *testing.T) {
 		"is_member": false,
 	}
 
-	resp, err := testServer.POST("/api/v1/customers", customerBody, auth.Token)
+	resp, err := testEnv.Server.POST("/api/v1/customers", customerBody, auth.Token)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create customer failed: %s", string(resp.Body))
 
@@ -85,7 +85,7 @@ func TestCustomer_Update(t *testing.T) {
 		"is_member": true,
 	}
 
-	resp, err = testServer.PUT(fmt.Sprintf("/api/v1/customers/%d", customerID), updateBody, auth.Token)
+	resp, err = testEnv.Server.PUT(fmt.Sprintf("/api/v1/customers/%d", customerID), updateBody, auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -111,7 +111,7 @@ func TestCustomer_Delete(t *testing.T) {
 		"name": "To Be Deleted",
 	}
 
-	resp, err := testServer.POST("/api/v1/customers", customerBody, auth.Token)
+	resp, err := testEnv.Server.POST("/api/v1/customers", customerBody, auth.Token)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create customer failed: %s", string(resp.Body))
 
@@ -123,12 +123,12 @@ func TestCustomer_Delete(t *testing.T) {
 	customerID := int64(data["id"].(float64))
 
 	// Delete the customer
-	resp, err = testServer.DELETE(fmt.Sprintf("/api/v1/customers/%d", customerID), auth.Token)
+	resp, err = testEnv.Server.DELETE(fmt.Sprintf("/api/v1/customers/%d", customerID), auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Verify deletion
-	resp, err = testServer.GET(fmt.Sprintf("/api/v1/customers/%d", customerID), auth.Token)
+	resp, err = testEnv.Server.GET(fmt.Sprintf("/api/v1/customers/%d", customerID), auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
@@ -144,13 +144,13 @@ func TestCustomer_List(t *testing.T) {
 			"name": fmt.Sprintf("Customer %d", i+1),
 		}
 
-		resp, err := testServer.POST("/api/v1/customers", customerBody, auth.Token)
+		resp, err := testEnv.Server.POST("/api/v1/customers", customerBody, auth.Token)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, resp.StatusCode, "create customer failed: %s", string(resp.Body))
 	}
 
 	// List customers
-	resp, err := testServer.GET("/api/v1/customers", auth.Token)
+	resp, err := testEnv.Server.GET("/api/v1/customers", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -198,7 +198,7 @@ func TestCustomer_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := testServer.POST("/api/v1/customers", tt.body, auth.Token)
+			resp, err := testEnv.Server.POST("/api/v1/customers", tt.body, auth.Token)
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 		})
@@ -209,7 +209,7 @@ func TestCustomer_NotFound(t *testing.T) {
 	cleanupDatabase(t)
 	auth := registerTestUser(t)
 
-	resp, err := testServer.GET("/api/v1/customers/99999", auth.Token)
+	resp, err := testEnv.Server.GET("/api/v1/customers/99999", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
@@ -225,13 +225,13 @@ func TestCustomer_ListWithPagination(t *testing.T) {
 			"name": fmt.Sprintf("Paginated Customer %d", i+1),
 		}
 
-		resp, err := testServer.POST("/api/v1/customers", customerBody, auth.Token)
+		resp, err := testEnv.Server.POST("/api/v1/customers", customerBody, auth.Token)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, resp.StatusCode, "create customer failed: %s", string(resp.Body))
 	}
 
 	// List first page
-	resp, err := testServer.GET("/api/v1/customers?page=1&per_page=5", auth.Token)
+	resp, err := testEnv.Server.GET("/api/v1/customers?page=1&per_page=5", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -249,7 +249,7 @@ func TestCustomer_ListWithPagination(t *testing.T) {
 	assert.NotNil(t, pagination["next_page"])
 
 	// List second page
-	resp, err = testServer.GET("/api/v1/customers?page=2&per_page=5", auth.Token)
+	resp, err = testEnv.Server.GET("/api/v1/customers?page=2&per_page=5", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -278,13 +278,13 @@ func TestCustomer_Search(t *testing.T) {
 			"name": c.name,
 		}
 
-		resp, err := testServer.POST("/api/v1/customers", customerBody, auth.Token)
+		resp, err := testEnv.Server.POST("/api/v1/customers", customerBody, auth.Token)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, resp.StatusCode, "create customer failed: %s", string(resp.Body))
 	}
 
 	// Search for "Alice"
-	resp, err := testServer.GET("/api/v1/customers?search=Alice", auth.Token)
+	resp, err := testEnv.Server.GET("/api/v1/customers?search=Alice", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 

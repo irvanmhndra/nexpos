@@ -21,7 +21,7 @@ func TestAuthFlow_RegisterAndLogin(t *testing.T) {
 		"password": "password123",
 	}
 
-	resp, err := testServer.POST("/api/v1/auth/register", registerBody, "")
+	resp, err := testEnv.Server.POST("/api/v1/auth/register", registerBody, "")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
@@ -47,7 +47,7 @@ func TestAuthFlow_RegisterAndLogin(t *testing.T) {
 		"password": "password123",
 	}
 
-	resp, err = testServer.POST("/api/v1/auth/login", loginBody, "")
+	resp, err = testEnv.Server.POST("/api/v1/auth/login", loginBody, "")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -77,7 +77,7 @@ func TestAuthFlow_RefreshToken(t *testing.T) {
 		"password": "password123",
 	}
 
-	resp, err := testServer.POST("/api/v1/auth/register", registerBody, "")
+	resp, err := testEnv.Server.POST("/api/v1/auth/register", registerBody, "")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
@@ -93,7 +93,7 @@ func TestAuthFlow_RefreshToken(t *testing.T) {
 		"refresh_token": refreshToken,
 	}
 
-	resp, err = testServer.POST("/api/v1/auth/refresh", refreshBody, "")
+	resp, err = testEnv.Server.POST("/api/v1/auth/refresh", refreshBody, "")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "refresh failed: %s", string(resp.Body))
 
@@ -119,7 +119,7 @@ func TestAuthFlow_Logout(t *testing.T) {
 		"password": "password123",
 	}
 
-	resp, err := testServer.POST("/api/v1/auth/register", registerBody, "")
+	resp, err := testEnv.Server.POST("/api/v1/auth/register", registerBody, "")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
@@ -131,7 +131,7 @@ func TestAuthFlow_Logout(t *testing.T) {
 	accessToken := data["access_token"].(string)
 
 	// Logout
-	resp, err = testServer.POST("/api/v1/auth/logout", nil, accessToken)
+	resp, err = testEnv.Server.POST("/api/v1/auth/logout", nil, accessToken)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -153,7 +153,7 @@ func TestAuth_LoginWithInvalidCredentials(t *testing.T) {
 		"password": "password123",
 	}
 
-	resp, err := testServer.POST("/api/v1/auth/register", registerBody, "")
+	resp, err := testEnv.Server.POST("/api/v1/auth/register", registerBody, "")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
@@ -163,7 +163,7 @@ func TestAuth_LoginWithInvalidCredentials(t *testing.T) {
 		"password": "wrongpassword",
 	}
 
-	resp, err = testServer.POST("/api/v1/auth/login", loginBody, "")
+	resp, err = testEnv.Server.POST("/api/v1/auth/login", loginBody, "")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
@@ -184,7 +184,7 @@ func TestAuth_RegisterDuplicateEmail(t *testing.T) {
 		"password": "password123",
 	}
 
-	resp, err := testServer.POST("/api/v1/auth/register", registerBody, "")
+	resp, err := testEnv.Server.POST("/api/v1/auth/register", registerBody, "")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
@@ -195,7 +195,7 @@ func TestAuth_RegisterDuplicateEmail(t *testing.T) {
 		"password": "password456",
 	}
 
-	resp, err = testServer.POST("/api/v1/auth/register", registerBody2, "")
+	resp, err = testEnv.Server.POST("/api/v1/auth/register", registerBody2, "")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusConflict, resp.StatusCode)
 
@@ -253,7 +253,7 @@ func TestAuth_RegisterValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := testServer.POST("/api/v1/auth/register", tt.body, "")
+			resp, err := testEnv.Server.POST("/api/v1/auth/register", tt.body, "")
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 
@@ -301,7 +301,7 @@ func TestAuth_LoginValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := testServer.POST("/api/v1/auth/login", tt.body, "")
+			resp, err := testEnv.Server.POST("/api/v1/auth/login", tt.body, "")
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 
@@ -321,7 +321,7 @@ func TestAuth_RefreshTokenInvalid(t *testing.T) {
 		"refresh_token": "invalid-refresh-token",
 	}
 
-	resp, err := testServer.POST("/api/v1/auth/refresh", refreshBody, "")
+	resp, err := testEnv.Server.POST("/api/v1/auth/refresh", refreshBody, "")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 

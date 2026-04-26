@@ -19,7 +19,7 @@ func createTestCategory(t *testing.T, token string) int64 {
 		"code": fmt.Sprintf("CAT-%d", n),
 		"name": fmt.Sprintf("Test Category %d", n),
 	}
-	resp, err := testServer.POST("/api/v1/product-categories", categoryBody, token)
+	resp, err := testEnv.Server.POST("/api/v1/product-categories", categoryBody, token)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create category failed: %s", string(resp.Body))
 
@@ -46,7 +46,7 @@ func createTestProduct(t *testing.T, token string, categoryID int64, name, sku s
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/products", productBody, token)
+	resp, err := testEnv.Server.POST("/api/v1/products", productBody, token)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create product failed: %s", string(resp.Body))
 
@@ -73,7 +73,7 @@ func TestProductCategory_CreateAndGet(t *testing.T) {
 		"description": "Electronic devices and accessories",
 	}
 
-	resp, err := testServer.POST("/api/v1/product-categories", categoryBody, auth.Token)
+	resp, err := testEnv.Server.POST("/api/v1/product-categories", categoryBody, auth.Token)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create category failed: %s", string(resp.Body))
 
@@ -88,7 +88,7 @@ func TestProductCategory_CreateAndGet(t *testing.T) {
 	assert.Equal(t, "Electronics", data["name"])
 
 	// Get the category
-	resp, err = testServer.GET(fmt.Sprintf("/api/v1/product-categories/%d", categoryID), auth.Token)
+	resp, err = testEnv.Server.GET(fmt.Sprintf("/api/v1/product-categories/%d", categoryID), auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -117,13 +117,13 @@ func TestProductCategory_List(t *testing.T) {
 			"name": c.name,
 		}
 
-		resp, err := testServer.POST("/api/v1/product-categories", categoryBody, auth.Token)
+		resp, err := testEnv.Server.POST("/api/v1/product-categories", categoryBody, auth.Token)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, resp.StatusCode, "create category failed: %s", string(resp.Body))
 	}
 
 	// List categories
-	resp, err := testServer.GET("/api/v1/product-categories", auth.Token)
+	resp, err := testEnv.Server.GET("/api/v1/product-categories", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -157,7 +157,7 @@ func TestProduct_CreateAndGet(t *testing.T) {
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/products", productBody, auth.Token)
+	resp, err := testEnv.Server.POST("/api/v1/products", productBody, auth.Token)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create product failed: %s", string(resp.Body))
 
@@ -179,7 +179,7 @@ func TestProduct_CreateAndGet(t *testing.T) {
 	assert.Equal(t, 99.99, variant["price"])
 
 	// Get the product
-	resp, err = testServer.GET(fmt.Sprintf("/api/v1/products/%d", productID), auth.Token)
+	resp, err = testEnv.Server.GET(fmt.Sprintf("/api/v1/products/%d", productID), auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
@@ -205,13 +205,13 @@ func TestProduct_List(t *testing.T) {
 			},
 		}
 
-		resp, err := testServer.POST("/api/v1/products", productBody, auth.Token)
+		resp, err := testEnv.Server.POST("/api/v1/products", productBody, auth.Token)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, resp.StatusCode, "create product failed: %s", string(resp.Body))
 	}
 
 	// List products
-	resp, err := testServer.GET("/api/v1/products", auth.Token)
+	resp, err := testEnv.Server.GET("/api/v1/products", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -245,7 +245,7 @@ func TestProduct_Update(t *testing.T) {
 		},
 	}
 
-	resp, err := testServer.PUT(fmt.Sprintf("/api/v1/products/%d", productID), updateBody, auth.Token)
+	resp, err := testEnv.Server.PUT(fmt.Sprintf("/api/v1/products/%d", productID), updateBody, auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -266,12 +266,12 @@ func TestProduct_Delete(t *testing.T) {
 	productID, _ := createTestProduct(t, auth.Token, categoryID, "To Be Deleted", "DEL-001", 100.00, 50.00)
 
 	// Delete the product
-	resp, err := testServer.DELETE(fmt.Sprintf("/api/v1/products/%d", productID), auth.Token)
+	resp, err := testEnv.Server.DELETE(fmt.Sprintf("/api/v1/products/%d", productID), auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Verify deletion
-	resp, err = testServer.GET(fmt.Sprintf("/api/v1/products/%d", productID), auth.Token)
+	resp, err = testEnv.Server.GET(fmt.Sprintf("/api/v1/products/%d", productID), auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
@@ -320,7 +320,7 @@ func TestProduct_WithMultipleVariants(t *testing.T) {
 		},
 	}
 
-	resp, err := testServer.POST("/api/v1/products", productBody, auth.Token)
+	resp, err := testEnv.Server.POST("/api/v1/products", productBody, auth.Token)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create product failed: %s", string(resp.Body))
 
@@ -396,7 +396,7 @@ func TestProduct_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := testServer.POST("/api/v1/products", tt.body, auth.Token)
+			resp, err := testEnv.Server.POST("/api/v1/products", tt.body, auth.Token)
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 		})
@@ -429,13 +429,13 @@ func TestProduct_Search(t *testing.T) {
 			},
 		}
 
-		resp, err := testServer.POST("/api/v1/products", productBody, auth.Token)
+		resp, err := testEnv.Server.POST("/api/v1/products", productBody, auth.Token)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, resp.StatusCode, "create product failed: %s", string(resp.Body))
 	}
 
 	// Search for "Apple"
-	resp, err := testServer.GET("/api/v1/products?search=Apple", auth.Token)
+	resp, err := testEnv.Server.GET("/api/v1/products?search=Apple", auth.Token)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
