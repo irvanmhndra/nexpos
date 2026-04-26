@@ -1,7 +1,6 @@
-package integration
+package integration_test
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -12,27 +11,21 @@ import (
 
 func TestAuthFlow_RegisterAndLogin(t *testing.T) {
 	cleanupDatabase(t)
-	ctx := context.Background()
 
 	// Step 1: Register a new user
-	registerBody := map[string]interface{}{
+	resp := doPost(t, "/api/v1/auth/register", map[string]interface{}{
 		"name":     "John Doe",
 		"email":    "john@example.com",
 		"password": "password123",
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/auth/register", registerBody, "")
-	require.NoError(t, err)
+	}, "")
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
-	var registerResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &registerResp)
-	require.NoError(t, err)
+	r := decodeResponse(t, resp)
+	require.True(t, r.Success)
+	assert.Equal(t, "Registration successful", r.Message)
 
-	require.True(t, registerResp["success"].(bool))
-	assert.Equal(t, "Registration successful", registerResp["message"])
-
-	data := registerResp["data"].(map[string]interface{})
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &data))
 	assert.NotEmpty(t, data["access_token"])
 	assert.NotEmpty(t, data["refresh_token"])
 	assert.NotNil(t, data["user"])
@@ -42,69 +35,50 @@ func TestAuthFlow_RegisterAndLogin(t *testing.T) {
 	assert.Equal(t, "john@example.com", user["email"])
 
 	// Step 2: Login with registered credentials
-	loginBody := map[string]interface{}{
+	resp = doPost(t, "/api/v1/auth/login", map[string]interface{}{
 		"email":    "john@example.com",
 		"password": "password123",
-	}
-
-	resp, err = testEnv.Server.POST("/api/v1/auth/login", loginBody, "")
-	require.NoError(t, err)
+	}, "")
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var loginResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &loginResp)
-	require.NoError(t, err)
+	r = decodeResponse(t, resp)
+	assert.True(t, r.Success)
+	assert.Equal(t, "Login successful", r.Message)
 
-	assert.True(t, loginResp["success"].(bool))
-	assert.Equal(t, "Login successful", loginResp["message"])
-
-	loginData := loginResp["data"].(map[string]interface{})
-	accessToken := loginData["access_token"].(string)
-	refreshToken := loginData["refresh_token"].(string)
-	assert.NotEmpty(t, accessToken)
-	assert.NotEmpty(t, refreshToken)
-
-	_ = ctx // Context available for future use
+	var loginData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &loginData))
+	assert.NotEmpty(t, loginData["access_token"])
+	assert.NotEmpty(t, loginData["refresh_token"])
 }
 
 func TestAuthFlow_RefreshToken(t *testing.T) {
 	cleanupDatabase(t)
 
 	// Register a user first
-	registerBody := map[string]interface{}{
+	resp := doPost(t, "/api/v1/auth/register", map[string]interface{}{
 		"name":     "Jane Doe",
 		"email":    "jane@example.com",
 		"password": "password123",
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/auth/register", registerBody, "")
-	require.NoError(t, err)
+	}, "")
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
-	var registerResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &registerResp)
-	require.NoError(t, err)
-
-	data := registerResp["data"].(map[string]interface{})
+	r := decodeResponse(t, resp)
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &data))
 	refreshToken := data["refresh_token"].(string)
 
 	// Refresh the token
-	refreshBody := map[string]interface{}{
+	resp = doPost(t, "/api/v1/auth/refresh", map[string]interface{}{
 		"refresh_token": refreshToken,
-	}
-
-	resp, err = testEnv.Server.POST("/api/v1/auth/refresh", refreshBody, "")
-	require.NoError(t, err)
+	}, "")
 	require.Equal(t, http.StatusOK, resp.StatusCode, "refresh failed: %s", string(resp.Body))
 
-	var refreshResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &refreshResp)
-	require.NoError(t, err)
+	r = decodeResponse(t, resp)
+	require.True(t, r.Success)
+	assert.Equal(t, "Token refreshed successfully", r.Message)
 
-	require.True(t, refreshResp["success"].(bool))
-	assert.Equal(t, "Token refreshed successfully", refreshResp["message"])
-
-	refreshData := refreshResp["data"].(map[string]interface{})
+	var refreshData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &refreshData))
 	assert.NotEmpty(t, refreshData["access_token"])
 	assert.NotEmpty(t, refreshData["refresh_token"])
 }
@@ -113,97 +87,70 @@ func TestAuthFlow_Logout(t *testing.T) {
 	cleanupDatabase(t)
 
 	// Register a user first
-	registerBody := map[string]interface{}{
+	resp := doPost(t, "/api/v1/auth/register", map[string]interface{}{
 		"name":     "Bob Smith",
 		"email":    "bob@example.com",
 		"password": "password123",
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/auth/register", registerBody, "")
-	require.NoError(t, err)
+	}, "")
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
-	var registerResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &registerResp)
-	require.NoError(t, err)
-
-	data := registerResp["data"].(map[string]interface{})
+	r := decodeResponse(t, resp)
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &data))
 	accessToken := data["access_token"].(string)
 
 	// Logout
-	resp, err = testEnv.Server.POST("/api/v1/auth/logout", nil, accessToken)
-	require.NoError(t, err)
+	resp = doPost(t, "/api/v1/auth/logout", nil, accessToken)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var logoutResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &logoutResp)
-	require.NoError(t, err)
-
-	assert.True(t, logoutResp["success"].(bool))
-	assert.Equal(t, "Logged out successfully", logoutResp["message"])
+	r = decodeResponse(t, resp)
+	assert.True(t, r.Success)
+	assert.Equal(t, "Logged out successfully", r.Message)
 }
 
 func TestAuth_LoginWithInvalidCredentials(t *testing.T) {
 	cleanupDatabase(t)
 
 	// Register a user first
-	registerBody := map[string]interface{}{
+	resp := doPost(t, "/api/v1/auth/register", map[string]interface{}{
 		"name":     "Test User",
 		"email":    "test@example.com",
 		"password": "password123",
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/auth/register", registerBody, "")
-	require.NoError(t, err)
+	}, "")
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
 	// Try to login with wrong password
-	loginBody := map[string]interface{}{
+	resp = doPost(t, "/api/v1/auth/login", map[string]interface{}{
 		"email":    "test@example.com",
 		"password": "wrongpassword",
-	}
-
-	resp, err = testEnv.Server.POST("/api/v1/auth/login", loginBody, "")
-	require.NoError(t, err)
+	}, "")
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
-	var loginResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &loginResp)
-	require.NoError(t, err)
-
-	assert.False(t, loginResp["success"].(bool))
+	r := decodeResponse(t, resp)
+	assert.False(t, r.Success)
 }
 
 func TestAuth_RegisterDuplicateEmail(t *testing.T) {
 	cleanupDatabase(t)
 
 	// Register first user
-	registerBody := map[string]interface{}{
+	resp := doPost(t, "/api/v1/auth/register", map[string]interface{}{
 		"name":     "First User",
 		"email":    "duplicate@example.com",
 		"password": "password123",
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/auth/register", registerBody, "")
-	require.NoError(t, err)
+	}, "")
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "register failed: %s", string(resp.Body))
 
 	// Try to register with same email
-	registerBody2 := map[string]interface{}{
+	resp = doPost(t, "/api/v1/auth/register", map[string]interface{}{
 		"name":     "Second User",
 		"email":    "duplicate@example.com",
 		"password": "password456",
-	}
-
-	resp, err = testEnv.Server.POST("/api/v1/auth/register", registerBody2, "")
-	require.NoError(t, err)
+	}, "")
 	assert.Equal(t, http.StatusConflict, resp.StatusCode)
 
-	var registerResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &registerResp)
-	require.NoError(t, err)
-
-	assert.False(t, registerResp["success"].(bool))
+	r := decodeResponse(t, resp)
+	assert.False(t, r.Success)
 }
 
 func TestAuth_RegisterValidation(t *testing.T) {
@@ -253,14 +200,11 @@ func TestAuth_RegisterValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := testEnv.Server.POST("/api/v1/auth/register", tt.body, "")
-			require.NoError(t, err)
+			resp := doPost(t, "/api/v1/auth/register", tt.body, "")
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 
-			var registerResp map[string]interface{}
-			err = json.Unmarshal(resp.Body, &registerResp)
-			require.NoError(t, err)
-			assert.False(t, registerResp["success"].(bool))
+			r := decodeResponse(t, resp)
+			assert.False(t, r.Success)
 		})
 	}
 }
@@ -301,14 +245,11 @@ func TestAuth_LoginValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := testEnv.Server.POST("/api/v1/auth/login", tt.body, "")
-			require.NoError(t, err)
+			resp := doPost(t, "/api/v1/auth/login", tt.body, "")
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 
-			var loginResp map[string]interface{}
-			err = json.Unmarshal(resp.Body, &loginResp)
-			require.NoError(t, err)
-			assert.False(t, loginResp["success"].(bool))
+			r := decodeResponse(t, resp)
+			assert.False(t, r.Success)
 		})
 	}
 }
@@ -317,17 +258,11 @@ func TestAuth_RefreshTokenInvalid(t *testing.T) {
 	cleanupDatabase(t)
 
 	// Try to refresh with invalid token
-	refreshBody := map[string]interface{}{
+	resp := doPost(t, "/api/v1/auth/refresh", map[string]interface{}{
 		"refresh_token": "invalid-refresh-token",
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/auth/refresh", refreshBody, "")
-	require.NoError(t, err)
+	}, "")
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
-	var refreshResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &refreshResp)
-	require.NoError(t, err)
-
-	assert.False(t, refreshResp["success"].(bool))
+	r := decodeResponse(t, resp)
+	assert.False(t, r.Success)
 }

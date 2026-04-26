@@ -1,4 +1,4 @@
-package integration
+package integration_test
 
 import (
 	"context"
@@ -7,13 +7,14 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/irvanmhndra/nexpos-api/tests/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // orderTestData holds all IDs needed for order tests.
 type orderTestData struct {
-	auth       *authContext
+	auth       *testutil.AuthContext
 	customerID int64
 	categoryID int64
 	productID  int64
@@ -27,20 +28,19 @@ func setupOrderTest(t *testing.T) *orderTestData {
 	auth := registerTestUser(t)
 
 	// Create customer via API
-	custBody := map[string]interface{}{"code": "ORD-CUST", "name": "Order Test Customer"}
-	resp, err := testEnv.Server.POST("/api/v1/customers", custBody, auth.Token)
-	require.NoError(t, err)
+	resp := doPost(t, "/api/v1/customers", map[string]interface{}{"code": "ORD-CUST", "name": "Order Test Customer"}, auth.Token)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create customer failed: %s", string(resp.Body))
-	var custResp map[string]interface{}
-	require.NoError(t, json.Unmarshal(resp.Body, &custResp))
-	customerID := int64(custResp["data"].(map[string]interface{})["id"].(float64))
+	r := decodeResponse(t, resp)
+	var custData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &custData))
+	customerID := int64(custData["id"].(float64))
 
 	// Create category + product via API helpers
 	categoryID := createTestCategory(t, auth.Token)
 	productID, variantID := createTestProduct(t, auth.Token, categoryID, "Order Test Product", "ORD-SKU-001", 100.00, 50.00)
 
 	// Seed initial stock (100 units) so order creation doesn't fail on stock validation
-	err = testEnv.Fixtures.CreateStock(context.Background(), variantID, auth.BranchID, 100, 0)
+	err := testEnv.Fixtures.CreateStock(context.Background(), variantID, auth.BranchID, 100, 0)
 	require.NoError(t, err)
 
 	return &orderTestData{
@@ -56,7 +56,7 @@ func TestOrderFlow_CreateAndGet(t *testing.T) {
 	td := setupOrderTest(t)
 
 	// Create an order
-	orderBody := map[string]interface{}{
+	resp := doPost(t, "/api/v1/orders", map[string]interface{}{
 		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
@@ -66,20 +66,15 @@ func TestOrderFlow_CreateAndGet(t *testing.T) {
 				"discount_amount":    0,
 			},
 		},
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/orders", orderBody, td.auth.Token)
-	require.NoError(t, err)
+	}, td.auth.Token)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
-	var createResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &createResp)
-	require.NoError(t, err)
+	r := decodeResponse(t, resp)
+	assert.True(t, r.Success)
+	assert.Equal(t, "Order created successfully", r.Message)
 
-	assert.True(t, createResp["success"].(bool))
-	assert.Equal(t, "Order created successfully", createResp["message"])
-
-	data := createResp["data"].(map[string]interface{})
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &data))
 	orderID := int64(data["id"].(float64))
 	assert.NotZero(t, orderID)
 	assert.NotEmpty(t, data["order_no"])
@@ -92,16 +87,14 @@ func TestOrderFlow_CreateAndGet(t *testing.T) {
 	assert.Equal(t, float64(200), data["grand_total"])
 
 	// Get the order
-	resp, err = testEnv.Server.GET(fmt.Sprintf("/api/v1/orders/%d", orderID), td.auth.Token)
-	require.NoError(t, err)
+	resp = doGet(t, fmt.Sprintf("/api/v1/orders/%d", orderID), td.auth.Token)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var getResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &getResp)
-	require.NoError(t, err)
+	r = decodeResponse(t, resp)
+	assert.True(t, r.Success)
 
-	assert.True(t, getResp["success"].(bool))
-	getData := getResp["data"].(map[string]interface{})
+	var getData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &getData))
 	assert.Equal(t, float64(orderID), getData["id"])
 }
 
@@ -115,7 +108,7 @@ func TestOrderFlow_CreateConfirmPayComplete(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 1: Create an order (delivery to avoid auto-complete on payment)
-	orderBody := map[string]interface{}{
+	resp := doPost(t, "/api/v1/orders", map[string]interface{}{
 		"customer_id":      td.customerID,
 		"fulfillment_type": "delivery",
 		"items": []map[string]interface{}{
@@ -125,70 +118,57 @@ func TestOrderFlow_CreateConfirmPayComplete(t *testing.T) {
 				"discount_amount":    0,
 			},
 		},
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/orders", orderBody, token)
-	require.NoError(t, err)
+	}, token)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
-	var createResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &createResp)
-	require.NoError(t, err)
-
-	data := createResp["data"].(map[string]interface{})
+	r := decodeResponse(t, resp)
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &data))
 	orderID := int64(data["id"].(float64))
 	grandTotal := data["grand_total"].(float64)
 
 	assert.Equal(t, "draft", data["status"])
 
 	// Step 2: Confirm the order
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
-	require.NoError(t, err)
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "confirm failed: %s", string(resp.Body))
 
-	var confirmResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &confirmResp)
-	require.NoError(t, err)
+	r = decodeResponse(t, resp)
+	assert.True(t, r.Success)
 
-	assert.True(t, confirmResp["success"].(bool))
-	confirmData := confirmResp["data"].(map[string]interface{})
+	var confirmData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &confirmData))
 	assert.Equal(t, "confirmed", confirmData["status"])
 	assert.NotNil(t, confirmData["confirmed_at"])
 
 	// Step 3: Add payment
-	paymentBody := map[string]interface{}{
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/payments", orderID), map[string]interface{}{
 		"payments": []map[string]interface{}{
 			{
 				"method": "cash",
 				"amount": grandTotal,
 			},
 		},
-	}
-
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), paymentBody, token)
-	require.NoError(t, err)
+	}, token)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "payment failed: %s", string(resp.Body))
 
-	var paymentResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &paymentResp)
-	require.NoError(t, err)
+	r = decodeResponse(t, resp)
+	assert.True(t, r.Success)
 
-	assert.True(t, paymentResp["success"].(bool))
-	paymentData := paymentResp["data"].(map[string]interface{})
+	var paymentData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &paymentData))
 	assert.Equal(t, "paid", paymentData["payment_status"])
 	assert.NotNil(t, paymentData["paid_at"])
 
 	// Step 4: Complete the order
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/complete", orderID), nil, token)
-	require.NoError(t, err)
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/complete", orderID), nil, token)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "complete failed: %s", string(resp.Body))
 
-	var completeResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &completeResp)
-	require.NoError(t, err)
+	r = decodeResponse(t, resp)
+	assert.True(t, r.Success)
 
-	assert.True(t, completeResp["success"].(bool))
-	completeData := completeResp["data"].(map[string]interface{})
+	var completeData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &completeData))
 	assert.Equal(t, "completed", completeData["status"])
 	assert.NotNil(t, completeData["completed_at"])
 
@@ -232,7 +212,7 @@ func TestOrderFlow_Cancel(t *testing.T) {
 	token := td.auth.Token
 
 	// Create an order
-	orderBody := map[string]interface{}{
+	resp := doPost(t, "/api/v1/orders", map[string]interface{}{
 		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
@@ -242,34 +222,25 @@ func TestOrderFlow_Cancel(t *testing.T) {
 				"discount_amount":    0,
 			},
 		},
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/orders", orderBody, token)
-	require.NoError(t, err)
+	}, token)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
-	var createResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &createResp)
-	require.NoError(t, err)
-
-	data := createResp["data"].(map[string]interface{})
+	r := decodeResponse(t, resp)
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &data))
 	orderID := int64(data["id"].(float64))
 
 	// Cancel the order
-	cancelBody := map[string]interface{}{
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/cancel", orderID), map[string]interface{}{
 		"reason": "Customer changed their mind",
-	}
-
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/cancel", orderID), cancelBody, token)
-	require.NoError(t, err)
+	}, token)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var cancelResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &cancelResp)
-	require.NoError(t, err)
+	r = decodeResponse(t, resp)
+	assert.True(t, r.Success)
 
-	assert.True(t, cancelResp["success"].(bool))
-	cancelData := cancelResp["data"].(map[string]interface{})
+	var cancelData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &cancelData))
 	assert.Equal(t, "cancelled", cancelData["status"])
 	assert.Equal(t, "Customer changed their mind", cancelData["cancel_reason"])
 	assert.NotNil(t, cancelData["cancelled_at"])
@@ -284,8 +255,8 @@ func TestOrderFlow_VoidConfirmed(t *testing.T) {
 	err := testEnv.Fixtures.CreateStock(ctx, td.variantID, td.auth.BranchID, 10, 0)
 	require.NoError(t, err)
 
-	// Create and confirm an order (not completed — no stock deduction yet)
-	orderBody := map[string]interface{}{
+	// Create and confirm an order (not completed -- no stock deduction yet)
+	resp := doPost(t, "/api/v1/orders", map[string]interface{}{
 		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
@@ -295,39 +266,29 @@ func TestOrderFlow_VoidConfirmed(t *testing.T) {
 				"discount_amount":    0,
 			},
 		},
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/orders", orderBody, token)
-	require.NoError(t, err)
+	}, token)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
-	var createResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &createResp)
-	require.NoError(t, err)
-
-	data := createResp["data"].(map[string]interface{})
+	r := decodeResponse(t, resp)
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &data))
 	orderID := int64(data["id"].(float64))
 
 	// Confirm the order first
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
-	require.NoError(t, err)
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "confirm failed: %s", string(resp.Body))
 
 	// Void the confirmed order (not completed, so no stock restoration)
-	voidBody := map[string]interface{}{
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/void", orderID), map[string]interface{}{
 		"reason": "Fraudulent order",
-	}
-
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/void", orderID), voidBody, token)
-	require.NoError(t, err)
+	}, token)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var voidResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &voidResp)
-	require.NoError(t, err)
+	r = decodeResponse(t, resp)
+	assert.True(t, r.Success)
 
-	assert.True(t, voidResp["success"].(bool))
-	voidData := voidResp["data"].(map[string]interface{})
+	var voidData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &voidData))
 	assert.Equal(t, "voided", voidData["status"])
 	assert.Equal(t, "Fraudulent order", voidData["void_reason"])
 	assert.NotNil(t, voidData["voided_at"])
@@ -360,8 +321,8 @@ func TestOrderFlow_VoidCompleted(t *testing.T) {
 	err := testEnv.Fixtures.CreateStock(ctx, td.variantID, td.auth.BranchID, 10, 0)
 	require.NoError(t, err)
 
-	// Create → Confirm → Pay → Complete an order (delivery to avoid auto-complete)
-	orderBody := map[string]interface{}{
+	// Create -> Confirm -> Pay -> Complete an order (delivery to avoid auto-complete)
+	resp := doPost(t, "/api/v1/orders", map[string]interface{}{
 		"customer_id":      td.customerID,
 		"fulfillment_type": "delivery",
 		"items": []map[string]interface{}{
@@ -371,38 +332,29 @@ func TestOrderFlow_VoidCompleted(t *testing.T) {
 				"discount_amount":    0,
 			},
 		},
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/orders", orderBody, token)
-	require.NoError(t, err)
+	}, token)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
-	var createResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &createResp)
-	require.NoError(t, err)
-
-	data := createResp["data"].(map[string]interface{})
+	r := decodeResponse(t, resp)
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &data))
 	orderID := int64(data["id"].(float64))
 	grandTotal := data["grand_total"].(float64)
 
 	// Confirm
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
-	require.NoError(t, err)
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "confirm failed: %s", string(resp.Body))
 
 	// Pay
-	paymentBody := map[string]interface{}{
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/payments", orderID), map[string]interface{}{
 		"payments": []map[string]interface{}{
 			{"method": "cash", "amount": grandTotal},
 		},
-	}
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), paymentBody, token)
-	require.NoError(t, err)
+	}, token)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "payment failed: %s", string(resp.Body))
 
 	// Complete
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/complete", orderID), nil, token)
-	require.NoError(t, err)
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/complete", orderID), nil, token)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "complete failed: %s", string(resp.Body))
 
 	// Verify stock was deducted after completion
@@ -415,17 +367,15 @@ func TestOrderFlow_VoidCompleted(t *testing.T) {
 	assert.Equal(t, 8, stockQtyAfterComplete) // 10 - 2
 
 	// Now void the completed order
-	voidBody := map[string]interface{}{
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/void", orderID), map[string]interface{}{
 		"reason": "Customer returned items",
-	}
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/void", orderID), voidBody, token)
-	require.NoError(t, err)
+	}, token)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var voidResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &voidResp)
-	require.NoError(t, err)
-	assert.Equal(t, "voided", voidResp["data"].(map[string]interface{})["status"])
+	r = decodeResponse(t, resp)
+	var voidData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &voidData))
+	assert.Equal(t, "voided", voidData["status"])
 
 	// DB assertion: stock should be restored
 	var stockQtyAfterVoid int
@@ -471,7 +421,7 @@ func TestOrderFlow_Refund(t *testing.T) {
 	token := td.auth.Token
 
 	// Create, confirm, and pay an order
-	orderBody := map[string]interface{}{
+	resp := doPost(t, "/api/v1/orders", map[string]interface{}{
 		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
@@ -481,70 +431,55 @@ func TestOrderFlow_Refund(t *testing.T) {
 				"discount_amount":    0,
 			},
 		},
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/orders", orderBody, token)
-	require.NoError(t, err)
+	}, token)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
-	var createResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &createResp)
-	require.NoError(t, err)
-
-	data := createResp["data"].(map[string]interface{})
+	r := decodeResponse(t, resp)
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &data))
 	orderID := int64(data["id"].(float64))
 	grandTotal := data["grand_total"].(float64)
 
 	// Confirm
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
-	require.NoError(t, err)
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "confirm failed: %s", string(resp.Body))
 
 	// Pay
-	paymentBody := map[string]interface{}{
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/payments", orderID), map[string]interface{}{
 		"payments": []map[string]interface{}{
 			{
 				"method": "cash",
 				"amount": grandTotal,
 			},
 		},
-	}
-
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), paymentBody, token)
-	require.NoError(t, err)
+	}, token)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "payment failed: %s", string(resp.Body))
 
-	var paymentResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &paymentResp)
-	require.NoError(t, err)
-
-	paymentData := paymentResp["data"].(map[string]interface{})
+	r = decodeResponse(t, resp)
+	var paymentData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &paymentData))
 	payments := paymentData["payments"].([]interface{})
 	payment := payments[0].(map[string]interface{})
 	paymentID := int64(payment["id"].(float64))
 
 	// Refund
-	refundBody := map[string]interface{}{
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/refund", orderID), map[string]interface{}{
 		"payment_id":    paymentID,
 		"amount":        grandTotal,
 		"refund_reason": "Customer returned item",
-	}
-
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/refund", orderID), refundBody, token)
-	require.NoError(t, err)
+	}, token)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var refundResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &refundResp)
-	require.NoError(t, err)
+	r = decodeResponse(t, resp)
+	assert.True(t, r.Success)
 
-	assert.True(t, refundResp["success"].(bool))
-	refundData := refundResp["data"].(map[string]interface{})
+	var refundData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &refundData))
 	assert.Equal(t, grandTotal, refundData["refunded_total"])
 
 	// DB assertion: verify payment status is 'refunded' in database
 	var paymentStatus string
-	err = testEnv.DB.QueryRowContext(ctx,
+	err := testEnv.DB.QueryRowContext(ctx,
 		"SELECT status FROM payments WHERE id = $1",
 		paymentID,
 	).Scan(&paymentStatus)
@@ -558,7 +493,7 @@ func TestOrderFlow_ListOrders(t *testing.T) {
 
 	// Create multiple orders
 	for i := 0; i < 3; i++ {
-		orderBody := map[string]interface{}{
+		resp := doPost(t, "/api/v1/orders", map[string]interface{}{
 			"customer_id":      td.customerID,
 			"fulfillment_type": "counter",
 			"items": []map[string]interface{}{
@@ -568,30 +503,29 @@ func TestOrderFlow_ListOrders(t *testing.T) {
 					"discount_amount":    0,
 				},
 			},
-		}
-
-		resp, err := testEnv.Server.POST("/api/v1/orders", orderBody, token)
-		require.NoError(t, err)
+		}, token)
 		require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 	}
 
 	// List orders
-	resp, err := testEnv.Server.GET("/api/v1/orders", token)
-	require.NoError(t, err)
+	resp := doGet(t, "/api/v1/orders", token)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var listResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &listResp)
-	require.NoError(t, err)
+	r := decodeResponse(t, resp)
+	assert.True(t, r.Success)
 
-	assert.True(t, listResp["success"].(bool))
-	data := listResp["data"].([]interface{})
-	assert.Len(t, data, 3)
+	var items []map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &items))
+	assert.Len(t, items, 3)
 
 	// Verify pagination in meta
-	meta := listResp["meta"].(map[string]interface{})
-	pagination := meta["pagination"].(map[string]interface{})
-	assert.Equal(t, float64(3), pagination["total_records"])
+	var meta struct {
+		Pagination struct {
+			TotalRecords float64 `json:"total_records"`
+		} `json:"pagination"`
+	}
+	require.NoError(t, json.Unmarshal(r.Meta, &meta))
+	assert.Equal(t, float64(3), meta.Pagination.TotalRecords)
 }
 
 func TestOrderFlow_UpdateOrder(t *testing.T) {
@@ -599,7 +533,7 @@ func TestOrderFlow_UpdateOrder(t *testing.T) {
 	token := td.auth.Token
 
 	// Create an order
-	orderBody := map[string]interface{}{
+	resp := doPost(t, "/api/v1/orders", map[string]interface{}{
 		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
@@ -610,36 +544,27 @@ func TestOrderFlow_UpdateOrder(t *testing.T) {
 			},
 		},
 		"notes": "Initial notes",
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/orders", orderBody, token)
-	require.NoError(t, err)
+	}, token)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
-	var createResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &createResp)
-	require.NoError(t, err)
-
-	data := createResp["data"].(map[string]interface{})
+	r := decodeResponse(t, resp)
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &data))
 	orderID := int64(data["id"].(float64))
 
 	// Update the order
-	updateBody := map[string]interface{}{
+	resp = doPut(t, fmt.Sprintf("/api/v1/orders/%d", orderID), map[string]interface{}{
 		"fulfillment_type": "delivery",
 		"shipping_address": "123 Main St, City",
 		"notes":            "Updated notes",
-	}
-
-	resp, err = testEnv.Server.PUT(fmt.Sprintf("/api/v1/orders/%d", orderID), updateBody, token)
-	require.NoError(t, err)
+	}, token)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var updateResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &updateResp)
-	require.NoError(t, err)
+	r = decodeResponse(t, resp)
+	assert.True(t, r.Success)
 
-	assert.True(t, updateResp["success"].(bool))
-	updateData := updateResp["data"].(map[string]interface{})
+	var updateData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &updateData))
 	assert.Equal(t, "delivery", updateData["fulfillment_type"])
 	assert.Equal(t, "123 Main St, City", updateData["shipping_address"])
 	assert.Equal(t, "Updated notes", updateData["notes"])
@@ -650,7 +575,7 @@ func TestOrder_CreateWithMultipleItems(t *testing.T) {
 	token := td.auth.Token
 
 	// Create additional product variant via API
-	productBody := map[string]interface{}{
+	resp := doPost(t, "/api/v1/products", map[string]interface{}{
 		"name":                "Second Product",
 		"product_category_id": td.categoryID,
 		"variants": []map[string]interface{}{
@@ -662,23 +587,21 @@ func TestOrder_CreateWithMultipleItems(t *testing.T) {
 				"is_default":    true,
 			},
 		},
-	}
-	resp, err := testEnv.Server.POST("/api/v1/products", productBody, token)
-	require.NoError(t, err)
+	}, token)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create product failed: %s", string(resp.Body))
 
-	var prodResp map[string]interface{}
-	require.NoError(t, json.Unmarshal(resp.Body, &prodResp))
-	prodData := prodResp["data"].(map[string]interface{})
+	r := decodeResponse(t, resp)
+	var prodData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &prodData))
 	variants := prodData["variants"].([]interface{})
 	variant2ID := int64(variants[0].(map[string]interface{})["id"].(float64))
 
 	// Seed stock for second variant
-	err = testEnv.Fixtures.CreateStock(context.Background(), variant2ID, td.auth.BranchID, 100, 0)
+	err := testEnv.Fixtures.CreateStock(context.Background(), variant2ID, td.auth.BranchID, 100, 0)
 	require.NoError(t, err)
 
 	// Create order with multiple items
-	orderBody := map[string]interface{}{
+	resp = doPost(t, "/api/v1/orders", map[string]interface{}{
 		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
@@ -693,17 +616,12 @@ func TestOrder_CreateWithMultipleItems(t *testing.T) {
 				"discount_amount":    0,
 			},
 		},
-	}
-
-	resp, err = testEnv.Server.POST("/api/v1/orders", orderBody, token)
-	require.NoError(t, err)
+	}, token)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
-	var createResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &createResp)
-	require.NoError(t, err)
-
-	data := createResp["data"].(map[string]interface{})
+	r = decodeResponse(t, resp)
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &data))
 
 	// Total: 200 + 150 = 350
 	// Discount: 10
@@ -770,8 +688,7 @@ func TestOrder_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := testEnv.Server.POST("/api/v1/orders", tt.body, auth.Token)
-			require.NoError(t, err)
+			resp := doPost(t, "/api/v1/orders", tt.body, auth.Token)
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 		})
 	}
@@ -782,7 +699,7 @@ func TestOrder_PaymentValidation(t *testing.T) {
 	token := td.auth.Token
 
 	// Create and confirm an order
-	orderBody := map[string]interface{}{
+	resp := doPost(t, "/api/v1/orders", map[string]interface{}{
 		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
@@ -791,36 +708,27 @@ func TestOrder_PaymentValidation(t *testing.T) {
 				"quantity":           1,
 			},
 		},
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/orders", orderBody, token)
-	require.NoError(t, err)
+	}, token)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
-	var createResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &createResp)
-	require.NoError(t, err)
-
-	data := createResp["data"].(map[string]interface{})
+	r := decodeResponse(t, resp)
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &data))
 	orderID := int64(data["id"].(float64))
 
 	// Confirm
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
-	require.NoError(t, err)
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "confirm failed: %s", string(resp.Body))
 
 	// Test invalid payment method
-	invalidPayment := map[string]interface{}{
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/payments", orderID), map[string]interface{}{
 		"payments": []map[string]interface{}{
 			{
 				"method": "invalid_method",
 				"amount": 100,
 			},
 		},
-	}
-
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), invalidPayment, token)
-	require.NoError(t, err)
+	}, token)
 	assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
 }
 
@@ -829,7 +737,7 @@ func TestOrder_PartialPayment(t *testing.T) {
 	token := td.auth.Token
 
 	// Create order (grand_total = 100)
-	orderBody := map[string]interface{}{
+	resp := doPost(t, "/api/v1/orders", map[string]interface{}{
 		"customer_id":      td.customerID,
 		"fulfillment_type": "counter",
 		"items": []map[string]interface{}{
@@ -838,65 +746,49 @@ func TestOrder_PartialPayment(t *testing.T) {
 				"quantity":           1,
 			},
 		},
-	}
-
-	resp, err := testEnv.Server.POST("/api/v1/orders", orderBody, token)
-	require.NoError(t, err)
+	}, token)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create order failed: %s", string(resp.Body))
 
-	var createResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &createResp)
-	require.NoError(t, err)
-
-	data := createResp["data"].(map[string]interface{})
+	r := decodeResponse(t, resp)
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &data))
 	orderID := int64(data["id"].(float64))
 
 	// Confirm
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
-	require.NoError(t, err)
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/confirm", orderID), nil, token)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "confirm failed: %s", string(resp.Body))
 
 	// Pay partial amount (50 out of 100)
-	partialPayment := map[string]interface{}{
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/payments", orderID), map[string]interface{}{
 		"payments": []map[string]interface{}{
 			{
 				"method": "cash",
 				"amount": 50,
 			},
 		},
-	}
-
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), partialPayment, token)
-	require.NoError(t, err)
+	}, token)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var paymentResp map[string]interface{}
-	err = json.Unmarshal(resp.Body, &paymentResp)
-	require.NoError(t, err)
-
-	paymentData := paymentResp["data"].(map[string]interface{})
+	r = decodeResponse(t, resp)
+	var paymentData map[string]interface{}
+	require.NoError(t, json.Unmarshal(r.Data, &paymentData))
 	assert.Equal(t, "partial", paymentData["payment_status"])
 	assert.Equal(t, float64(50), paymentData["paid_amount"])
 	assert.Equal(t, float64(50), paymentData["balance_due"])
 
 	// Pay remaining
-	remainingPayment := map[string]interface{}{
+	resp = doPost(t, fmt.Sprintf("/api/v1/orders/%d/payments", orderID), map[string]interface{}{
 		"payments": []map[string]interface{}{
 			{
 				"method": "credit_card",
 				"amount": 50,
 			},
 		},
-	}
-
-	resp, err = testEnv.Server.POST(fmt.Sprintf("/api/v1/orders/%d/payments", orderID), remainingPayment, token)
-	require.NoError(t, err)
+	}, token)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	err = json.Unmarshal(resp.Body, &paymentResp)
-	require.NoError(t, err)
-
-	paymentData = paymentResp["data"].(map[string]interface{})
+	r = decodeResponse(t, resp)
+	require.NoError(t, json.Unmarshal(r.Data, &paymentData))
 	assert.Equal(t, "paid", paymentData["payment_status"])
 	assert.Equal(t, float64(100), paymentData["paid_amount"])
 	assert.Equal(t, float64(0), paymentData["balance_due"])
