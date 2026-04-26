@@ -21,8 +21,8 @@ jobs:
           version: v2.11.3
           args: --timeout=5m
 
-  unit-test:
-    name: "Test: Unit Testing"
+  test:
+    name: "Test: Unit & Integration"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -31,24 +31,22 @@ jobs:
         with:
           go-version: '1.26.2'
 
-      - name: Run unit tests
-        run: go test -v -race -short ./internal/...
+      - name: Run all tests with coverage
+        run: go test -v -race -timeout 120s -coverprofile=coverage.out -covermode=atomic -coverpkg=./internal/... ./...
 
-  integration-test:
-    name: "Test: Integration Testing"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.26.2'
-
-      - name: Run integration tests
-        run: go test -v -race ./tests/integration/...
+      - name: Check coverage >= 50%
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep "^total:" | awk '{print $3}' | tr -d '%')
+          echo "Combined coverage: ${COVERAGE}%"
+          awk -v cov="$COVERAGE" 'BEGIN {
+            if (cov+0 < 50) {
+              print "Coverage " cov "% is below 50% minimum"; exit 1
+            }
+            print "Coverage " cov "% meets 50% minimum"
+          }'
 
   vulnerability-scan:
-    name: "Security: Vulnerability Scan"
+    name: "Security: govulncheck"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -79,7 +77,7 @@ jobs:
 
   deploy:
     name: "Deploy"
-    needs: [lint, unit-test, integration-test, vulnerability-scan, static-analysis]
+    needs: [lint, test, vulnerability-scan, static-analysis]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
