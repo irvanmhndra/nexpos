@@ -12,12 +12,6 @@ This project uses a layered testing approach:
 └──────────────────────┬───────────────────────────┘
                        │
 ┌──────────────────────┴───────────────────────────┐
-│  Handler Unit Tests (internal/handler/*_test.go) │
-│  Mock services, test HTTP binding & validation   │
-│  Tests: all handlers                             │
-└──────────────────────┬───────────────────────────┘
-                       │
-┌──────────────────────┴───────────────────────────┐
 │  Service Unit Tests (internal/service/*_test.go) │
 │  Mock repositories, test business logic          │
 │  Tests: all services                             │
@@ -29,53 +23,41 @@ This project uses a layered testing approach:
 | Layer | What it tests | Mock boundary | Value |
 |-------|--------------|---------------|-------|
 | **Service unit tests** | Business logic, validation, error handling | Repository interfaces | **High** — this is where the real logic lives |
-| **Handler unit tests** | HTTP binding, validation, status codes, response format | Service interfaces | **Medium** — handlers are thin, but catches HTTP-level bugs without a database |
 | **Integration tests** | Full request → response → database flow, including side effects | Nothing (real stack) | **High** — verifies everything works together |
 
 ### Key design decisions
 
-1. **Handlers use service interfaces** (`service.XxxServiceInterface`) — enables mocking for handler unit tests
-2. **Services use repository interfaces** — enables mocking for service unit tests
-3. **Integration tests live in `tests/integration/`** — a separate package is required because integration tests need to import `internal/app` to boot the real application, but `internal/app` already imports `internal/handler`. Placing integration tests inside `internal/handler/` would create a circular import (`handler_test → app → handler`). The separate package can import anything without this issue, giving it access to the real app, database, middleware, and route registration
-4. **Integration tests share setup via `TestMain`** in `setup_test.go` — database, app, and test server are initialized once
-5. **Integration tests use DB assertions for side effects** — when an operation produces database changes not visible in the API response (e.g. stock movements, payment status transitions), we query the database directly to verify
+1. **Services use repository interfaces** — enables mocking for service unit tests
+2. **Integration tests live in `tests/integration/`** — a separate package is required because integration tests need to import `internal/app` to boot the real application, but `internal/app` already imports `internal/handler`. Placing integration tests inside `internal/handler/` would create a circular import (`handler_test → app → handler`). The separate package can import anything without this issue, giving it access to the real app, database, middleware, and route registration
+3. **Integration tests share setup via `TestMain`** in `setup_test.go` — database, app, and test server are initialized once
+4. **Integration tests use DB assertions for side effects** — when an operation produces database changes not visible in the API response (e.g. stock movements, payment status transitions), we query the database directly to verify
 
 ## Project Test Structure
 
 ```
 internal/
-  handler/
-    auth.go
-    auth_test.go          ← handler unit test (mocks service)
-    customer.go
-    customer_test.go
-    ...
   service/
     branch.go
     branch_test.go        ← service unit test (mocks repository)
     customer.go
     customer_test.go
     ...
-    mocks/                ← service mocks (for handler tests)
-      auth.go
-      customer.go
-      ...
   repository/
     mocks/                ← repository mocks (for service tests)
       branch.go
       customer.go
       ...
 tests/
+  testutil/
+    db.go               ← test database utilities (truncate, tx, UniqueCounter)
+    http.go             ← test HTTP client (GET, POST, PUT, DELETE)
+    fixtures.go         ← test data factories (company, branch, user, product, stock, etc.)
   integration/
     setup_test.go         ← TestMain: DB + app setup/teardown
     auth_test.go          ← full-stack integration tests
     customer_test.go
     order_test.go         ← includes DB assertions for stock/payment
     ...
-    testutil/
-      db.go               ← test database utilities (truncate, tx)
-      http.go             ← test HTTP client (GET, POST, PUT, DELETE)
-      fixtures.go         ← test data factories (company, branch, user, product, stock, etc.)
 ```
 
 ## Running Tests
@@ -90,16 +72,12 @@ go test -short ./internal/...
 go test -race -short ./internal/...
 ```
 
-### Integration tests (requires test database)
+### Integration tests (no external database needed)
+Testcontainers automatically starts a PostgreSQL container during the test run.
+Requires Docker to be running.
+
 ```bash
-# Start test database
-docker-compose -f docker-compose.test.yml up -d
-
-# Run integration tests
-go test -v ./tests/integration/...
-
-# Stop test database
-docker-compose -f docker-compose.test.yml down
+go test -v -race ./tests/integration/...
 ```
 
 ### All tests
@@ -110,7 +88,6 @@ go test ./...
 ### Specific package
 ```bash
 go test -v ./internal/service/...
-go test -v ./internal/handler/...
 ```
 
 ### Specific test
@@ -159,56 +136,6 @@ func TestCustomerService_Create_Success(t *testing.T) {
     require.NoError(t, err)
     assert.Equal(t, "CUST-001", result.Code)
 }
-```
-
-### Handler unit test pattern
-
-Handler tests mock service dependencies:
-
-```go
-package handler
-
-func setupCustomerHandler(t *testing.T) (*CustomerHandler, *mocks.MockCustomerService) {
-    t.Helper()
-    v := validator.New()
-    mockSvc := new(mocks.MockCustomerService)
-    h := NewCustomerHandler(mockSvc, v)
-    return h, mockSvc
-}
-
-func createCustomerContext(method, path, body string) (*echo.Context, *httptest.ResponseRecorder) {
-    e := echo.New()
-    req := httptest.NewRequest(method, path, strings.NewReader(body))
-    req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-    rec := httptest.NewRecorder()
-    c := e.NewContext(req, rec)
-    c.Set("company_id", int64(1))
-    return c, rec
-}
-
-func TestCustomerHandler_Create_Success(t *testing.T) {
-    h, mockSvc := setupCustomerHandler(t)
-
-    mockSvc.On("Create", mock.Anything, int64(1), mock.AnythingOfType("dto.CreateCustomerRequest")).
-        Return(&dto.CustomerResponse{ID: 1, Name: "Test"}, nil)
-
-    body := `{"code": "CUST-001", "name": "Test"}`
-    c, rec := createCustomerContext(http.MethodPost, "/api/v1/customers", body)
-
-    err := h.Create(c)
-    assert.NoError(t, err)
-    assert.Equal(t, http.StatusCreated, rec.Code)
-    mockSvc.AssertExpectations(t)
-}
-```
-
-### Echo v5 path parameters
-
-Use `SetPathValues` (not `SetPathParams`) for Echo v5:
-
-```go
-c, rec := createContext(http.MethodGet, "/api/v1/items/1", "")
-c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 ```
 
 ### Integration test pattern
@@ -332,11 +259,6 @@ func TestCustomerService_Create_Success(t *testing.T)
 func TestCustomerService_Create_CodeExists(t *testing.T)
 func TestCustomerService_Create_RepoError(t *testing.T)
 
-// Handler tests
-func TestCustomerHandler_Create_Success(t *testing.T)
-func TestCustomerHandler_Create_InvalidJSON(t *testing.T)
-func TestCustomerHandler_Create_ValidationError(t *testing.T)
-
 // Integration tests (flow-based naming)
 func TestOrderFlow_CreateAndGet(t *testing.T)
 func TestOrderFlow_CreateConfirmPayComplete(t *testing.T)
@@ -352,13 +274,6 @@ func TestOrder_ValidationErrors(t *testing.T)
 - Edge cases (nil values, boundary conditions)
 - State transitions (order lifecycle)
 
-### Handler tests — focus on:
-- JSON binding (valid/invalid)
-- Validation errors (required fields, format constraints)
-- Path/query parameter parsing
-- HTTP status codes
-- Response message format
-
 ### Integration tests — focus on:
 - End-to-end flows (create → get → update → delete)
 - Database constraints (unique, foreign keys)
@@ -369,11 +284,12 @@ func TestOrder_ValidationErrors(t *testing.T)
 ## Test Utilities
 
 ### `testutil/db.go`
-- `NewTestDB()` — creates a database connection to the test PostgreSQL instance
-- `RunMigrations()` — drops and recreates the `public` schema, then applies all `.up.sql` migration files in order. The schema reset ensures migrations can be re-applied cleanly across test runs
+- `NewTestDB(ctx)` — starts a `postgres:18-alpine` container via testcontainers, connects, and returns a `TestDB` with DSN
+- `RunMigrations()` — drops and recreates the `public` schema, then applies all migrations using `golang-migrate`. Uses `findMigrationsDir()` to locate migrations by walking up to `go.mod`
 - `TruncateAllTables()` — truncates all tables (including `stock_movements`, `stocks`) in FK-safe order, then re-seeds system data (roles, permissions, role_permissions)
 - `TruncateTables(tables...)` — truncates specific tables
 - `BeginTx(ctx)` — starts a transaction for test isolation
+- `UniqueCounter()` — exported atomic counter for generating unique test data (e.g. emails, SKUs)
 
 ### `testutil/fixtures.go`
 - `CreateBaseTestData(ctx)` — creates a complete set: company, branch, role, user, customer, category, product, variant (used for DB-level fixture creation; prefer API-based setup for integration tests)
@@ -385,10 +301,11 @@ func TestOrder_ValidationErrors(t *testing.T)
 - `cleanupDatabase(t)` — truncates all tables and re-seeds system data between tests
 - `createTestCategory(t, token)` — creates a product category via API, returns its ID
 - `createTestProduct(t, token, categoryID, name, sku, price, cost)` — creates a product with one variant via API, returns `(productID, variantID)`
-- `uniqueCounter()` — atomic counter for generating unique test data codes/names
+- `testutil.UniqueCounter()` — atomic counter for generating unique test data codes/names
 
 ### `testutil/http.go`
-- `TestServer` — wraps Echo for HTTP testing via `ServeHTTP`
+- `TestServer` — wraps `*httptest.Server` (real HTTP server with TCP listener) for full-stack HTTP testing
+- `Close()` — shuts down the test server
 - `GET/POST/PUT/DELETE(path, body/token)` — convenience methods
 - `Response.ParseResponse()` — parses standard API response
 - `Response.ParseData(v)` — parses response data into a struct
@@ -409,7 +326,3 @@ func TestOrder_ValidationErrors(t *testing.T)
 ### Repository mocks (`internal/repository/mocks/`)
 - Use EXPECT() builder pattern with auto-cleanup
 - Created with `NewMockXxxRepository(t)` constructor
-
-### Service mocks (`internal/service/mocks/`)
-- Simple `testify/mock` with `.On().Return()` pattern
-- Created with `new(mocks.MockXxxService)`

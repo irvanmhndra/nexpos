@@ -4,7 +4,7 @@ A multi-tenant Point of Sale (POS) backend API built with Go, designed for retai
 
 ## Tech Stack
 
-- **Language:** Go 1.25
+- **Language:** Go 1.26.2
 - **Framework:** Echo v5
 - **Database:** PostgreSQL 18
 - **Authentication:** JWT with refresh tokens
@@ -29,7 +29,7 @@ A multi-tenant Point of Sale (POS) backend API built with Go, designed for retai
 
 ## Prerequisites
 
-- Go 1.25+
+- Go 1.26.2+
 - Docker and Docker Compose
 - Make
 - [golang-migrate](https://github.com/golang-migrate/migrate) CLI
@@ -293,6 +293,9 @@ nexpos-api/
 │   └── pagination/          # Pagination helpers
 ├── migrations/              # Database migrations (30 migrations)
 ├── docs/                    # Documentation
+├── tests/
+│   ├── testutil/            # Shared test utilities (DB, fixtures, HTTP client)
+│   └── integration/         # Integration tests
 ├── docker-compose.yml
 ├── makefile
 └── .env.example
