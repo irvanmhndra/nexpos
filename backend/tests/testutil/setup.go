@@ -11,15 +11,16 @@ import (
 
 // TestEnv holds the shared test infrastructure for integration tests.
 type TestEnv struct {
-	App      *app.App
-	DB       *sqlx.DB
-	TestDB   *TestDB
-	Server   *TestServer
-	Fixtures *Fixtures
-	Cleanup  func()
+	App       *app.App
+	DB        *sqlx.DB
+	TestDB    *TestDB
+	TestMongo *TestMongo
+	Server    *TestServer
+	Fixtures  *Fixtures
+	Cleanup   func()
 }
 
-// Setup starts a PostgreSQL testcontainer, runs migrations, and boots
+// Setup starts PostgreSQL + MongoDB testcontainers, runs migrations, and boots
 // the full app. Call env.Cleanup() when done.
 func Setup(ctx context.Context) (*TestEnv, error) {
 	tdb, err := NewTestDB(ctx)
@@ -32,6 +33,12 @@ func Setup(ctx context.Context) (*TestEnv, error) {
 		return nil, err
 	}
 
+	tmongo, err := NewTestMongo(ctx)
+	if err != nil {
+		_ = tdb.Close()
+		return nil, err
+	}
+
 	cfg := &config.Config{
 		Server: config.ServerConfig{
 			Port: "8081",
@@ -39,6 +46,10 @@ func Setup(ctx context.Context) (*TestEnv, error) {
 		},
 		Postgres: config.PostgresConfig{
 			DSNOverride: tdb.DSN,
+		},
+		Mongo: config.MongoConfig{
+			URI:      tmongo.URI,
+			Database: "nexpos_test",
 		},
 		JWT: config.JWTConfig{
 			Secret:             "test-secret-key-for-integration-tests",
@@ -52,17 +63,20 @@ func Setup(ctx context.Context) (*TestEnv, error) {
 	a, err := app.New(cfg)
 	if err != nil {
 		_ = tdb.Close()
+		_ = tmongo.Close()
 		return nil, err
 	}
 
 	return &TestEnv{
-		App:      a,
-		DB:       tdb.DB,
-		TestDB:   tdb,
-		Fixtures: NewFixtures(tdb.DB),
+		App:       a,
+		DB:        tdb.DB,
+		TestDB:    tdb,
+		TestMongo: tmongo,
+		Fixtures:  NewFixtures(tdb.DB),
 		Cleanup: func() {
 			a.Close()
 			_ = tdb.Close()
+			_ = tmongo.Close()
 		},
 	}, nil
 }
