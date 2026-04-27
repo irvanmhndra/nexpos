@@ -149,6 +149,11 @@ type ExpenseServiceInterface interface {
 	GetExpenseSummary(ctx context.Context, companyID int64, req dto.ExpenseSummaryRequest) (*dto.ExpenseSummaryResponse, error)
 }
 
+type ReceiptServiceInterface interface {
+	CreateFromOrder(ctx context.Context, companyID int64, order *dto.OrderResponse) error
+	GetByOrderID(ctx context.Context, companyID, orderID int64) (*model.Receipt, error)
+}
+
 // Ensure concrete types implement interfaces
 var _ AuthServiceInterface = (*AuthService)(nil)
 var _ UserServiceInterface = (*UserService)(nil)
@@ -164,3 +169,4 @@ var _ InventoryServiceInterface = (*InventoryService)(nil)
 var _ PurchaseOrderServiceInterface = (*PurchaseOrderService)(nil)
 var _ ShiftServiceInterface = (*ShiftService)(nil)
 var _ ExpenseServiceInterface = (*ExpenseService)(nil)
+var _ ReceiptServiceInterface = (*ReceiptService)(nil)

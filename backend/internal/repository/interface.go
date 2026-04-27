@@ -319,3 +319,8 @@ type StockMovementRepository interface {
 	List(ctx context.Context, companyID, branchID int64, movType, search, startDate, endDate string, limit, offset int) ([]*MovementRow, int, error)
 	GetMonthlyStats(ctx context.Context, companyID, branchID int64) (*MovementStats, error)
 }
+
+type ReceiptRepository interface {
+	Save(ctx context.Context, r *model.Receipt) error
+	GetByOrderID(ctx context.Context, companyID, orderID int64) (*model.Receipt, error)
+}
