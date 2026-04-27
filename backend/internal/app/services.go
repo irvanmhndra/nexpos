@@ -20,6 +20,7 @@ type Services struct {
 	PurchaseOrder   *service.PurchaseOrderService
 	Shift           *service.ShiftService
 	Expense         *service.ExpenseService
+	Receipt         *service.ReceiptService // nil if MongoDB not configured
 }
 
 func initServices(repos *Repositories, cfg *config.Config) *Services {

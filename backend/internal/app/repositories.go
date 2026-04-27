@@ -32,6 +32,7 @@ type Repositories struct {
 	Shift           repository.ShiftRepository
 	ExpenseCategory repository.ExpenseCategoryRepository
 	Expense         repository.ExpenseRepository
+	Receipt         repository.ReceiptRepository // nil if MongoDB not configured
 }
 
 func initRepositories(db *sqlx.DB) *Repositories {

@@ -23,6 +23,7 @@ type Handlers struct {
 	Shift           *handler.ShiftHandler
 	ExpenseCategory *handler.ExpenseCategoryHandler
 	Expense         *handler.ExpenseHandler
+	Receipt         *handler.ReceiptHandler // nil if MongoDB not configured
 }
 
 func Setup(e *echo.Echo, h *Handlers, authMW echo.MiddlewareFunc) {
@@ -100,6 +101,9 @@ func Setup(e *echo.Echo, h *Handlers, authMW echo.MiddlewareFunc) {
 	orders.POST("/:id/cancel", h.Order.Cancel)
 	orders.POST("/:id/void", h.Order.Void)
 	orders.POST("/:id/refund", h.Order.RefundPayment)
+	if h.Receipt != nil {
+		orders.GET("/:id/receipt", h.Receipt.Get)
+	}
 
 	// Report routes
 	reports := protected.Group("/reports")

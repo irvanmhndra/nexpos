@@ -24,10 +24,11 @@ type Handlers struct {
 	Shift           *handler.ShiftHandler
 	ExpenseCategory *handler.ExpenseCategoryHandler
 	Expense         *handler.ExpenseHandler
+	Receipt         *handler.ReceiptHandler // nil if MongoDB not configured
 }
 
 func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator) *Handlers {
-	return &Handlers{
+	h := &Handlers{
 		Health:          handler.NewHealthHandler(db),
 		Auth:            handler.NewAuthHandler(services.Auth, v),
 		User:            handler.NewUserHandler(services.User, v),
@@ -46,4 +47,9 @@ func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator)
 		ExpenseCategory: handler.NewExpenseCategoryHandler(services.Expense, v),
 		Expense:         handler.NewExpenseHandler(services.Expense, v),
 	}
+	if services.Receipt != nil {
+		h.Order = handler.NewOrderHandler(services.Order, v, services.Receipt)
+		h.Receipt = handler.NewReceiptHandler(services.Receipt)
+	}
+	return h
 }

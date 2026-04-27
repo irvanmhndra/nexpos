@@ -12,22 +12,27 @@ import (
 
 	"github.com/irvanmhndra/nexpos-api/config"
 	authmiddleware "github.com/irvanmhndra/nexpos-api/internal/middleware"
+	mongorepo "github.com/irvanmhndra/nexpos-api/internal/repository/mongo"
 	"github.com/irvanmhndra/nexpos-api/internal/router"
+	"github.com/irvanmhndra/nexpos-api/internal/service"
 	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
 	"github.com/irvanmhndra/nexpos-api/pkg/validator"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	_ "github.com/lib/pq"
+	"go.mongodb.org/mongo-driver/mongo"
+	mongoopts "go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type App struct {
-	cfg      *config.Config
-	db       *sqlx.DB
-	echo     *echo.Echo
-	Repos    *Repositories
-	Services *Services
-	Handlers *Handlers
+	cfg         *config.Config
+	db          *sqlx.DB
+	mongoClient *mongo.Client
+	echo        *echo.Echo
+	Repos       *Repositories
+	Services    *Services
+	Handlers    *Handlers
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -41,12 +46,34 @@ func New(cfg *config.Config) (*App, error) {
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(5 * time.Minute)
 
-	// Initialize validator
-	v := validator.New()
-
 	// Initialize layers
 	repos := initRepositories(db)
+
+	// Initialize MongoDB (optional)
+	var mongoClient *mongo.Client
+
+	if cfg.Mongo.URI != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		mongoClient, err = mongo.Connect(ctx, mongoopts.Client().ApplyURI(cfg.Mongo.URI))
+		if err != nil {
+			return nil, err
+		}
+
+		receiptRepo, err := mongorepo.NewReceiptRepository(mongoClient.Database(cfg.Mongo.Database))
+		if err != nil {
+			return nil, err
+		}
+		repos.Receipt = receiptRepo
+	}
+
 	services := initServices(repos, cfg)
+	if repos.Receipt != nil {
+		services.Receipt = service.NewReceiptService(repos.Receipt)
+	}
+
+	v := validator.New()
 	handlers := initHandlers(db, services, v)
 
 	// Initialize Echo
@@ -118,15 +145,17 @@ func New(cfg *config.Config) (*App, error) {
 		Shift:           handlers.Shift,
 		ExpenseCategory: handlers.ExpenseCategory,
 		Expense:         handlers.Expense,
+		Receipt:         handlers.Receipt,
 	}, authmiddleware.Auth(repos.UserSession))
 
 	return &App{
-		cfg:      cfg,
-		db:       db,
-		echo:     e,
-		Repos:    repos,
-		Services: services,
-		Handlers: handlers,
+		cfg:         cfg,
+		db:          db,
+		mongoClient: mongoClient,
+		echo:        e,
+		Repos:       repos,
+		Services:    services,
+		Handlers:    handlers,
 	}, nil
 }
 
@@ -165,6 +194,11 @@ func (a *App) Run() {
 func (a *App) Close() {
 	if a.db != nil {
 		_ = a.db.Close()
+	}
+	if a.mongoClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = a.mongoClient.Disconnect(ctx)
 	}
 }
 
