@@ -16,6 +16,23 @@ services:
       timeout: 5s
       retries: 5
 
+  mongo:
+    image: mongo:7
+    container_name: nexpos_mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DB}
+    ports:
+      - "27017:27017"
+    volumes:
+      - nexpos_mongodata:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   nexpos-api:
     build: .
     image: nexpos-api:latest
@@ -26,7 +43,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      mongo:
+        condition: service_healthy
     restart: always
 
 volumes:
   nexpos_pgdata:
+  nexpos_mongodata:
