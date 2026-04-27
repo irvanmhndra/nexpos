@@ -10,6 +10,7 @@ type Config struct {
 	Server   ServerConfig
 	Postgres PostgresConfig
 	JWT      JWTConfig
+	Mongo    MongoConfig
 }
 
 type ServerConfig struct {
@@ -32,6 +33,11 @@ func (p PostgresConfig) DSN() string {
 		return p.DSNOverride
 	}
 	return "postgres://" + p.User + ":" + p.Password + "@" + p.Host + ":" + p.Port + "/" + p.DB + "?sslmode=" + p.SSLMode
+}
+
+type MongoConfig struct {
+	URI      string
+	Database string
 }
 
 type JWTConfig struct {
@@ -58,6 +64,10 @@ func Load() *Config {
 			Password: getEnv("POSTGRES_PASSWORD", ""),
 			DB:       getEnv("POSTGRES_DB", "pos_db"),
 			SSLMode:  getEnv("POSTGRES_SSLMODE", "disable"),
+		},
+		Mongo: MongoConfig{
+			URI:      getEnv("MONGO_URI", ""),
+			Database: getEnv("MONGO_DB", "nexpos"),
 		},
 		JWT: JWTConfig{
 			Secret:             getEnv("JWT_SECRET", "secret"),
