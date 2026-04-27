@@ -28,8 +28,8 @@ type TestDB struct {
 
 // NewTestDB starts a PostgreSQL testcontainer and returns a connected TestDB.
 func NewTestDB(ctx context.Context) (*TestDB, error) {
-	pgContainer, err := postgres.RunContainer(ctx,
-		testcontainers.WithImage("postgres:18-alpine"),
+	pgContainer, err := postgres.Run(ctx,
+		"postgres:18-alpine",
 		postgres.WithDatabase("pos_test_db"),
 		postgres.WithUsername("pos_test_user"),
 		postgres.WithPassword("pos_test_password"),

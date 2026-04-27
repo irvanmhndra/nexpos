@@ -283,7 +283,6 @@ func (r *ExpenseRepository) GetTotalByDateRange(ctx context.Context, companyID i
 	if to != "" {
 		whereClause += fmt.Sprintf(" AND expense_date <= $%d", argIndex)
 		args = append(args, to)
-		argIndex++
 	}
 
 	query := "SELECT COALESCE(SUM(amount), 0) FROM expenses " + whereClause
