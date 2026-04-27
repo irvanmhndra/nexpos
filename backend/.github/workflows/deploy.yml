@@ -80,6 +80,7 @@ jobs:
     needs: [lint, test, vulnerability-scan, static-analysis]
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       packages: write
     steps:
       - uses: actions/checkout@v5
