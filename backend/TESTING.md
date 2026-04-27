@@ -440,7 +440,7 @@ func cleanupDatabase(t *testing.T) {
 }
 ```
 
-MongoDB documents (receipts) are not truncated between tests because they are keyed by `(order_id, company_id)` and PostgreSQL sequences reset on `RESTART IDENTITY`, so IDs never collide across tests.
+MongoDB collections are also dropped in `cleanupDatabase` because PostgreSQL sequences reset on `RESTART IDENTITY`, meaning order IDs restart from 1 each test — which would cause a receipt from a previous test to be returned for a newly created order with the same ID.
 
 `TruncateAllTables()` truncates all application tables with `RESTART IDENTITY CASCADE` (resets auto-increment sequences too) and re-seeds system data (roles, permissions, role_permissions). This brings the database back to a known state in milliseconds — much faster than restarting containers or re-running migrations.
 

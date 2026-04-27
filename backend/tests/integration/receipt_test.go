@@ -15,6 +15,16 @@ func TestReceipt_GetAfterComplete(t *testing.T) {
 	cleanupDatabase(t)
 	auth := registerTestUser(t)
 
+	// Create customer (required for delivery orders)
+	custResp := doPost(t, "/api/v1/customers", map[string]interface{}{
+		"code": "RCPT-CUST", "name": "Receipt Customer",
+	}, auth.Token)
+	require.Equal(t, http.StatusCreated, custResp.StatusCode)
+	custR := decodeResponse(t, custResp)
+	var custData map[string]interface{}
+	require.NoError(t, json.Unmarshal(custR.Data, &custData))
+	customerID := int64(custData["id"].(float64))
+
 	// Create category + product
 	categoryID := createTestCategory(t, auth.Token)
 	productID, variantID := createTestProduct(t, auth.Token, categoryID, "Receipt Product", "RCPT-SKU-001", 250.00, 100.00)
@@ -24,8 +34,9 @@ func TestReceipt_GetAfterComplete(t *testing.T) {
 	err := testEnv.Fixtures.CreateStock(context.Background(), variantID, auth.BranchID, 50, 0)
 	require.NoError(t, err)
 
-	// Create order (delivery to avoid auto-complete)
+	// Create order (delivery to avoid auto-complete on full payment)
 	resp := doPost(t, "/api/v1/orders", map[string]interface{}{
+		"customer_id":      customerID,
 		"fulfillment_type": "delivery",
 		"items": []map[string]interface{}{
 			{
