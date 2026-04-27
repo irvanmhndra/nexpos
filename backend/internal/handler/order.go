@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -13,15 +14,20 @@ import (
 )
 
 type OrderHandler struct {
-	orderSvc  service.OrderServiceInterface
-	validator *validator.CustomValidator
+	orderSvc   service.OrderServiceInterface
+	receiptSvc service.ReceiptServiceInterface // nil if MongoDB not configured
+	validator  *validator.CustomValidator
 }
 
-func NewOrderHandler(orderSvc service.OrderServiceInterface, validator *validator.CustomValidator) *OrderHandler {
-	return &OrderHandler{
+func NewOrderHandler(orderSvc service.OrderServiceInterface, validator *validator.CustomValidator, receiptSvc ...service.ReceiptServiceInterface) *OrderHandler {
+	h := &OrderHandler{
 		orderSvc:  orderSvc,
 		validator: validator,
 	}
+	if len(receiptSvc) > 0 {
+		h.receiptSvc = receiptSvc[0]
+	}
+	return h
 }
 
 func (h *OrderHandler) Preview(c *echo.Context) error {
@@ -199,6 +205,13 @@ func (h *OrderHandler) Complete(c *echo.Context) error {
 	result, err := h.orderSvc.CompleteOrder(ctx, companyID, id, req)
 	if err != nil {
 		return httputil.Error(c, err)
+	}
+
+	// Best-effort: persist receipt snapshot to MongoDB (non-blocking failure)
+	if h.receiptSvc != nil {
+		if err := h.receiptSvc.CreateFromOrder(ctx, companyID, result); err != nil {
+			slog.Error("failed to save receipt snapshot", "order_id", id, "error", err)
+		}
 	}
 
 	return httputil.Success(c, http.StatusOK, "Order completed successfully", result)
