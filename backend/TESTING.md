@@ -49,14 +49,18 @@ internal/
       ...
 tests/
   testutil/
-    db.go               ← test database utilities (truncate, tx, UniqueCounter)
+    db.go               ← PostgreSQL testcontainer + migrations + truncate helpers
+    mongo.go            ← MongoDB testcontainer + drop collections
     http.go             ← test HTTP client (GET, POST, PUT, DELETE)
     fixtures.go         ← test data factories (company, branch, user, product, stock, etc.)
+    setup.go            ← TestEnv: boots full app wiring both containers
   integration/
-    setup_test.go         ← TestMain: DB + app setup/teardown
+    setup_test.go         ← TestMain: start containers, boot app, teardown
+    helpers_test.go       ← doPost/doGet/doPut/doDelete/decodeResponse/registerTestUser
     auth_test.go          ← full-stack integration tests
     customer_test.go
     order_test.go         ← includes DB assertions for stock/payment
+    receipt_test.go       ← MongoDB receipt snapshot tests
     ...
 ```
 
@@ -73,7 +77,7 @@ go test -race -short ./internal/...
 ```
 
 ### Integration tests (no external database needed)
-Testcontainers automatically starts a PostgreSQL container during the test run.
+Testcontainers automatically starts PostgreSQL and MongoDB containers during the test run.
 Requires Docker to be running.
 
 ```bash
@@ -140,34 +144,31 @@ func TestCustomerService_Create_Success(t *testing.T) {
 
 ### Integration test pattern
 
-Integration tests use the real HTTP stack and database. All protected routes require authentication via `registerTestUser()`, which registers a user via the API and returns an `authContext` with tokens and IDs:
+Integration tests use the real HTTP stack and database. All protected routes require authentication via `registerTestUser()`, which registers a user via the API and returns an `AuthContext` with tokens and IDs:
 
 ```go
-package integration
+package integration_test
 
 func TestCustomer_CreateAndGet(t *testing.T) {
     cleanupDatabase(t)
     auth := registerTestUser(t)
 
-    // Create (all API calls pass auth.Token)
-    body := map[string]interface{}{
-        "code": "CUST-001",
-        "name": "John Customer",
+    // Create — doPost wraps testEnv.Server.POST and asserts no transport error
+    resp := doPost(t, "/api/v1/customers", map[string]interface{}{
+        "code":  "CUST-001",
+        "name":  "John Customer",
         "phone": "+1234567890",
-    }
-    resp, err := testServer.POST("/api/v1/customers", body, auth.Token)
-    require.NoError(t, err)
+    }, auth.Token)
     assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-    // Parse ID from response
-    var createResp map[string]interface{}
-    json.Unmarshal(resp.Body, &createResp)
-    data := createResp["data"].(map[string]interface{})
+    // decodeResponse parses the standard API envelope
+    r := decodeResponse(t, resp)
+    var data map[string]interface{}
+    require.NoError(t, json.Unmarshal(r.Data, &data))
     customerID := int64(data["id"].(float64))
 
     // Get
-    resp, err = testServer.GET(fmt.Sprintf("/api/v1/customers/%d", customerID), auth.Token)
-    require.NoError(t, err)
+    resp = doGet(t, fmt.Sprintf("/api/v1/customers/%d", customerID), auth.Token)
     assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 ```
@@ -190,20 +191,20 @@ func setupOrderTest(t *testing.T) *orderTestData {
     auth := registerTestUser(t)
 
     // Create customer, category, product via API
-    customerID := createTestCustomer(t, auth.Token)
+    resp := doPost(t, "/api/v1/customers", map[string]interface{}{"code": "ORD-CUST", "name": "Order Test Customer"}, auth.Token)
+    r := decodeResponse(t, resp)
+    var custData map[string]interface{}
+    require.NoError(t, json.Unmarshal(r.Data, &custData))
+    customerID := int64(custData["id"].(float64))
+
     categoryID := createTestCategory(t, auth.Token)
     productID, variantID := createTestProduct(t, auth.Token, categoryID, "Test Product", "SKU-001", 100.00, 50.00)
 
-    // Seed stock (required — order creation validates stock availability)
-    _, err := testDB.DB.Exec(
-        `INSERT INTO stocks (product_variant_id, branch_id, quantity, min_quantity)
-         VALUES ($1, $2, 100, 0)
-         ON CONFLICT (product_variant_id, branch_id) DO UPDATE SET quantity = 100`,
-        variantID, auth.BranchID,
-    )
+    // Seed stock via fixtures (required — order creation validates stock availability)
+    err := testEnv.Fixtures.CreateStock(context.Background(), variantID, auth.BranchID, 100, 0)
     require.NoError(t, err)
 
-    return &orderTestData{auth: auth, customerID: customerID, ...}
+    return &orderTestData{auth: auth, customerID: customerID, productID: productID, variantID: variantID}
 }
 ```
 
@@ -222,13 +223,12 @@ For DB assertions (stock movements, payment status), query the database directly
 ```go
 // DB assertion: verify stock was deducted
 var stockQty int
-err = testDB.DB.QueryRowContext(ctx,
+err = testEnv.DB.QueryRowContext(ctx,
     "SELECT quantity FROM stocks WHERE product_variant_id = $1 AND branch_id = $2",
     variantID, auth.BranchID,
 ).Scan(&stockQty)
 require.NoError(t, err)
 assert.Equal(t, 9, stockQty) // started at 10, ordered 1
-```
 ```
 
 ### When to use DB assertions
@@ -281,15 +281,235 @@ func TestOrder_ValidationErrors(t *testing.T)
 - Authentication flows
 - Side effects via DB assertions (stock movements, payment status)
 
+## How Integration Tests Work End-to-End
+
+This section explains the full lifecycle of an integration test run: from `go test ./...` to teardown.
+
+### 1. Test entry point — `TestMain`
+
+`tests/integration/setup_test.go` declares `TestMain(m *testing.M)`. Go calls this before any test in the package runs. It is the single place where shared infrastructure (database, MongoDB, app, HTTP server) is initialized and later torn down:
+
+```
+go test ./tests/integration/...
+    └── TestMain(m)
+          ├── NewTestDB(ctx)       → starts PostgreSQL container
+          ├── RunMigrations()      → applies all SQL migrations
+          ├── NewTestMongo(ctx)    → starts MongoDB container
+          ├── app.New(cfg)         → boots the full application
+          ├── NewTestServer(echo)  → wraps echo in httptest.Server
+          └── m.Run()              → runs all Test* functions
+                ├── TestAuth_Login
+                ├── TestOrderFlow_CreateConfirmPayComplete
+                ├── TestReceipt_GetAfterComplete
+                └── ...
+          └── env.Cleanup()        → teardown (containers + connections)
+```
+
+The infrastructure is created **once** for the entire package and shared across all tests, which keeps the test suite fast — container startup happens once, not per test.
+
+### 2. Testcontainers — real databases, no manual setup
+
+[testcontainers-go](https://github.com/testcontainers/testcontainers-go) starts real Docker containers programmatically from Go test code. No external database or Docker Compose file is needed — `go test` is the only command required.
+
+**PostgreSQL container** (`tests/testutil/db.go`):
+
+```go
+pgContainer, err := postgres.RunContainer(ctx,
+    testcontainers.WithImage("postgres:18-alpine"),
+    postgres.WithDatabase("pos_test_db"),
+    postgres.WithUsername("pos_test_user"),
+    postgres.WithPassword("pos_test_password"),
+    testcontainers.WithWaitStrategy(
+        wait.ForLog("database system is ready to accept connections").
+            WithOccurrence(2).
+            WithStartupTimeout(60*time.Second),
+    ),
+)
+```
+
+- `RunContainer` pulls the image (first run only; cached after) and starts a container.
+- `WithWaitStrategy` blocks until the log line appears twice — this is the PostgreSQL readiness signal. The test will not proceed until the database is truly ready to accept connections, preventing flaky "connection refused" errors.
+- `pgContainer.ConnectionString(ctx, "sslmode=disable")` returns a dynamic DSN like `postgres://pos_test_user:pos_test_password@localhost:49821/pos_test_db?sslmode=disable`. The port is random (Docker assigns it), so there are no port conflicts.
+
+**MongoDB container** (`tests/testutil/mongo.go`):
+
+```go
+container, err := mongodb.Run(ctx, "mongo:7")
+uri, err := container.ConnectionString(ctx)
+// uri → "mongodb://localhost:49822"
+```
+
+MongoDB requires no database/username/password configuration — it starts in open mode for tests. The URI is similarly dynamic.
+
+Both containers are terminated in `env.Cleanup()`, which is called after `m.Run()` returns.
+
+### 3. golang-migrate — schema management
+
+[golang-migrate](https://github.com/golang-migrate/migrate) applies SQL migration files from `migrations/` in sequence. It uses a `schema_migrations` table to track which migrations have already run.
+
+**How `RunMigrations()` works** (`tests/testutil/db.go`):
+
+```go
+// 1. Drop and recreate the public schema for a clean slate
+_, err := t.DB.Exec("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+
+// 2. Find the migrations/ directory by walking up from the working directory
+migrationsDir, err := findMigrationsDir()
+// walks up until go.mod is found, returns <root>/migrations
+
+// 3. Create a migrator targeting the test database
+m, err := migrate.New("file://"+migrationsDir, t.DSN)
+
+// 4. Apply all UP migrations in sequence
+if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+    return fmt.Errorf("run migrations: %w", err)
+}
+```
+
+`findMigrationsDir()` solves the problem that `go test` sets the working directory to the package being tested (e.g. `tests/integration/`), not the project root. It walks up directories until it finds `go.mod`, then appends `migrations/`. This means migration files are always found regardless of which package runs the tests.
+
+**Migration files** (`migrations/`) follow the naming convention:
+```
+000001_create_companies.up.sql
+000001_create_companies.down.sql
+000002_create_branches.up.sql
+...
+```
+
+`m.Up()` applies all unapplied files in numeric order. Each migration runs in a transaction — if any file fails, the migration halts and reports which file failed.
+
+**MongoDB does not use file-based migrations.** Instead, `mongorepo.NewReceiptRepository()` calls `ensureReceiptIndexes()` at startup:
+
+```go
+func ensureIndexes(col *mongo.Collection) error {
+    _, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
+        {
+            Keys:    bson.D{{Key: "order_id", Value: 1}, {Key: "company_id", Value: 1}},
+            Options: options.Index().SetUnique(true),
+        },
+        ...
+    })
+    return err
+}
+```
+
+`CreateMany` is idempotent — calling it on an already-indexed collection is a no-op. This runs on every app startup (both in production and in tests), so index definitions are always in sync with the code.
+
+### 4. App boot — `app.New(cfg)`
+
+The test passes a `*config.Config` built entirely from testcontainer outputs — no environment variables needed:
+
+```go
+cfg := &config.Config{
+    Postgres: config.PostgresConfig{
+        DSNOverride: tdb.DSN,  // e.g. "postgres://...@localhost:49821/..."
+    },
+    Mongo: config.MongoConfig{
+        URI:      tmongo.URI,   // e.g. "mongodb://localhost:49822"
+        Database: "nexpos_test",
+    },
+    JWT: config.JWTConfig{
+        Secret: "test-secret-key-for-integration-tests",
+        ...
+    },
+}
+a, err := app.New(cfg)
+```
+
+`app.New` initializes the full stack in the same way production does: Postgres connection pool, MongoDB client, repository layer, service layer, handler layer, Echo routes, and middleware. The test app is **identical** to production — not a stripped-down version.
+
+### 5. HTTP test server — `httptest.Server`
+
+```go
+server := NewTestServer(env.App.Echo())
+// internally: httptest.NewServer(handler) → real TCP listener on a random port
+```
+
+`httptest.NewServer` starts a real TCP listener on a random local port. Tests make real `http.Client` requests to this server — they go through the full Echo middleware stack (auth middleware, request logger, CORS, recover). This is different from using `httptest.NewRecorder`, which bypasses the HTTP layer and calls handlers directly.
+
+### 6. Per-test isolation — `cleanupDatabase(t)`
+
+Tests share the same containers throughout the package run. To prevent test pollution, each test calls `cleanupDatabase(t)` at the start:
+
+```go
+func cleanupDatabase(t *testing.T) {
+    t.Helper()
+    if err := testEnv.TestDB.TruncateAllTables(); err != nil {
+        t.Fatalf("Failed to cleanup database: %v", err)
+    }
+}
+```
+
+MongoDB documents (receipts) are not truncated between tests because they are keyed by `(order_id, company_id)` and PostgreSQL sequences reset on `RESTART IDENTITY`, so IDs never collide across tests.
+
+`TruncateAllTables()` truncates all application tables with `RESTART IDENTITY CASCADE` (resets auto-increment sequences too) and re-seeds system data (roles, permissions, role_permissions). This brings the database back to a known state in milliseconds — much faster than restarting containers or re-running migrations.
+
+### 7. End-to-end request flow in a test
+
+When a test calls `doPost(t, "/api/v1/orders", body, auth.Token)`:
+
+```
+doPost
+  └── http.NewRequest(POST, "http://127.0.0.1:<port>/api/v1/orders", body)
+        └── httptest.Server (TCP listener)
+              └── Echo router
+                    ├── middleware.RequestLogger
+                    ├── middleware.Recover
+                    ├── middleware.CORS
+                    ├── middleware.RequestID
+                    └── authmiddleware.Auth   ← validates JWT, sets company_id/user_id/branch_id in context
+                          └── OrderHandler.Create
+                                └── OrderService.Create
+                                      └── OrderRepository.Create  ← real SQL to testcontainer PostgreSQL
+```
+
+The response comes back as a real HTTP response — status code, headers, JSON body — exactly as a frontend would receive it.
+
+### Full lifecycle summary
+
+```
+go test ./tests/integration/...
+
+1. TestMain starts
+   ├── docker pull postgres:18-alpine  (first run only)
+   ├── docker run postgres:18-alpine   → port 49821
+   ├── wait for "database system is ready" × 2
+   ├── DROP SCHEMA public CASCADE; CREATE SCHEMA public
+   ├── golang-migrate: apply 000001..000030 migrations to port 49821
+   ├── docker pull mongo:7             (first run only)
+   ├── docker run mongo:7              → port 49822
+   ├── mongo.Connect to port 49822
+   ├── mongorepo.NewReceiptRepository() → creates MongoDB indexes (idempotent)
+   ├── app.New(cfg)                    → full app boot (repos, services, handlers, routes)
+   └── httptest.NewServer(echo)        → TCP listener on port 49823
+
+2. m.Run() — for each Test* function:
+   ├── cleanupDatabase(t)              → TRUNCATE + re-seed in ~10ms
+   ├── registerTestUser(t)             → POST /api/v1/auth/register → JWT token
+   ├── ... test-specific API calls ... → real HTTP → Echo → service → PostgreSQL/MongoDB
+   └── assertions on HTTP responses and/or direct DB queries
+
+3. TestMain cleanup
+   ├── httptest.Server.Close()
+   ├── app.Close()                     → disconnect Postgres pool, disconnect MongoDB
+   ├── postgres container.Terminate()
+   └── mongodb container.Terminate()
+```
+
 ## Test Utilities
 
 ### `testutil/db.go`
 - `NewTestDB(ctx)` — starts a `postgres:18-alpine` container via testcontainers, connects, and returns a `TestDB` with DSN
 - `RunMigrations()` — drops and recreates the `public` schema, then applies all migrations using `golang-migrate`. Uses `findMigrationsDir()` to locate migrations by walking up to `go.mod`
-- `TruncateAllTables()` — truncates all tables (including `stock_movements`, `stocks`) in FK-safe order, then re-seeds system data (roles, permissions, role_permissions)
+- `TruncateAllTables()` — truncates all tables (including `stock_movements`, `stocks`) in FK-safe order with `RESTART IDENTITY CASCADE`, then re-seeds system data (roles, permissions, role_permissions)
 - `TruncateTables(tables...)` — truncates specific tables
 - `BeginTx(ctx)` — starts a transaction for test isolation
 - `UniqueCounter()` — exported atomic counter for generating unique test data (e.g. emails, SKUs)
+
+### `testutil/mongo.go`
+- `NewTestMongo(ctx)` — starts a `mongo:7` container via testcontainers, connects, and returns a `TestMongo` with URI
+- `DropCollections(dbName)` — drops all collections in the given database (used for MongoDB cleanup between tests)
+- `Close()` — disconnects the client and terminates the container
 
 ### `testutil/fixtures.go`
 - `CreateBaseTestData(ctx)` — creates a complete set: company, branch, role, user, customer, category, product, variant (used for DB-level fixture creation; prefer API-based setup for integration tests)
@@ -306,9 +526,9 @@ func TestOrder_ValidationErrors(t *testing.T)
 ### `testutil/http.go`
 - `TestServer` — wraps `*httptest.Server` (real HTTP server with TCP listener) for full-stack HTTP testing
 - `Close()` — shuts down the test server
-- `GET/POST/PUT/DELETE(path, body/token)` — convenience methods
-- `Response.ParseResponse()` — parses standard API response
-- `Response.ParseData(v)` — parses response data into a struct
+- `GET/POST/PUT/DELETE(path, body/token)` — low-level methods returning `(*Response, error)`; integration tests wrap these via `doPost/doGet/doPut/doDelete` in `helpers_test.go` which assert no transport error and return `*Response` directly
+- `Response.ParseResponse()` — parses the standard API envelope into `APIResponse`
+- `Response.ParseData(v)` — parses `APIResponse.Data` into a typed struct
 
 ## Common Pitfalls
 
