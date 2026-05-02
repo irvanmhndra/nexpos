@@ -27,7 +27,7 @@ func NewShiftHandler(shiftSvc service.ShiftServiceInterface, v *validator.Custom
 func (h *ShiftHandler) Open(c *echo.Context) error {
 	var req dto.OpenShiftRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -55,7 +55,7 @@ func (h *ShiftHandler) Close(c *echo.Context) error {
 
 	var req dto.CloseShiftRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {

@@ -27,7 +27,7 @@ func NewExpenseCategoryHandler(expenseSvc service.ExpenseServiceInterface, v *va
 func (h *ExpenseCategoryHandler) Create(c *echo.Context) error {
 	var req dto.CreateExpenseCategoryRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -80,7 +80,7 @@ func (h *ExpenseCategoryHandler) Update(c *echo.Context) error {
 
 	var req dto.UpdateExpenseCategoryRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -131,7 +131,7 @@ func NewExpenseHandler(expenseSvc service.ExpenseServiceInterface, v *validator.
 func (h *ExpenseHandler) Create(c *echo.Context) error {
 	var req dto.CreateExpenseRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -214,7 +214,7 @@ func (h *ExpenseHandler) Update(c *echo.Context) error {
 
 	var req dto.UpdateExpenseRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {

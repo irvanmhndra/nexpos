@@ -27,7 +27,7 @@ func NewUserHandler(userSvc service.UserServiceInterface, validator *validator.C
 func (h *UserHandler) Create(c *echo.Context) error {
 	var req dto.CreateUserRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -87,7 +87,7 @@ func (h *UserHandler) Update(c *echo.Context) error {
 
 	var req dto.UpdateUserRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -113,7 +113,7 @@ func (h *UserHandler) UpdateStatus(c *echo.Context) error {
 
 	var req dto.UpdateUserStatusRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {

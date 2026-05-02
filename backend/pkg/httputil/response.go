@@ -1,6 +1,11 @@
 package httputil
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
+	"strings"
+
 	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
 	"github.com/labstack/echo/v5"
 )
@@ -77,4 +82,40 @@ func ValidationError(c *echo.Context, errors []FieldError) error {
 		ErrorCode: "VALIDATION_ERROR",
 		Errors:    errors,
 	})
+}
+
+// BindError converts a bind/unmarshal error into a user-friendly AppError.
+func BindError(err error) *apperror.AppError {
+	var typeErr *json.UnmarshalTypeError
+	if errors.As(err, &typeErr) {
+		field := typeErr.Field
+		expected := typeErr.Type.String()
+		return apperror.ValidationError("Validation failed", []FieldError{
+			{Field: field, Message: "must be " + friendlyType(expected)},
+		})
+	}
+
+	var syntaxErr *json.SyntaxError
+	if errors.As(err, &syntaxErr) {
+		return apperror.BadRequest("malformed JSON body")
+	}
+
+	if errors.Is(err, io.EOF) {
+		return apperror.BadRequest("request body is empty")
+	}
+
+	return apperror.BadRequest("invalid request body")
+}
+
+func friendlyType(goType string) string {
+	switch {
+	case strings.HasPrefix(goType, "int"), strings.HasPrefix(goType, "float"):
+		return "a number"
+	case goType == "string":
+		return "a string"
+	case goType == "bool":
+		return "true or false"
+	default:
+		return goType
+	}
 }

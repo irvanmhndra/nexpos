@@ -27,7 +27,7 @@ func NewSupplierHandler(purchaseOrderSvc service.PurchaseOrderServiceInterface, 
 func (h *SupplierHandler) Create(c *echo.Context) error {
 	var req dto.CreateSupplierRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -102,7 +102,7 @@ func (h *SupplierHandler) Update(c *echo.Context) error {
 
 	var req dto.UpdateSupplierRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {

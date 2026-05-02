@@ -5,7 +5,6 @@ import (
 
 	"github.com/irvanmhndra/nexpos-api/internal/dto"
 	"github.com/irvanmhndra/nexpos-api/internal/service"
-	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
 	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
 	"github.com/irvanmhndra/nexpos-api/pkg/validator"
 	"github.com/labstack/echo/v5"
@@ -35,7 +34,7 @@ func (h *CompanySettingsHandler) Get(c *echo.Context) error {
 func (h *CompanySettingsHandler) Update(c *echo.Context) error {
 	var req dto.UpdateCompanySettingsRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {

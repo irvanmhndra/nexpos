@@ -33,7 +33,7 @@ func NewOrderHandler(orderSvc service.OrderServiceInterface, validator *validato
 func (h *OrderHandler) Preview(c *echo.Context) error {
 	var req dto.PreviewOrderRequest
 	if err := (*c).Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -55,7 +55,7 @@ func (h *OrderHandler) Preview(c *echo.Context) error {
 func (h *OrderHandler) Create(c *echo.Context) error {
 	var req dto.CreateOrderRequest
 	if err := (*c).Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -127,7 +127,7 @@ func (h *OrderHandler) Update(c *echo.Context) error {
 
 	var req dto.UpdateOrderRequest
 	if err := (*c).Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -170,7 +170,7 @@ func (h *OrderHandler) AddPayment(c *echo.Context) error {
 
 	var req dto.AddPaymentRequest
 	if err := (*c).Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -196,7 +196,7 @@ func (h *OrderHandler) Complete(c *echo.Context) error {
 
 	var req dto.CompleteOrderRequest
 	if err := (*c).Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	ctx := (*c).Request().Context()
@@ -225,7 +225,7 @@ func (h *OrderHandler) Cancel(c *echo.Context) error {
 
 	var req dto.CancelOrderRequest
 	if err := (*c).Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -251,7 +251,7 @@ func (h *OrderHandler) Void(c *echo.Context) error {
 
 	var req dto.VoidOrderRequest
 	if err := (*c).Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -277,7 +277,7 @@ func (h *OrderHandler) RefundPayment(c *echo.Context) error {
 
 	var req dto.RefundPaymentRequest
 	if err := (*c).Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {

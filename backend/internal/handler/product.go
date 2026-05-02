@@ -27,7 +27,7 @@ func NewProductHandler(productSvc service.ProductServiceInterface, validator *va
 func (h *ProductHandler) Create(c *echo.Context) error {
 	var req dto.CreateProductRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -117,7 +117,7 @@ func (h *ProductHandler) Update(c *echo.Context) error {
 
 	var req dto.UpdateProductRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {

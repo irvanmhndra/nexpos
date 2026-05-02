@@ -27,7 +27,7 @@ func NewProductCategoryHandler(categorySvc service.ProductCategoryServiceInterfa
 func (h *ProductCategoryHandler) Create(c *echo.Context) error {
 	var req dto.CreateProductCategoryRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -124,7 +124,7 @@ func (h *ProductCategoryHandler) Update(c *echo.Context) error {
 
 	var req dto.UpdateProductCategoryRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {

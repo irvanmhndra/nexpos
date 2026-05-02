@@ -78,7 +78,7 @@ func (h *InventoryHandler) GetInventoryStats(c *echo.Context) error {
 func (h *InventoryHandler) AdjustStock(c *echo.Context) error {
 	var req dto.AdjustStockRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -115,7 +115,7 @@ func (h *InventoryHandler) UpdateMinStock(c *echo.Context) error {
 
 	var req dto.UpdateMinStockRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {

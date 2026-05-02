@@ -27,7 +27,7 @@ func NewBranchHandler(branchSvc service.BranchServiceInterface, validator *valid
 func (h *BranchHandler) Create(c *echo.Context) error {
 	var req dto.CreateBranchRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -112,7 +112,7 @@ func (h *BranchHandler) Update(c *echo.Context) error {
 
 	var req dto.UpdateBranchRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {

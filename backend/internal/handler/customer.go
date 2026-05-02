@@ -27,7 +27,7 @@ func NewCustomerHandler(customerSvc service.CustomerServiceInterface, validator 
 func (h *CustomerHandler) Create(c *echo.Context) error {
 	var req dto.CreateCustomerRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -112,7 +112,7 @@ func (h *CustomerHandler) Update(c *echo.Context) error {
 
 	var req dto.UpdateCustomerRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {

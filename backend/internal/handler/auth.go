@@ -6,7 +6,6 @@ import (
 
 	"github.com/irvanmhndra/nexpos-api/internal/dto"
 	"github.com/irvanmhndra/nexpos-api/internal/service"
-	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
 	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
 	"github.com/irvanmhndra/nexpos-api/pkg/validator"
 	"github.com/labstack/echo/v5"
@@ -27,7 +26,7 @@ func NewAuthHandler(authSvc service.AuthServiceInterface, validator *validator.C
 func (h *AuthHandler) Login(c *echo.Context) error {
 	var req dto.LoginRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -49,7 +48,7 @@ func (h *AuthHandler) Login(c *echo.Context) error {
 func (h *AuthHandler) Register(c *echo.Context) error {
 	var req dto.RegisterRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
@@ -71,7 +70,7 @@ func (h *AuthHandler) Register(c *echo.Context) error {
 func (h *AuthHandler) RefreshToken(c *echo.Context) error {
 	var req dto.RefreshTokenRequest
 	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, apperror.BadRequest("invalid request body"))
+		return httputil.Error(c, httputil.BindError(err))
 	}
 
 	if fieldErrors := h.validator.ValidateAndFormat(&req); fieldErrors != nil {
