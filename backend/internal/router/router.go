@@ -23,6 +23,7 @@ type Handlers struct {
 	Shift           *handler.ShiftHandler
 	ExpenseCategory *handler.ExpenseCategoryHandler
 	Expense         *handler.ExpenseHandler
+	StockOpname     *handler.StockOpnameHandler
 	Receipt         *handler.ReceiptHandler // nil if MongoDB not configured
 }
 
@@ -176,4 +177,14 @@ func Setup(e *echo.Echo, h *Handlers, authMW echo.MiddlewareFunc) {
 	expenses.GET("/:id", h.Expense.Get)
 	expenses.PUT("/:id", h.Expense.Update)
 	expenses.DELETE("/:id", h.Expense.Delete)
+
+	// Stock opname routes
+	opnames := protected.Group("/stock-opnames")
+	opnames.POST("", h.StockOpname.Create)
+	opnames.GET("", h.StockOpname.List)
+	opnames.GET("/:id", h.StockOpname.Get)
+	opnames.PATCH("/:id/items/:itemId", h.StockOpname.UpdateItem)
+	opnames.PATCH("/:id/items", h.StockOpname.BulkUpdateItems)
+	opnames.POST("/:id/complete", h.StockOpname.Complete)
+	opnames.POST("/:id/cancel", h.StockOpname.Cancel)
 }

@@ -145,6 +145,7 @@ func New(cfg *config.Config) (*App, error) {
 		Shift:           handlers.Shift,
 		ExpenseCategory: handlers.ExpenseCategory,
 		Expense:         handlers.Expense,
+		StockOpname:     handlers.StockOpname,
 		Receipt:         handlers.Receipt,
 	}, authmiddleware.Auth(repos.UserSession))
 

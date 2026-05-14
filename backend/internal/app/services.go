@@ -20,6 +20,7 @@ type Services struct {
 	PurchaseOrder   *service.PurchaseOrderService
 	Shift           *service.ShiftService
 	Expense         *service.ExpenseService
+	StockOpname     *service.StockOpnameService
 	Receipt         *service.ReceiptService // nil if MongoDB not configured
 }
 
@@ -64,5 +65,11 @@ func initServices(repos *Repositories, cfg *config.Config) *Services {
 		),
 		Shift:   service.NewShiftService(repos.Shift, repos.Payment),
 		Expense: service.NewExpenseService(repos.Expense, repos.ExpenseCategory),
+		StockOpname: service.NewStockOpnameService(
+			repos.StockOpname,
+			repos.Stock,
+			repos.StockMovement,
+			repos.Branch,
+		),
 	}
 }
