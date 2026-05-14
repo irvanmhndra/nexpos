@@ -325,6 +325,37 @@ type ReceiptRepository interface {
 	GetByOrderID(ctx context.Context, companyID, orderID int64) (*model.Receipt, error)
 }
 
+type DailySettlementRepository interface {
+	Create(ctx context.Context, s *model.DailySettlement) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.DailySettlement, error)
+	GetByBranchAndDate(ctx context.Context, companyID, branchID int64, date string) (*model.DailySettlement, error)
+	List(ctx context.Context, companyID int64, params *DailySettlementListParams) ([]*model.DailySettlement, int, error)
+	Update(ctx context.Context, s *model.DailySettlement) error
+	CreateItem(ctx context.Context, item *model.DailySettlementItem) error
+	GetItems(ctx context.Context, settlementID int64) ([]*model.DailySettlementItem, error)
+	GetItem(ctx context.Context, settlementID, itemID int64) (*model.DailySettlementItem, error)
+	UpdateItem(ctx context.Context, item *model.DailySettlementItem) error
+	GetPaymentBreakdown(ctx context.Context, companyID, branchID int64, date string) ([]*PaymentMethodTotals, error)
+	GetExpensesTotal(ctx context.Context, companyID, branchID int64, date string) (float64, error)
+}
+
+// DailySettlementListParams for filtering settlements
+type DailySettlementListParams struct {
+	Status   string
+	BranchID *int64
+	DateFrom string
+	DateTo   string
+	Limit    int
+	Offset   int
+}
+
+// PaymentMethodTotals is the aggregation result of payments by method for a given branch+date
+type PaymentMethodTotals struct {
+	Method     string  `db:"method"`
+	GrossSales float64 `db:"gross_sales"`
+	Refunds    float64 `db:"refunds"`
+}
+
 type StockOpnameRepository interface {
 	Create(ctx context.Context, opname *model.StockOpname) error
 	GetByID(ctx context.Context, companyID, id int64) (*model.StockOpname, error)
