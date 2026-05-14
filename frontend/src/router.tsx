@@ -211,6 +211,27 @@ export const router = createBrowserRouter([
           return { Component: ExpenseCategoriesPage };
         },
       },
+      {
+        path: '/daily-settlements',
+        lazy: async () => {
+          const { DailySettlementsPage } = await import('./pages/daily-settlements/DailySettlementsPage');
+          return { Component: DailySettlementsPage };
+        },
+      },
+      {
+        path: '/daily-settlements/new',
+        lazy: async () => {
+          const { DailySettlementNewPage } = await import('./pages/daily-settlements/DailySettlementNewPage');
+          return { Component: DailySettlementNewPage };
+        },
+      },
+      {
+        path: '/daily-settlements/:id',
+        lazy: async () => {
+          const { DailySettlementDetailPage } = await import('./pages/daily-settlements/DailySettlementDetailPage');
+          return { Component: DailySettlementDetailPage };
+        },
+      },
     ],
   },
 ]);

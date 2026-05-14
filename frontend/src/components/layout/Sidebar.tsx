@@ -50,6 +50,7 @@ const navGroups: NavGroup[] = [
     title: 'Keuangan',
     items: [
       { label: 'Shift', icon: 'schedule', path: '/shifts' },
+      { label: 'Rekap Harian', icon: 'account_balance', path: '/daily-settlements' },
       { label: 'Pengeluaran', icon: 'receipt', path: '/expenses' },
       { label: 'Kategori Pengeluaran', icon: 'label', path: '/expense-categories' },
     ],
