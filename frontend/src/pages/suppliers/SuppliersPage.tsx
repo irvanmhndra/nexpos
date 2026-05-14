@@ -9,7 +9,7 @@ import {
   useDeleteSupplier,
 } from '@/hooks/useSuppliers';
 import { formatDate, getApiErrorMessage } from '@/utils';
-import type { Supplier, CreateSupplierRequest, UpdateSupplierRequest } from '@/types/supplier';
+import type { Supplier, CreateSupplierRequest } from '@/types/supplier';
 
 interface SupplierFormData {
   name: string;

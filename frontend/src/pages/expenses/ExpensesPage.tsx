@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Card, Badge, Button, Input, Dropdown, Icon } from '@/components/ui';
+import { Card, Button, Input, Dropdown, Icon } from '@/components/ui';
 import { DataTable } from '@/components/common';
 import {
   useExpenses,
