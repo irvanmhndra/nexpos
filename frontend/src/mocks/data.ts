@@ -420,6 +420,125 @@ export const mockStockMovements: MockStockMovement[] = Array.from({ length: 100 
 }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
 
+// ============== Stock Opname ==============
+
+export interface MockStockOpnameItem {
+  id: number;
+  stock_opname_id: number;
+  product_variant_id: number;
+  sku: string;
+  product_name: string;
+  variant_name: string;
+  system_stock: number;
+  counted_stock: number | null;
+  variance_qty: number;
+  unit_cost: number;
+  variance_value: number;
+  notes: string | null;
+  counted_at: string | null;
+}
+
+export interface MockStockOpname {
+  id: number;
+  branch_id: number;
+  opname_number: string;
+  status: 'in_progress' | 'completed' | 'cancelled';
+  notes: string | null;
+  total_items: number;
+  counted_items: number;
+  total_variance_qty: number;
+  total_variance_value: number;
+  started_by: number | null;
+  completed_by: number | null;
+  started_at: string;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  items?: MockStockOpnameItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export const mockStockOpnames: MockStockOpname[] = [
+  {
+    id: 1,
+    branch_id: 1,
+    opname_number: 'OPN-20260512-0001',
+    status: 'completed',
+    notes: 'Stock opname bulanan',
+    total_items: 24,
+    counted_items: 24,
+    total_variance_qty: -8,
+    total_variance_value: -45000,
+    started_by: 1,
+    completed_by: 1,
+    started_at: '2026-05-12T08:00:00Z',
+    completed_at: '2026-05-12T15:30:00Z',
+    cancelled_at: null,
+    created_at: '2026-05-12T08:00:00Z',
+    updated_at: '2026-05-12T15:30:00Z',
+  },
+  {
+    id: 2,
+    branch_id: 1,
+    opname_number: 'OPN-20260514-0001',
+    status: 'in_progress',
+    notes: null,
+    total_items: 32,
+    counted_items: 12,
+    total_variance_qty: 0,
+    total_variance_value: 0,
+    started_by: 1,
+    completed_by: null,
+    started_at: '2026-05-14T09:15:00Z',
+    completed_at: null,
+    cancelled_at: null,
+    created_at: '2026-05-14T09:15:00Z',
+    updated_at: '2026-05-14T09:15:00Z',
+  },
+];
+
+// Pre-populate items for opname id=2 so the count session has something to show
+const opnameItemsByOpnameId: Record<number, MockStockOpnameItem[]> = { 1: [], 2: [] };
+let nextOpnameItemId = 1;
+
+(function seedOpnameItems() {
+  const variantsSeen = new Set<string>();
+  const flat: { product: Product; variant: ProductVariant }[] = [];
+  for (const p of mockProducts) {
+    for (const v of p.variants) {
+      if (variantsSeen.has(v.id)) continue;
+      variantsSeen.add(v.id);
+      flat.push({ product: p, variant: v });
+    }
+  }
+  const seed = flat.slice(0, 32);
+  seed.forEach((entry, idx) => {
+    const counted = idx < 12 ? entry.variant.stock + faker.number.int({ min: -3, max: 2 }) : null;
+    const variance = counted != null ? counted - entry.variant.stock : 0;
+    const unitCost = entry.variant.cost;
+    opnameItemsByOpnameId[2].push({
+      id: nextOpnameItemId++,
+      stock_opname_id: 2,
+      product_variant_id: parseInt(entry.variant.id),
+      sku: entry.variant.sku,
+      product_name: entry.product.name,
+      variant_name: entry.variant.name,
+      system_stock: entry.variant.stock,
+      counted_stock: counted,
+      variance_qty: variance,
+      unit_cost: unitCost,
+      variance_value: variance * unitCost,
+      notes: null,
+      counted_at: counted != null ? faker.date.recent({ days: 1 }).toISOString() : null,
+    });
+  });
+})();
+
+export const opnameItems = opnameItemsByOpnameId;
+export function nextOpnameItemIdValue() {
+  return nextOpnameItemId++;
+}
+
 // Company Settings mock
 export const mockCompanySettings = {
   id: 1,

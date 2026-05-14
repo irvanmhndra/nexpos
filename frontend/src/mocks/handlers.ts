@@ -25,7 +25,11 @@ import {
   mockStockMovements,
   variantMinStock,
   mockCompanySettings,
+  mockStockOpnames,
+  opnameItems,
+  nextOpnameItemIdValue,
 } from './data';
+import type { MockStockOpname, MockStockOpnameItem } from './data';
 
 // Return sale price if active, otherwise normal price
 function getEffectivePrice(v: { price: number; salePrice?: number; saleStart?: string; saleEnd?: string }): number {
@@ -862,6 +866,228 @@ export const handlers = [
     Object.assign(mockCompanySettings, body);
     mockCompanySettings.updated_at = new Date().toISOString();
     return HttpResponse.json({ success: true, message: 'Company settings updated successfully', data: mockCompanySettings });
+  }),
+
+  // ============== Stock Opname ==============
+  http.get(`${API_BASE_URL}/stock-opnames`, ({ request }) => {
+    const url = new URL(request.url);
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const perPage = parseInt(url.searchParams.get('per_page') || '10');
+    const status = url.searchParams.get('status');
+    const branchID = url.searchParams.get('branch_id');
+
+    let filtered = [...mockStockOpnames].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+    if (status) filtered = filtered.filter(o => o.status === status);
+    if (branchID) filtered = filtered.filter(o => o.branch_id === parseInt(branchID));
+
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / perPage) || 1;
+    const start = (page - 1) * perPage;
+    const paged = filtered.slice(start, start + perPage);
+
+    return HttpResponse.json({
+      success: true,
+      message: 'Stock opnames retrieved',
+      data: paged,
+      meta: {
+        pagination: {
+          total_records: total,
+          total_pages: totalPages,
+          current_page: page,
+          per_page: perPage,
+          next_page: page < totalPages ? page + 1 : null,
+          prev_page: page > 1 ? page - 1 : null,
+        },
+      },
+    });
+  }),
+
+  http.get(`${API_BASE_URL}/stock-opnames/:id`, ({ params }) => {
+    const id = parseInt(params.id as string);
+    const opname = mockStockOpnames.find(o => o.id === id);
+    if (!opname) {
+      return HttpResponse.json({ success: false, message: 'Stock opname not found' }, { status: 404 });
+    }
+    const items = opnameItems[id] || [];
+    return HttpResponse.json({
+      success: true,
+      message: 'Stock opname retrieved successfully',
+      data: { ...opname, items, total_items: items.length, counted_items: items.filter(i => i.counted_stock !== null).length },
+    });
+  }),
+
+  http.post(`${API_BASE_URL}/stock-opnames`, async ({ request }) => {
+    const body = (await request.json()) as { branch_id: number; notes?: string; category_id?: number };
+
+    // Build snapshot from current products
+    const newId = (mockStockOpnames[mockStockOpnames.length - 1]?.id || 0) + 1;
+    const now = new Date().toISOString();
+    const variantsSeen = new Set<string>();
+    const items: MockStockOpnameItem[] = [];
+    for (const p of mockProducts) {
+      for (const v of p.variants) {
+        if (variantsSeen.has(v.id)) continue;
+        variantsSeen.add(v.id);
+        items.push({
+          id: nextOpnameItemIdValue(),
+          stock_opname_id: newId,
+          product_variant_id: parseInt(v.id),
+          sku: v.sku,
+          product_name: p.name,
+          variant_name: v.name,
+          system_stock: v.stock,
+          counted_stock: null,
+          variance_qty: 0,
+          unit_cost: v.cost,
+          variance_value: 0,
+          notes: null,
+          counted_at: null,
+        });
+      }
+    }
+    opnameItems[newId] = items;
+
+    const ymd = now.slice(0, 10).replace(/-/g, '');
+    const opname: MockStockOpname = {
+      id: newId,
+      branch_id: body.branch_id,
+      opname_number: `OPN-${ymd}-${String(newId).padStart(4, '0')}`,
+      status: 'in_progress',
+      notes: body.notes ?? null,
+      total_items: items.length,
+      counted_items: 0,
+      total_variance_qty: 0,
+      total_variance_value: 0,
+      started_by: 1,
+      completed_by: null,
+      started_at: now,
+      completed_at: null,
+      cancelled_at: null,
+      created_at: now,
+      updated_at: now,
+    };
+    mockStockOpnames.push(opname);
+    return HttpResponse.json(
+      { success: true, message: 'Stock opname created successfully', data: { ...opname, items } },
+      { status: 201 },
+    );
+  }),
+
+  http.patch(`${API_BASE_URL}/stock-opnames/:id/items/:itemId`, async ({ params, request }) => {
+    const opnameId = parseInt(params.id as string);
+    const itemId = parseInt(params.itemId as string);
+    const body = (await request.json()) as { counted_stock: number; notes?: string };
+
+    const opname = mockStockOpnames.find(o => o.id === opnameId);
+    if (!opname || opname.status !== 'in_progress') {
+      return HttpResponse.json({ success: false, message: 'Opname not editable' }, { status: 400 });
+    }
+    const item = (opnameItems[opnameId] || []).find(i => i.id === itemId);
+    if (!item) {
+      return HttpResponse.json({ success: false, message: 'Item not found' }, { status: 404 });
+    }
+    item.counted_stock = body.counted_stock;
+    item.variance_qty = body.counted_stock - item.system_stock;
+    item.variance_value = item.variance_qty * item.unit_cost;
+    item.notes = body.notes ?? null;
+    item.counted_at = new Date().toISOString();
+    return HttpResponse.json({ success: true, message: 'Item updated', data: item });
+  }),
+
+  http.patch(`${API_BASE_URL}/stock-opnames/:id/items`, async ({ params, request }) => {
+    const opnameId = parseInt(params.id as string);
+    const body = (await request.json()) as { items: { item_id: number; counted_stock: number; notes?: string }[] };
+    const opname = mockStockOpnames.find(o => o.id === opnameId);
+    if (!opname || opname.status !== 'in_progress') {
+      return HttpResponse.json({ success: false, message: 'Opname not editable' }, { status: 400 });
+    }
+    const items = opnameItems[opnameId] || [];
+    const now = new Date().toISOString();
+    for (const line of body.items) {
+      const it = items.find(i => i.id === line.item_id);
+      if (!it) continue;
+      it.counted_stock = line.counted_stock;
+      it.variance_qty = line.counted_stock - it.system_stock;
+      it.variance_value = it.variance_qty * it.unit_cost;
+      it.notes = line.notes ?? null;
+      it.counted_at = now;
+    }
+    return HttpResponse.json({
+      success: true,
+      message: 'Items updated',
+      data: { ...opname, items, counted_items: items.filter(i => i.counted_stock !== null).length },
+    });
+  }),
+
+  http.post(`${API_BASE_URL}/stock-opnames/:id/complete`, async ({ params, request }) => {
+    const id = parseInt(params.id as string);
+    const body = (await request.json().catch(() => ({}))) as { notes?: string };
+    const opname = mockStockOpnames.find(o => o.id === id);
+    if (!opname || opname.status !== 'in_progress') {
+      return HttpResponse.json({ success: false, message: 'Opname not in progress' }, { status: 400 });
+    }
+    const items = opnameItems[id] || [];
+
+    // Apply adjustments to product stock for items with a count
+    let totalQty = 0;
+    let totalValue = 0;
+    for (const item of items) {
+      if (item.counted_stock === null) continue;
+      const product = mockProducts.find(p => p.variants.some(v => parseInt(v.id) === item.product_variant_id));
+      const variant = product?.variants.find(v => parseInt(v.id) === item.product_variant_id);
+      if (variant) {
+        const before = variant.stock;
+        variant.stock = item.counted_stock;
+        if (variant.stock !== before) {
+          mockStockMovements.unshift({
+            id: crypto.randomUUID(),
+            product_id: product!.id,
+            variant_id: variant.id,
+            product_name: product!.name,
+            variant_name: variant.name,
+            sku: variant.sku,
+            type: 'ADJUST',
+            quantity: Math.abs(variant.stock - before),
+            stock_before: before,
+            stock_after: variant.stock,
+            reference: opname.opname_number,
+            notes: 'Stock opname',
+            created_at: new Date().toISOString(),
+            created_by: 'Admin User',
+          });
+        }
+      }
+      totalQty += item.variance_qty;
+      totalValue += item.variance_value;
+    }
+    opname.status = 'completed';
+    opname.completed_at = new Date().toISOString();
+    opname.completed_by = 1;
+    opname.total_variance_qty = totalQty;
+    opname.total_variance_value = totalValue;
+    if (body?.notes) opname.notes = body.notes;
+    return HttpResponse.json({
+      success: true,
+      message: 'Stock opname completed',
+      data: { ...opname, items },
+    });
+  }),
+
+  http.post(`${API_BASE_URL}/stock-opnames/:id/cancel`, ({ params }) => {
+    const id = parseInt(params.id as string);
+    const opname = mockStockOpnames.find(o => o.id === id);
+    if (!opname || opname.status !== 'in_progress') {
+      return HttpResponse.json({ success: false, message: 'Opname not in progress' }, { status: 400 });
+    }
+    opname.status = 'cancelled';
+    opname.cancelled_at = new Date().toISOString();
+    return HttpResponse.json({
+      success: true,
+      message: 'Stock opname cancelled',
+      data: { ...opname, items: opnameItems[id] || [] },
+    });
   }),
 ];
 
