@@ -28,8 +28,18 @@ import {
   mockStockOpnames,
   opnameItems,
   nextOpnameItemIdValue,
+  mockDailySettlements,
+  dailySettlementItems,
+  nextSettlementItemIdValue,
+  SETTLEMENT_METHODS,
 } from './data';
-import type { MockStockOpname, MockStockOpnameItem } from './data';
+import type {
+  MockStockOpname,
+  MockStockOpnameItem,
+  MockDailySettlement,
+  MockDailySettlementItem,
+  SettlementPaymentMethod,
+} from './data';
 
 // Return sale price if active, otherwise normal price
 function getEffectivePrice(v: { price: number; salePrice?: number; saleStart?: string; saleEnd?: string }): number {
@@ -1089,7 +1099,271 @@ export const handlers = [
       data: { ...opname, items: opnameItems[id] || [] },
     });
   }),
+
+  // ============== Daily Settlement ==============
+  http.get(`${API_BASE_URL}/daily-settlements/report`, ({ request }) => {
+    const url = new URL(request.url);
+    const branchID = parseInt(url.searchParams.get('branch_id') || '0');
+    const date = url.searchParams.get('date') || '';
+
+    if (!branchID || !date) {
+      return HttpResponse.json({ success: false, message: 'branch_id and date required' }, { status: 400 });
+    }
+    return HttpResponse.json({
+      success: true,
+      message: 'Daily settlement report retrieved',
+      data: computeSettlementBreakdown(branchID, date),
+    });
+  }),
+
+  http.get(`${API_BASE_URL}/daily-settlements`, ({ request }) => {
+    const url = new URL(request.url);
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const perPage = parseInt(url.searchParams.get('per_page') || '10');
+    const status = url.searchParams.get('status');
+    const branchID = url.searchParams.get('branch_id');
+    const dateFrom = url.searchParams.get('date_from');
+    const dateTo = url.searchParams.get('date_to');
+
+    let filtered = [...mockDailySettlements].sort((a, b) =>
+      b.settlement_date.localeCompare(a.settlement_date),
+    );
+    if (status) filtered = filtered.filter(s => s.status === status);
+    if (branchID) filtered = filtered.filter(s => s.branch_id === parseInt(branchID));
+    if (dateFrom) filtered = filtered.filter(s => s.settlement_date >= dateFrom);
+    if (dateTo) filtered = filtered.filter(s => s.settlement_date <= dateTo);
+
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / perPage) || 1;
+    const start = (page - 1) * perPage;
+    const paged = filtered.slice(start, start + perPage).map(s => withDerivedTotals(s));
+
+    return HttpResponse.json({
+      success: true,
+      message: 'Daily settlements retrieved',
+      data: paged,
+      meta: {
+        pagination: {
+          total_records: total,
+          total_pages: totalPages,
+          current_page: page,
+          per_page: perPage,
+          next_page: page < totalPages ? page + 1 : null,
+          prev_page: page > 1 ? page - 1 : null,
+        },
+      },
+    });
+  }),
+
+  http.get(`${API_BASE_URL}/daily-settlements/:id`, ({ params }) => {
+    const id = parseInt(params.id as string);
+    const settlement = mockDailySettlements.find(s => s.id === id);
+    if (!settlement) {
+      return HttpResponse.json({ success: false, message: 'Settlement not found' }, { status: 404 });
+    }
+    return HttpResponse.json({
+      success: true,
+      message: 'Daily settlement retrieved',
+      data: withDerivedTotals(settlement),
+    });
+  }),
+
+  http.post(`${API_BASE_URL}/daily-settlements`, async ({ request }) => {
+    const body = (await request.json()) as { branch_id: number; settlement_date: string; notes?: string };
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(body.settlement_date)) {
+      return HttpResponse.json({ success: false, message: 'settlement_date must be YYYY-MM-DD' }, { status: 400 });
+    }
+    if (mockDailySettlements.some(s => s.branch_id === body.branch_id && s.settlement_date === body.settlement_date)) {
+      return HttpResponse.json(
+        { success: false, message: 'Settlement already exists for this branch and date' },
+        { status: 400 },
+      );
+    }
+
+    const breakdown = computeSettlementBreakdown(body.branch_id, body.settlement_date);
+    const newId = (mockDailySettlements[mockDailySettlements.length - 1]?.id || 0) + 1;
+    const now = new Date().toISOString();
+
+    const items: MockDailySettlementItem[] = breakdown.by_method.map(m => ({
+      id: nextSettlementItemIdValue(),
+      payment_method: m.payment_method,
+      expected_amount: m.expected_amount,
+      actual_amount: null,
+      variance_amount: -m.expected_amount,
+      notes: null,
+    }));
+    dailySettlementItems[newId] = items;
+
+    const settlement: MockDailySettlement = {
+      id: newId,
+      branch_id: body.branch_id,
+      settlement_date: body.settlement_date,
+      status: 'draft',
+      total_sales: breakdown.total_sales,
+      total_refunds: breakdown.total_refunds,
+      total_expenses: breakdown.total_expenses,
+      total_expected: breakdown.total_expected,
+      total_actual: 0,
+      total_variance: -breakdown.total_expected,
+      notes: body.notes ?? null,
+      recorded_by: 1,
+      finalized_by: null,
+      finalized_at: null,
+      items,
+      created_at: now,
+      updated_at: now,
+    };
+    mockDailySettlements.push(settlement);
+
+    return HttpResponse.json(
+      { success: true, message: 'Daily settlement created', data: withDerivedTotals(settlement) },
+      { status: 201 },
+    );
+  }),
+
+  http.patch(`${API_BASE_URL}/daily-settlements/:id/items/:itemId`, async ({ params, request }) => {
+    const id = parseInt(params.id as string);
+    const itemId = parseInt(params.itemId as string);
+    const body = (await request.json()) as { actual_amount: number; notes?: string };
+
+    const settlement = mockDailySettlements.find(s => s.id === id);
+    if (!settlement || settlement.status !== 'draft') {
+      return HttpResponse.json({ success: false, message: 'Settlement not editable' }, { status: 400 });
+    }
+    const item = (dailySettlementItems[id] || []).find(i => i.id === itemId);
+    if (!item) {
+      return HttpResponse.json({ success: false, message: 'Item not found' }, { status: 404 });
+    }
+    item.actual_amount = body.actual_amount;
+    item.variance_amount = body.actual_amount - item.expected_amount;
+    item.notes = body.notes ?? null;
+    return HttpResponse.json({ success: true, message: 'Item updated', data: item });
+  }),
+
+  http.patch(`${API_BASE_URL}/daily-settlements/:id/items`, async ({ params, request }) => {
+    const id = parseInt(params.id as string);
+    const body = (await request.json()) as { items: { item_id: number; actual_amount: number; notes?: string }[] };
+
+    const settlement = mockDailySettlements.find(s => s.id === id);
+    if (!settlement || settlement.status !== 'draft') {
+      return HttpResponse.json({ success: false, message: 'Settlement not editable' }, { status: 400 });
+    }
+    const items = dailySettlementItems[id] || [];
+    for (const line of body.items) {
+      const item = items.find(i => i.id === line.item_id);
+      if (!item) continue;
+      item.actual_amount = line.actual_amount;
+      item.variance_amount = line.actual_amount - item.expected_amount;
+      item.notes = line.notes ?? null;
+    }
+    return HttpResponse.json({
+      success: true,
+      message: 'Items updated',
+      data: withDerivedTotals(settlement),
+    });
+  }),
+
+  http.post(`${API_BASE_URL}/daily-settlements/:id/finalize`, async ({ params, request }) => {
+    const id = parseInt(params.id as string);
+    const body = (await request.json().catch(() => ({}))) as { notes?: string };
+    const settlement = mockDailySettlements.find(s => s.id === id);
+    if (!settlement || settlement.status !== 'draft') {
+      return HttpResponse.json({ success: false, message: 'Settlement not in draft' }, { status: 400 });
+    }
+    settlement.status = 'finalized';
+    settlement.finalized_at = new Date().toISOString();
+    settlement.finalized_by = 1;
+    if (body?.notes) settlement.notes = body.notes;
+    return HttpResponse.json({
+      success: true,
+      message: 'Daily settlement finalized',
+      data: withDerivedTotals(settlement),
+    });
+  }),
 ];
+
+// ============== Daily Settlement helpers ==============
+
+function withDerivedTotals(s: MockDailySettlement): MockDailySettlement {
+  const items = dailySettlementItems[s.id] || s.items || [];
+  const totals = items.reduce(
+    (acc, it) => {
+      acc.expected += it.expected_amount;
+      if (it.actual_amount != null) acc.actual += it.actual_amount;
+      acc.variance += it.variance_amount;
+      return acc;
+    },
+    { expected: 0, actual: 0, variance: 0 },
+  );
+  return {
+    ...s,
+    items,
+    total_expected: totals.expected,
+    total_actual: totals.actual,
+    total_variance: totals.variance,
+  };
+}
+
+function computeSettlementBreakdown(branchId: number, date: string) {
+  // Aggregate mock orders by payment method on the given date. Branch filtering
+  // is best-effort because mock orders don't carry a branch — we just take all.
+  void branchId;
+  const ordersForDate = mockOrders.filter(o => o.createdAt.startsWith(date) && o.status !== 'cancelled');
+
+  const byMethodMap = new Map<SettlementPaymentMethod, { gross: number; refunds: number }>();
+  for (const m of SETTLEMENT_METHODS) byMethodMap.set(m, { gross: 0, refunds: 0 });
+
+  for (const order of ordersForDate) {
+    const method = normalizeMethod(order.paymentMethod);
+    const bucket = byMethodMap.get(method)!;
+    bucket.gross += order.total;
+  }
+
+  // Fake some refunds and cash expenses for realism
+  const cashBucket = byMethodMap.get('cash')!;
+  cashBucket.refunds = Math.round(cashBucket.gross * 0.02);
+  const totalExpenses = Math.round(cashBucket.gross * 0.05);
+
+  let totalSales = 0;
+  let totalRefunds = 0;
+  let totalExpected = 0;
+  const byMethod = SETTLEMENT_METHODS.map(m => {
+    const bucket = byMethodMap.get(m)!;
+    const expensesOut = m === 'cash' ? totalExpenses : 0;
+    const expected = bucket.gross - bucket.refunds - expensesOut;
+    totalSales += bucket.gross;
+    totalRefunds += bucket.refunds;
+    totalExpected += expected;
+    return {
+      payment_method: m,
+      gross_sales: bucket.gross,
+      refunds: bucket.refunds,
+      expenses_out: expensesOut,
+      expected_amount: expected,
+    };
+  });
+
+  return {
+    branch_id: branchId,
+    settlement_date: date,
+    total_sales: totalSales,
+    total_refunds: totalRefunds,
+    total_expenses: totalExpenses,
+    total_expected: totalExpected,
+    by_method: byMethod,
+  };
+}
+
+function normalizeMethod(m: string): SettlementPaymentMethod {
+  const v = m?.toLowerCase().replace(/\s+/g, '_');
+  if ((SETTLEMENT_METHODS as string[]).includes(v)) return v as SettlementPaymentMethod;
+  if (v === 'card' || v === 'creditcard') return 'credit_card';
+  if (v === 'debit' || v === 'debitcard') return 'debit_card';
+  if (v === 'ewallet' || v === 'wallet') return 'e_wallet';
+  if (v === 'transfer') return 'bank_transfer';
+  return 'cash';
+}
 
 // Import types from data
 import type { Product, ProductVariant, Order, User, Branch, Promotion, MockStockMovement } from './data';

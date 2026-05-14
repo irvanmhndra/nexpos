@@ -539,6 +539,62 @@ export function nextOpnameItemIdValue() {
   return nextOpnameItemId++;
 }
 
+// ============== Daily Settlement ==============
+
+export type SettlementPaymentMethod =
+  | 'cash'
+  | 'debit_card'
+  | 'credit_card'
+  | 'e_wallet'
+  | 'bank_transfer'
+  | 'qris';
+
+export const SETTLEMENT_METHODS: SettlementPaymentMethod[] = [
+  'cash',
+  'debit_card',
+  'credit_card',
+  'e_wallet',
+  'bank_transfer',
+  'qris',
+];
+
+export interface MockDailySettlementItem {
+  id: number;
+  payment_method: SettlementPaymentMethod;
+  expected_amount: number;
+  actual_amount: number | null;
+  variance_amount: number;
+  notes: string | null;
+}
+
+export interface MockDailySettlement {
+  id: number;
+  branch_id: number;
+  settlement_date: string;
+  status: 'draft' | 'finalized';
+  total_sales: number;
+  total_refunds: number;
+  total_expenses: number;
+  total_expected: number;
+  total_actual: number;
+  total_variance: number;
+  notes: string | null;
+  recorded_by: number | null;
+  finalized_by: number | null;
+  finalized_at: string | null;
+  items?: MockDailySettlementItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export const mockDailySettlements: MockDailySettlement[] = [];
+export const dailySettlementItems: Record<number, MockDailySettlementItem[]> = {};
+let nextSettlementItemId = 1;
+
+export function nextSettlementItemIdValue() {
+  return nextSettlementItemId++;
+}
+
 // Company Settings mock
 export const mockCompanySettings = {
   id: 1,
