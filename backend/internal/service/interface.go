@@ -154,6 +154,17 @@ type ReceiptServiceInterface interface {
 	GetByOrderID(ctx context.Context, companyID, orderID int64) (*model.Receipt, error)
 }
 
+// DailySettlementServiceInterface defines the contract for daily cash reconciliation
+type DailySettlementServiceInterface interface {
+	Report(ctx context.Context, companyID int64, req dto.DailySettlementReportRequest) (*dto.DailySettlementReportResponse, error)
+	Create(ctx context.Context, companyID, userID int64, req dto.CreateDailySettlementRequest) (*dto.DailySettlementResponse, error)
+	GetByID(ctx context.Context, companyID, id int64) (*dto.DailySettlementResponse, error)
+	List(ctx context.Context, companyID int64, req dto.ListDailySettlementRequest) (*dto.DailySettlementListResponse, error)
+	UpdateItem(ctx context.Context, companyID, settlementID, itemID int64, req dto.UpdateSettlementItemRequest) (*dto.DailySettlementItemResponse, error)
+	BulkUpdateItems(ctx context.Context, companyID, settlementID int64, req dto.BulkUpdateSettlementItemsRequest) (*dto.DailySettlementResponse, error)
+	Finalize(ctx context.Context, companyID, settlementID, userID int64, req dto.FinalizeDailySettlementRequest) (*dto.DailySettlementResponse, error)
+}
+
 // StockOpnameServiceInterface defines the contract for stock opname (physical count) operations
 type StockOpnameServiceInterface interface {
 	Create(ctx context.Context, companyID, userID int64, req dto.CreateStockOpnameRequest) (*dto.StockOpnameResponse, error)
@@ -182,3 +193,4 @@ var _ ShiftServiceInterface = (*ShiftService)(nil)
 var _ ExpenseServiceInterface = (*ExpenseService)(nil)
 var _ ReceiptServiceInterface = (*ReceiptService)(nil)
 var _ StockOpnameServiceInterface = (*StockOpnameService)(nil)
+var _ DailySettlementServiceInterface = (*DailySettlementService)(nil)
