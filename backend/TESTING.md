@@ -314,8 +314,7 @@ The infrastructure is created **once** for the entire package and shared across 
 **PostgreSQL container** (`tests/testutil/db.go`):
 
 ```go
-pgContainer, err := postgres.RunContainer(ctx,
-    testcontainers.WithImage("postgres:18-alpine"),
+pgContainer, err := postgres.Run(ctx, "postgres:18-alpine",
     postgres.WithDatabase("pos_test_db"),
     postgres.WithUsername("pos_test_user"),
     postgres.WithPassword("pos_test_password"),
@@ -327,7 +326,7 @@ pgContainer, err := postgres.RunContainer(ctx,
 )
 ```
 
-- `RunContainer` pulls the image (first run only; cached after) and starts a container.
+- `postgres.Run` pulls the image (first run only; cached after) and starts a container.
 - `WithWaitStrategy` blocks until the log line appears twice — this is the PostgreSQL readiness signal. The test will not proceed until the database is truly ready to accept connections, preventing flaky "connection refused" errors.
 - `pgContainer.ConnectionString(ctx, "sslmode=disable")` returns a dynamic DSN like `postgres://pos_test_user:pos_test_password@localhost:49821/pos_test_db?sslmode=disable`. The port is random (Docker assigns it), so there are no port conflicts.
 
@@ -435,7 +434,10 @@ Tests share the same containers throughout the package run. To prevent test poll
 func cleanupDatabase(t *testing.T) {
     t.Helper()
     if err := testEnv.TestDB.TruncateAllTables(); err != nil {
-        t.Fatalf("Failed to cleanup database: %v", err)
+        t.Fatalf("Failed to truncate tables: %v", err)
+    }
+    if err := testEnv.TestMongo.DropCollections("nexpos_test"); err != nil {
+        t.Fatalf("Failed to drop mongo collections: %v", err)
     }
 }
 ```
