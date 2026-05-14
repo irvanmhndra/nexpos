@@ -324,3 +324,24 @@ type ReceiptRepository interface {
 	Save(ctx context.Context, r *model.Receipt) error
 	GetByOrderID(ctx context.Context, companyID, orderID int64) (*model.Receipt, error)
 }
+
+type StockOpnameRepository interface {
+	Create(ctx context.Context, opname *model.StockOpname) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.StockOpname, error)
+	List(ctx context.Context, companyID int64, params *StockOpnameListParams) ([]*model.StockOpname, int, error)
+	Update(ctx context.Context, opname *model.StockOpname) error
+	GenerateOpnameNumber(ctx context.Context, companyID int64) (string, error)
+	SnapshotItems(ctx context.Context, opnameID, companyID, branchID int64, categoryID *int64) (int, error)
+	GetItems(ctx context.Context, opnameID int64) ([]*model.StockOpnameItem, error)
+	GetItem(ctx context.Context, opnameID, itemID int64) (*model.StockOpnameItem, error)
+	UpdateItem(ctx context.Context, item *model.StockOpnameItem) error
+	GetItemStats(ctx context.Context, opnameID int64) (totalItems, countedItems int, err error)
+}
+
+// StockOpnameListParams for filtering stock opnames
+type StockOpnameListParams struct {
+	Status   string
+	BranchID *int64
+	Limit    int
+	Offset   int
+}
