@@ -29,6 +29,7 @@ const navGroups: NavGroup[] = [
       { label: 'Produk', icon: 'inventory_2', path: '/products' },
       { label: 'Kategori', icon: 'category', path: '/categories' },
       { label: 'Inventaris', icon: 'warehouse', path: '/inventory' },
+      { label: 'Stock Opname', icon: 'fact_check', path: '/stock-opnames' },
     ],
   },
   {

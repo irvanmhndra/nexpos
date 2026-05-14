@@ -100,6 +100,27 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: '/stock-opnames',
+        lazy: async () => {
+          const { StockOpnamesPage } = await import('./pages/inventory/StockOpnamesPage');
+          return { Component: StockOpnamesPage };
+        },
+      },
+      {
+        path: '/stock-opnames/new',
+        lazy: async () => {
+          const { StockOpnameNewPage } = await import('./pages/inventory/StockOpnameNewPage');
+          return { Component: StockOpnameNewPage };
+        },
+      },
+      {
+        path: '/stock-opnames/:id',
+        lazy: async () => {
+          const { StockOpnameDetailPage } = await import('./pages/inventory/StockOpnameDetailPage');
+          return { Component: StockOpnameDetailPage };
+        },
+      },
+      {
         path: '/orders',
         lazy: async () => {
           const { OrdersPage } = await import('./pages/orders/OrdersPage');
