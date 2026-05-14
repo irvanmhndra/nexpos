@@ -2,7 +2,8 @@
 
 ## Overview
 
-RESTful API for Nexpos — a multi-tenant Point of Sale system. All endpoints use JSON. Protected routes require JWT authentication.
+RESTful API for **Nexpos** — a multi-tenant POS SaaS built with Go + Echo v5 + PostgreSQL.
+The API uses JWT-based authentication and follows the consistent response format below.
 
 ## Base URL
 
@@ -11,879 +12,684 @@ Development: http://localhost:8080/api/v1
 Production:  https://api.nexpos.irvanmahendra.com/api/v1
 ```
 
----
+Health endpoints (outside the `/api/v1` group):
 
-## Response Format
+```
+GET /health
+GET /health/live
+GET /health/ready
+```
 
-All responses follow this structure:
+## Conventions
 
-**Success (single item):**
+- **Naming**: all request/response fields use `snake_case`.
+- **IDs**: integer (`int64`). Orders use the string `order_no` as the user-facing identifier.
+- **Timestamps**: RFC 3339 (`2026-05-14T08:00:00Z`).
+- **Money**: decimal numbers (rupiah), not strings.
+- **Multi-tenant**: scoped per company; users are limited to their own company via JWT claims.
+
+## Authentication
+
+Most endpoints are in the `protected` group and require `Authorization: Bearer <access_token>`. Public endpoints are only `/auth/login`, `/auth/register`, `/auth/refresh`, `/auth/logout`, and the health checks.
+
+## Standard Response Format
+
+**Success — single resource:**
 ```json
 {
   "success": true,
-  "message": "Data retrieved successfully",
+  "message": "Customer retrieved successfully",
   "data": { ... }
 }
 ```
 
-**Success (list with pagination):**
+**Success — paginated list:**
 ```json
 {
   "success": true,
-  "message": "Data retrieved successfully",
+  "message": "Customers retrieved",
   "data": [ ... ],
   "meta": {
-    "page": 1,
-    "limit": 10,
-    "total": 100,
-    "total_pages": 10
+    "pagination": {
+      "total_records": 200,
+      "total_pages": 10,
+      "current_page": 1,
+      "per_page": 20,
+      "next_page": 2,
+      "prev_page": null
+    }
   }
 }
 ```
 
-**Error (validation — 422):**
+**Error:**
+```json
+{
+  "success": false,
+  "message": "Branch not found",
+  "error_code": "NOT_FOUND"
+}
+```
+
+**Validation error (422):**
 ```json
 {
   "success": false,
   "message": "Validation failed",
   "errors": {
-    "name": "name is required"
+    "email": "email is required",
+    "password": "password must be at least 8 characters"
   }
 }
 ```
 
-**Error (business logic — 400/404/409):**
-```json
-{
-  "success": false,
-  "message": "Insufficient stock for variant SKU-001"
-}
-```
-
 ---
 
-## Authentication
+# Endpoints
 
-All protected routes require the header:
-```
-Authorization: Bearer <access_token>
-```
+## 1. Authentication
 
----
-
-## 1. Auth
-
-### POST /auth/login
-
-**Request:**
+### POST `/auth/login`
+Body:
 ```json
-{
-  "email": "admin@example.com",
-  "password": "password123"
-}
+{ "email": "admin@example.com", "password": "secret123" }
 ```
-
-**Response (200):**
+Response (200):
 ```json
 {
   "success": true,
   "message": "Login successful",
   "data": {
-    "access_token": "eyJhbGci...",
-    "refresh_token": "eyJhbGci...",
     "user": {
       "id": 1,
-      "name": "Admin",
+      "name": "Admin User",
       "email": "admin@example.com",
-      "role": "admin",
-      "company_id": 1,
-      "branch_id": 1
-    }
+      "role": "owner",
+      "company": { "id": 1, "code": "ACME", "name": "Acme Retail" },
+      "default_branch": { "id": 1, "code": "JKT-001", "name": "Cabang Pusat Jakarta" }
+    },
+    "access_token": "<jwt>",
+    "refresh_token": "<jwt>",
+    "expires_in": 3600
   }
 }
 ```
 
-### POST /auth/register
-
-**Request:**
+### POST `/auth/register`
+Body:
 ```json
-{
-  "name": "John Doe",
-  "email": "john@example.com",
-  "password": "password123",
-  "company_name": "My Store"
-}
+{ "name": "Owner Baru", "email": "owner@toko.com", "password": "secret123" }
 ```
+Creates a new user + company. Response mirrors login.
 
-**Response (201):** Same structure as login.
+### POST `/auth/refresh`
+Body: `{ "refresh_token": "<jwt>" }`
+Response: `{ access_token, refresh_token, expires_in }`.
 
-### POST /auth/refresh
-
-**Request:**
-```json
-{ "refresh_token": "eyJhbGci..." }
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Token refreshed",
-  "data": { "access_token": "eyJhbGci..." }
-}
-```
-
-### POST /auth/logout
-
-**Response (200):**
-```json
-{ "success": true, "message": "Logged out successfully", "data": null }
-```
+### POST `/auth/logout`
+Header: `Authorization: Bearer <access_token>`. Revokes the session.
 
 ---
 
 ## 2. Users
 
-### GET /users
+All endpoints require auth.
 
-**Query parameters:** `page`, `limit`, `search`, `role`, `status`
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/users` | Create user |
+| `GET` | `/users` | List users (paginated, query: `page`, `limit`) |
+| `GET` | `/users/:id` | Get user |
+| `PUT` | `/users/:id` | Update user |
+| `PATCH` | `/users/:id/status` | Update status (`active` / `inactive`) |
+| `DELETE` | `/users/:id` | Soft delete |
 
-**Response (200):**
+**Create user body:**
 ```json
-{
-  "success": true,
-  "message": "Users retrieved",
-  "data": [
-    {
-      "id": 1,
-      "name": "John Doe",
-      "email": "john@example.com",
-      "role": "cashier",
-      "status": "active",
-      "branch_id": 1,
-      "created_at": "2026-01-01T00:00:00Z"
-    }
-  ],
-  "meta": { "page": 1, "limit": 10, "total": 5, "total_pages": 1 }
-}
+{ "email": "kasir@toko.com", "password": "secret123", "name": "Kasir 1", "role_id": 3 }
 ```
 
-### POST /users
-
-**Request:**
+**User response:**
 ```json
 {
-  "name": "Jane Doe",
-  "email": "jane@example.com",
-  "password": "password123",
-  "role": "cashier",
-  "branch_id": 1
+  "id": 5,
+  "company_id": 1,
+  "role_id": 3,
+  "email": "kasir@toko.com",
+  "name": "Kasir 1",
+  "status": "active",
+  "role": { "id": 3, "code": "cashier", "name": "Kasir" },
+  "created_at": "2026-05-14T08:00:00Z",
+  "updated_at": "2026-05-14T08:00:00Z"
 }
-```
-
-### GET /users/:id / PUT /users/:id / DELETE /users/:id
-
-Standard single-item CRUD. PUT accepts same fields as POST (all optional).
-
-### PATCH /users/:id/status
-
-**Request:**
-```json
-{ "status": "inactive" }
 ```
 
 ---
 
 ## 3. Branches
 
-### GET /branches
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/branches` | Create |
+| `GET` | `/branches` | List (query: `page`, `per_page`, `search`, `is_active`) |
+| `GET` | `/branches/:id` | Get |
+| `PUT` | `/branches/:id` | Update |
+| `DELETE` | `/branches/:id` | Delete |
 
-**Query parameters:** `page`, `limit`, `search`
-
-**Response (200):**
+**Create branch body:**
 ```json
 {
-  "success": true,
-  "message": "Branches retrieved",
-  "data": [
-    {
-      "id": 1,
-      "name": "Main Branch",
-      "address": "Jl. Sudirman No. 1",
-      "phone": "021-1234567",
-      "is_active": true,
-      "created_at": "2026-01-01T00:00:00Z"
-    }
-  ],
-  "meta": { "page": 1, "limit": 10, "total": 2, "total_pages": 1 }
-}
-```
-
-### POST /branches
-
-```json
-{
-  "name": "Branch 2",
-  "address": "Jl. Thamrin No. 5",
-  "phone": "021-9876543"
+  "code": "JKT-001",
+  "name": "Cabang Pusat Jakarta",
+  "address": "Jl. Sudirman Kav. 52-53",
+  "phone": "021-555-0192",
+  "is_active": true
 }
 ```
 
 ---
 
-## 4. Product Categories
+## 4. Customers
 
-### GET /product-categories
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/customers` | Create |
+| `GET` | `/customers` | List (query: `page`, `per_page`, `search`, `is_member`) |
+| `GET` | `/customers/:id` | Get |
+| `PUT` | `/customers/:id` | Update |
+| `DELETE` | `/customers/:id` | Delete |
 
-**Query parameters:** `page`, `limit`, `search`
-
-**Response (200):**
+**Create customer body:**
 ```json
 {
-  "success": true,
-  "message": "Categories retrieved",
-  "data": [
-    { "id": 1, "name": "Beverages", "created_at": "2026-01-01T00:00:00Z" }
-  ],
-  "meta": { "page": 1, "limit": 10, "total": 3, "total_pages": 1 }
+  "code": "C-0001",
+  "name": "Budi Santoso",
+  "phone": "+62 812 0000 0000",
+  "email": "budi@example.com",
+  "is_member": true
 }
-```
-
-### GET /product-categories/all
-
-Returns all categories as a flat array (no pagination). Useful for dropdowns.
-
-### POST /product-categories
-
-```json
-{ "name": "Snacks" }
 ```
 
 ---
 
-## 5. Products
+## 5. Product Categories
 
-### GET /products
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/product-categories` | Create |
+| `GET` | `/product-categories` | List (paginated) |
+| `GET` | `/product-categories/all` | List all (no pagination, for selectors) |
+| `GET` | `/product-categories/:id` | Get |
+| `PUT` | `/product-categories/:id` | Update |
+| `DELETE` | `/product-categories/:id` | Delete |
 
-**Query parameters:** `page`, `limit`, `search`, `category`, `status`
-
-> `search` matches both product name and variant SKU.
-
-**Response (200):**
+**Create body:**
 ```json
-{
-  "success": true,
-  "message": "Products retrieved",
-  "data": [
-    {
-      "id": 1,
-      "name": "Teh Botol",
-      "image_data": "data:image/jpeg;base64,...",
-      "product_category_id": 1,
-      "category_name": "Beverages",
-      "is_active": true,
-      "variants": [
-        {
-          "id": 1,
-          "name": "330ml",
-          "sku": "TEH-330",
-          "price": 5000,
-          "sale_price": 4000,           // nullable
-          "sale_start": "2026-03-01T00:00:00Z", // nullable
-          "sale_end": "2026-03-31T23:59:59Z",   // nullable
-          "standard_cost": 3000,
-          "is_active": true
-        }
-      ]
-    }
-  ],
-  "meta": { "page": 1, "limit": 10, "total": 20, "total_pages": 2 }
-}
+{ "code": "BEV", "name": "Minuman", "parent_id": null, "sort_order": 1, "is_active": true }
 ```
 
-### POST /products
+---
 
+## 6. Products
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/products` | Create (with variants) |
+| `GET` | `/products` | List (query: `page`, `per_page`, `search`, `category_id`, `is_active`) |
+| `GET` | `/products/:id` | Get |
+| `PUT` | `/products/:id` | Update (variants merged by id) |
+| `DELETE` | `/products/:id` | Delete |
+
+**Create product body:**
 ```json
 {
-  "name": "Kopi Susu",
-  "product_category_id": 1,
-  "image_data": "data:image/jpeg;base64,...",
+  "name": "Kopi Susu Gula Aren",
+  "category_id": 2,
+  "description": "Signature kami",
+  "image_data": "data:image/png;base64,...",
+  "is_active": true,
   "variants": [
-    { "name": "Default", "sku": "KPS-001", "price": 15000, "standard_cost": 8000, "sale_price": 12000, "sale_start": "2026-03-01T00:00:00Z", "sale_end": null }
+    {
+      "sku": "KS-REG",
+      "name": "Regular",
+      "attributes": { "size": "regular" },
+      "price": 22000,
+      "standard_cost": 9000,
+      "last_purchase_cost": 9500,
+      "is_default": true,
+      "is_active": true
+    },
+    {
+      "sku": "KS-LRG",
+      "name": "Large",
+      "price": 28000,
+      "standard_cost": 11000,
+      "last_purchase_cost": 11500,
+      "is_default": false
+    }
   ]
 }
 ```
 
-> All sale price fields are optional. Set `sale_price` to `null` to disable.
-
-**Response (201):** Returns the created product with all variants.
-
-### GET /products/:id
-
-Returns product with full variant list.
-
-### PUT /products/:id
-
-Accepts same body as POST. Can update product fields and its variants.
-
----
-
-## 6. Customers
-
-### GET /customers
-
-**Query parameters:** `page`, `limit`, `search`
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Customers retrieved",
-  "data": [
-    {
-      "id": 1,
-      "name": "Budi Santoso",
-      "phone": "08123456789",
-      "email": "budi@example.com",
-      "address": "Jakarta",
-      "created_at": "2026-01-01T00:00:00Z"
-    }
-  ],
-  "meta": { "page": 1, "limit": 10, "total": 50, "total_pages": 5 }
-}
-```
-
-### POST /customers
-
-```json
-{
-  "name": "Ani Wijaya",
-  "phone": "08987654321",
-  "email": "ani@example.com",
-  "address": "Bandung"
-}
-```
+**Sale price** (harga coret) bisa diset per-variant lewat field `sale_price`, `sale_start`, `sale_end`. Saat aktif, kasir akan menampilkan harga coret.
 
 ---
 
 ## 7. Orders
 
-### GET /orders
+Order lifecycle: `draft → confirmed → completed/cancelled/voided`, with a separate `payment_status` (`unpaid → partial → paid`).
 
-**Query parameters:** `page`, `limit`, `search`, `status`, `date_from`, `date_to`
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/orders/preview` | Compute total + promo discount (does not persist) |
+| `POST` | `/orders` | Create order |
+| `GET` | `/orders` | List |
+| `GET` | `/orders/:id` | Get |
+| `PUT` | `/orders/:id` | Update items / customer |
+| `POST` | `/orders/:id/confirm` | Confirm (locks order for payment) |
+| `POST` | `/orders/:id/payments` | Add payment |
+| `POST` | `/orders/:id/complete` | Complete the order (auto-deducts stock) |
+| `POST` | `/orders/:id/cancel` | Cancel (before payment) |
+| `POST` | `/orders/:id/void` | Void (after completed, for corrections) |
+| `POST` | `/orders/:id/refund` | Refund a payment |
+| `GET` | `/orders/:id/receipt` | Get receipt (requires the MongoDB receipt store) |
 
-**Response (200):**
+**List query:** `page`, `per_page`, `search`, `status`, `payment_status`, `fulfillment_type`, `fulfillment_status`, `customer_id`, `payment_method`, `date_from`, `date_to`.
+
+**Create order body:**
 ```json
 {
-  "success": true,
-  "message": "Orders retrieved",
-  "data": [
-    {
-      "id": 1,
-      "order_number": "ORD-20260101-0001",
-      "status": "completed",
-      "subtotal": 50000,
-      "promo_discount": 5000,
-      "grand_total": 45000,
-      "customer_name": "Budi",
-      "cashier_name": "Admin",
-      "branch_name": "Main Branch",
-      "created_at": "2026-01-01T10:00:00Z"
-    }
-  ],
-  "meta": { "page": 1, "limit": 10, "total": 100, "total_pages": 10 }
-}
-```
-
-### POST /orders
-
-Creates an order and immediately deducts stock.
-
-**Request:**
-```json
-{
-  "branch_id": 1,
-  "customer_id": 1,
-  "promo_code": "DISC10",
+  "customer_id": 12,
+  "fulfillment_type": "counter",
   "items": [
-    { "product_variant_id": 1, "quantity": 2, "discount_amount": 0 }
-  ]
+    { "product_variant_id": 7, "quantity": 2, "discount_amount": 0 },
+    { "product_variant_id": 11, "quantity": 1 }
+  ],
+  "payments": [{ "method": "cash", "amount": 60000 }],
+  "promo_code": "WELCOME10",
+  "notes": "Take-away",
+  "offline_id": "8b3e1f8b-...-uuid"
 }
 ```
 
-**Response (201):** Full order object (see GET /orders/:id shape).
+**Payment methods:** `cash`, `debit_card`, `credit_card`, `e_wallet`, `bank_transfer`, `qris`.
 
-**Error (400 — insufficient stock):**
+**Order response (excerpt):**
 ```json
 {
-  "success": false,
-  "message": "Insufficient stock for variant TEH-330 (requested: 5, available: 2)"
+  "id": 101,
+  "order_no": "ORD-20260514-0123",
+  "status": "completed",
+  "payment_status": "paid",
+  "fulfillment_type": "counter",
+  "total_amount": 72000,
+  "total_discount": 7000,
+  "total_tax": 0,
+  "grand_total": 65000,
+  "paid_amount": 65000,
+  "balance_due": 0,
+  "applied_promotion": { "id": 1, "code": "WELCOME10", "name": "Welcome 10%", "discount_amount": 7000 },
+  "items": [ { "id": 1, "product_variant_id": 7, "sku": "KS-REG", "product_name": "Kopi Susu", "variant_name": "Regular", "unit_price": 22000, "quantity": 2, "subtotal": 44000 } ],
+  "payments": [ { "id": 1, "method": "cash", "amount": 65000, "status": "completed", "paid_at": "2026-05-14T10:15:00Z" } ],
+  "created_at": "2026-05-14T10:14:30Z",
+  "completed_at": "2026-05-14T10:15:00Z"
 }
 ```
 
-> **Note:** If a variant has an active sale price (`sale_price < price` and within `sale_start`/`sale_end` window), the order uses the sale price automatically. No change to the request body is needed.
-
-### POST /orders/preview
-
-Calculates order totals (with promo validation) **without creating the order**. Used by POS before checkout to show accurate pricing.
-
-**Request:** Same as POST /orders.
-
-**Response (200):**
+**Refund body:**
 ```json
-{
-  "success": true,
-  "message": "Order preview calculated",
-  "data": {
-    "subtotal": 50000,
-    "item_discount": 0,
-    "promo_discount": 5000,
-    "tax": 0,
-    "grand_total": 45000,
-    "applied_promotion": {
-      "id": 1,
-      "code": "DISC10",
-      "name": "Diskon 10%",
-      "discount_amount": 5000
-    }
-  }
-}
-```
-
-If promo code is invalid or inactive, `applied_promotion` is `null` and `promo_discount` is `0`.
-
-> **Note:** If a variant has an active sale price (`sale_price < price` and within `sale_start`/`sale_end` window), the order uses the sale price automatically. No change to the request body is needed.
-
-### GET /orders/:id
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Order retrieved",
-  "data": {
-    "id": 1,
-    "order_number": "ORD-20260101-0001",
-    "status": "completed",
-    "subtotal": 50000,
-    "item_discount": 0,
-    "promo_discount": 5000,
-    "tax": 0,
-    "grand_total": 45000,
-    "promo_code": "DISC10",
-    "customer_id": 1,
-    "customer_name": "Budi",
-    "branch_id": 1,
-    "branch_name": "Main Branch",
-    "items": [
-      {
-        "id": 1,
-        "product_variant_id": 1,
-        "product_name": "Teh Botol",
-        "variant_name": "330ml",
-        "sku": "TEH-330",
-        "quantity": 2,
-        "unit_price": 5000,
-        "discount_amount": 0,
-        "subtotal": 10000
-      }
-    ],
-    "payments": [
-      {
-        "id": 1,
-        "method": "cash",
-        "amount": 50000,
-        "change_amount": 5000,
-        "paid_at": "2026-01-01T10:05:00Z"
-      }
-    ],
-    "created_at": "2026-01-01T10:00:00Z",
-    "completed_at": "2026-01-01T10:05:00Z"
-  }
-}
-```
-
-### POST /orders/:id/confirm
-
-No request body. Transitions order from `draft` to `confirmed`.
-
-### POST /orders/:id/payments
-
-```json
-{
-  "method": "cash",
-  "amount": 50000
-}
-```
-
-`method` values: `cash`, `transfer`, `qris`, `card`, `other`
-
-### POST /orders/:id/complete
-
-No request body. Transitions order to `completed`.
-
-### POST /orders/:id/cancel
-
-```json
-{ "reason": "Customer changed mind" }
-```
-
-### POST /orders/:id/void
-
-```json
-{ "reason": "Incorrect order" }
-```
-
-### POST /orders/:id/refund
-
-```json
-{ "payment_id": 1, "amount": 5000, "reason": "Returned item" }
+{ "payment_id": 1, "amount": 22000, "refund_reason": "Salah varian" }
 ```
 
 ---
 
-## 8. Promotions
+## 8. Reports
 
-### GET /promotions
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/reports/summary` | Ringkasan periode |
+| `GET` | `/reports/sales-trend` | Trend per hari |
+| `GET` | `/reports/top-products` | Top produk (query: `limit`) |
+| `GET` | `/reports/category-revenue` | Revenue per kategori |
+| `GET` | `/reports/payment-methods` | Breakdown metode bayar |
+| `GET` | `/reports/hourly-sales` | Penjualan per jam |
 
-**Query parameters:** `page`, `limit`, `search`, `status`
+All endpoints require `date_from` and `date_to` query params (`YYYY-MM-DD`).
 
-**Response (200):**
+**Summary response:**
 ```json
 {
-  "success": true,
-  "message": "Promotions retrieved",
-  "data": [
-    {
-      "id": 1,
-      "code": "DISC10",
-      "name": "Diskon 10%",
-      "type": "percentage",
-      "value": 10,
-      "min_purchase": 20000,
-      "max_discount": 50000,
-      "start_date": "2026-01-01T00:00:00Z",
-      "end_date": "2026-12-31T23:59:59Z",
-      "is_active": true,
-      "usage_count": 15,
-      "usage_limit": 100
-    }
-  ],
-  "meta": { "page": 1, "limit": 10, "total": 3, "total_pages": 1 }
+  "total_revenue": 15000000,
+  "total_orders": 320,
+  "total_items_sold": 980,
+  "avg_order_value": 46875,
+  "new_customers": 18,
+  "completed_orders": 305,
+  "cancelled_orders": 8,
+  "pending_orders": 7,
+  "total_discount": 750000,
+  "total_tax": 0,
+  "gross_profit": 5400000,
+  "gross_profit_margin": 36.0
 }
 ```
 
-### POST /promotions
+---
 
+## 9. Promotions
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/promotions` | Create |
+| `GET` | `/promotions` | List (query: `page`, `per_page`, `search`, `is_active`, `type`) |
+| `GET` | `/promotions/:id` | Get |
+| `PUT` | `/promotions/:id` | Update |
+| `DELETE` | `/promotions/:id` | Delete |
+
+**Create promotion body:**
 ```json
 {
-  "code": "FLAT5K",
-  "name": "Potongan 5000",
-  "type": "fixed",
-  "value": 5000,
-  "min_purchase": 25000,
-  "max_discount": null,
-  "start_date": "2026-03-01T00:00:00Z",
-  "end_date": "2026-03-31T23:59:59Z",
-  "usage_limit": 200,
+  "code": "WELCOME10",
+  "name": "Welcome 10%",
+  "type": "discount",
+  "discount_type": "percentage",
+  "discount_value": 10,
+  "min_purchase": 50000,
+  "max_discount": 25000,
+  "start_at": "2026-05-01T00:00:00Z",
+  "end_at": "2026-05-31T23:59:59Z",
+  "priority": 10,
   "is_active": true
 }
 ```
 
-`type` values: `fixed` | `percentage`
+`type`: `discount` | `bundle` | `conditional`. Active promotions are applied automatically on preview/create when `promo_code` matches.
 
 ---
 
-## 9. Inventory
+## 10. Inventory & Stock Movements
 
-### GET /inventory
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/inventory` | List stok (query: `page`, `per_page`, `search`, `category`, `status`, `branch_id`) |
+| `GET` | `/inventory/stats` | Stats (total SKU, low/out, total value) |
+| `POST` | `/inventory/adjust` | Adjust manual (IN/OUT/ADJUST) |
+| `PUT` | `/inventory/:variantId/min-stock` | Update min stock |
+| `GET` | `/inventory/movements` | List stock movements |
+| `GET` | `/inventory/movements/stats` | Movement stats (this month) |
 
-**Query parameters:** `page`, `limit`, `search`, `category`, `status`, `branch_id`
+`status`: `normal` | `low` | `out_of_stock`.
 
-`status` values: `normal` | `low` | `out_of_stock`
-
-**Response (200):**
+**Adjust body:**
 ```json
 {
-  "success": true,
-  "message": "Inventory retrieved",
-  "data": [
-    {
-      "product_variant_id": 1,
-      "product_id": 1,
-      "product_name": "Teh Botol",
-      "variant_name": "330ml",
-      "sku": "TEH-330",
-      "category_name": "Beverages",
-      "image_data": "data:image/jpeg;base64,...",
-      "branch_id": 1,
-      "branch_name": "Main Branch",
-      "current_stock": 50,
-      "min_stock": 10,
-      "stock_value": 150000,
-      "has_variants": false
-    }
-  ],
-  "meta": { "page": 1, "limit": 20, "total": 35, "total_pages": 2 }
-}
-```
-
-**Stock status logic:**
-- `out_of_stock`: `current_stock === 0`
-- `low`: `current_stock > 0 && current_stock <= min_stock`
-- `normal`: `current_stock > min_stock`
-
-### GET /inventory/stats
-
-**Query parameters:** `branch_id`
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Inventory stats retrieved",
-  "data": {
-    "total_sku": 35,
-    "out_of_stock": 3,
-    "low_stock": 5,
-    "total_stock_value": 12500000
-  }
-}
-```
-
-### POST /inventory/adjust
-
-Creates a stock movement and updates the variant's stock quantity.
-
-**Request:**
-```json
-{
-  "product_variant_id": 1,
+  "variant_id": 7,
   "branch_id": 1,
-  "type": "in",
+  "type": "ADJUST",
   "quantity": 50,
-  "notes": "Restok dari supplier"
+  "unit_cost": 9000,
+  "note": "Koreksi opname manual"
 }
 ```
 
-`type` values: `in` | `out` | `adjustment`
-
-- `in`: adds quantity
-- `out`: subtracts quantity
-- `adjustment`: sets stock to the given quantity
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Stock adjusted",
-  "data": {
-    "id": 10,
-    "product_variant_id": 1,
-    "branch_id": 1,
-    "type": "in",
-    "quantity": 50,
-    "stock_before": 10,
-    "stock_after": 60,
-    "notes": "Restok dari supplier",
-    "created_at": "2026-03-15T09:00:00Z"
-  }
-}
-```
-
-### PUT /inventory/:variantId/min-stock
-
-Updates the minimum stock threshold for a variant at a branch.
-
-**Request:**
-```json
-{
-  "branch_id": 1,
-  "min_quantity": 15
-}
-```
-
-### GET /inventory/movements
-
-**Query parameters:** `page`, `limit`, `search`, `type`, `date_from`, `date_to`, `branch_id`
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Stock movements retrieved",
-  "data": [
-    {
-      "id": 10,
-      "product_variant_id": 1,
-      "product_name": "Teh Botol",
-      "variant_name": "330ml",
-      "sku": "TEH-330",
-      "branch_id": 1,
-      "branch_name": "Main Branch",
-      "type": "in",
-      "quantity": 50,
-      "stock_before": 10,
-      "stock_after": 60,
-      "reference": null,
-      "notes": "Restok dari supplier",
-      "created_by": "Admin",
-      "created_at": "2026-03-15T09:00:00Z"
-    }
-  ],
-  "meta": { "page": 1, "limit": 20, "total": 120, "total_pages": 6 }
-}
-```
-
-### GET /inventory/movements/stats
-
-**Query parameters:** `branch_id`, `date_from`, `date_to`
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Movement stats retrieved",
-  "data": {
-    "total_movements": 120,
-    "total_in": 800,
-    "total_out": 350,
-    "total_adjustment": 25,
-    "net_change": 450
-  }
-}
-```
-
----
-
-## 10. Reports
-
-All report endpoints support `branch_id`, `date_from`, `date_to` query parameters.
-
-### GET /reports/summary
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Summary retrieved",
-  "data": {
-    "total_revenue": 15000000,
-    "total_orders": 320,
-    "average_order_value": 46875,
-    "total_items_sold": 850,
-    "revenue_growth": 12.5,
-    "orders_growth": 8.3
-  }
-}
-```
-
-### GET /reports/sales-trend
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Sales trend retrieved",
-  "data": [
-    { "date": "2026-03-01", "revenue": 500000, "orders": 12 },
-    { "date": "2026-03-02", "revenue": 750000, "orders": 18 }
-  ]
-}
-```
-
-### GET /reports/top-products
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Top products retrieved",
-  "data": [
-    {
-      "product_id": 1,
-      "product_name": "Teh Botol",
-      "variant_name": "330ml",
-      "sku": "TEH-330",
-      "quantity_sold": 200,
-      "revenue": 1000000
-    }
-  ]
-}
-```
-
-### GET /reports/category-revenue
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Category revenue retrieved",
-  "data": [
-    { "category_name": "Beverages", "revenue": 5000000, "percentage": 33.3 }
-  ]
-}
-```
-
-### GET /reports/payment-methods
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Payment methods retrieved",
-  "data": [
-    { "method": "cash", "count": 150, "amount": 7500000, "percentage": 50.0 }
-  ]
-}
-```
-
-### GET /reports/hourly-sales
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Hourly sales retrieved",
-  "data": [
-    { "hour": 9, "orders": 15, "revenue": 750000 },
-    { "hour": 10, "orders": 25, "revenue": 1250000 }
-  ]
-}
-```
+`type` semantics:
+- `IN`: increase stock by `quantity`
+- `OUT`: decrease stock by `quantity` (fails on insufficient stock)
+- `ADJUST`: **set** stock to `quantity` (not a delta)
 
 ---
 
 ## 11. Company Settings
 
-### GET /company-settings
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/company-settings` | Get settings |
+| `PUT` | `/company-settings` | Update (partial; null fields ignored) |
 
-**Response (200):**
+**Response:**
 ```json
 {
-  "success": true,
-  "message": "Company settings retrieved",
-  "data": {
-    "company_name": "Toko Saya",
-    "address": "Jl. Sudirman No. 1, Jakarta",
-    "phone": "021-1234567",
-    "email": "toko@example.com",
-    "tax_rate": 0,
-    "currency": "IDR",
-    "logo_data": "data:image/jpeg;base64,...",
-    "receipt_footer": "Terima kasih telah berbelanja!"
-  }
+  "id": 1,
+  "company_id": 1,
+  "tax_enabled": false,
+  "tax_rate": 11,
+  "tax_inclusive": true,
+  "rounding_enabled": false,
+  "rounding_amount": 100,
+  "auto_complete_counter_orders": true,
+  "require_customer_for_delivery": true,
+  "receipt_header": null,
+  "receipt_footer": null,
+  "show_tax_on_receipt": true,
+  "offline_mode_enabled": false,
+  "max_offline_days": 7
 }
 ```
 
-### PUT /company-settings
+---
 
-Accepts any subset of the fields above. Only provided fields are updated.
+## 12. Suppliers
 
-**Request:**
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/suppliers` | Create |
+| `GET` | `/suppliers` | List (query: `page`, `per_page`, `search`, `is_active`) |
+| `GET` | `/suppliers/:id` | Get |
+| `PUT` | `/suppliers/:id` | Update |
+| `DELETE` | `/suppliers/:id` | Delete |
+
+**Create body:**
 ```json
 {
-  "company_name": "Toko Maju Jaya",
-  "receipt_footer": "Selamat datang kembali!"
+  "code": "SUP-001",
+  "name": "PT Sumber Sejahtera",
+  "contact_name": "Pak Andi",
+  "phone": "021-1234-5678",
+  "email": "sales@sumber.co.id",
+  "address": "Jl. Industri No. 12",
+  "notes": null,
+  "is_active": true
 }
 ```
+
+---
+
+## 13. Purchase Orders
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/purchase-orders` | Create draft PO |
+| `GET` | `/purchase-orders` | List (query: `page`, `per_page`, `status`, `supplier_id`) |
+| `GET` | `/purchase-orders/:id` | Get with items |
+| `POST` | `/purchase-orders/:id/receive` | Receive goods (creates an IN stock movement) |
+
+Status: `draft` | `ordered` | `partial` | `received` | `cancelled`.
+
+**Create body:**
+```json
+{
+  "branch_id": 1,
+  "supplier_id": 3,
+  "notes": "Order rutin mingguan",
+  "items": [
+    { "product_variant_id": 7, "sku": "KS-REG", "variant_name": "Kopi Susu Regular", "quantity": 100, "unit_cost": 9000 },
+    { "product_variant_id": 8, "sku": "KS-LRG", "variant_name": "Kopi Susu Large", "quantity": 50, "unit_cost": 11000 }
+  ]
+}
+```
+
+**Receive body:**
+```json
+{
+  "items": [
+    { "item_id": 1, "received_quantity": 100 },
+    { "item_id": 2, "received_quantity": 30 }
+  ]
+}
+```
+Status auto-transitions: `ordered → partial → received` based on total received qty.
+
+---
+
+## 14. Shifts
+
+Cash drawer reconciliation per kasir per branch.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/shifts` | Open shift |
+| `GET` | `/shifts` | List (query: `page`, `per_page`, `branch_id`, `cashier_id`, `status`, `date_from`, `date_to`) |
+| `GET` | `/shifts/current` | Get my open shift |
+| `GET` | `/shifts/:id` | Get shift detail |
+| `POST` | `/shifts/:id/close` | Close shift (computes cash difference) |
+
+**Open body:**
+```json
+{ "branch_id": 1, "opening_float": 500000 }
+```
+
+**Close body:**
+```json
+{ "actual_cash": 1825000, "notes": "Kelebihan 5rb di laci" }
+```
+
+On close, the system computes `expected_cash = opening_float + total_cash_payments_during_shift` and `cash_difference = actual_cash - expected_cash`.
+
+---
+
+## 15. Expenses
+
+### Categories
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/expense-categories` | Create |
+| `GET` | `/expense-categories` | List |
+| `PUT` | `/expense-categories/:id` | Update |
+| `DELETE` | `/expense-categories/:id` | Delete |
+
+### Expenses
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/expenses` | Create |
+| `GET` | `/expenses` | List (query: `page`, `per_page`, `branch_id`, `category_id`, `date_from`, `date_to`) |
+| `GET` | `/expenses/summary` | Summary by category (query: `branch_id`, `date_from`, `date_to`) |
+| `GET` | `/expenses/:id` | Get |
+| `PUT` | `/expenses/:id` | Update |
+| `DELETE` | `/expenses/:id` | Delete |
+
+**Create body:**
+```json
+{
+  "branch_id": 1,
+  "category_id": 4,
+  "amount": 150000,
+  "description": "Beli kantong plastik",
+  "reference_no": "NOTA-2304",
+  "expense_date": "2026-05-14",
+  "notes": null
+}
+```
+
+---
+
+## 16. Stock Opname
+
+A session for counting physical stock and reconciling it with system stock. Each session auto-snapshots every active variant in the branch. On completion, the system generates an `ADJUST` stock movement for each variance.
+
+Status: `in_progress` | `completed` | `cancelled`.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/stock-opnames` | Create (auto-snapshot) |
+| `GET` | `/stock-opnames` | List (query: `page`, `per_page`, `status`, `branch_id`) |
+| `GET` | `/stock-opnames/:id` | Get with items |
+| `PATCH` | `/stock-opnames/:id/items/:itemId` | Update count for one item |
+| `PATCH` | `/stock-opnames/:id/items` | Bulk update counts |
+| `POST` | `/stock-opnames/:id/complete` | Complete the session and apply adjustments |
+| `POST` | `/stock-opnames/:id/cancel` | Cancel the session |
+
+**Create body:**
+```json
+{ "branch_id": 1, "notes": "Opname bulanan", "category_id": null }
+```
+
+`category_id` is optional — if provided, the snapshot is restricted to variants in that category.
+
+**Update single item body:**
+```json
+{ "counted_stock": 47, "notes": "OK" }
+```
+
+**Bulk update body:**
+```json
+{
+  "items": [
+    { "item_id": 12, "counted_stock": 47 },
+    { "item_id": 13, "counted_stock": 30, "notes": "Some items expired" }
+  ]
+}
+```
+
+**Opname response (excerpt):**
+```json
+{
+  "id": 2,
+  "branch_id": 1,
+  "opname_number": "OPN-20260514-0001",
+  "status": "in_progress",
+  "total_items": 32,
+  "counted_items": 12,
+  "total_variance_qty": 0,
+  "total_variance_value": 0,
+  "started_at": "2026-05-14T09:15:00Z",
+  "items": [
+    {
+      "id": 12,
+      "product_variant_id": 7,
+      "sku": "KS-REG",
+      "product_name": "Kopi Susu",
+      "variant_name": "Regular",
+      "system_stock": 50,
+      "counted_stock": 47,
+      "variance_qty": -3,
+      "unit_cost": 9000,
+      "variance_value": -27000,
+      "counted_at": "2026-05-14T09:30:00Z"
+    }
+  ]
+}
+```
+
+On `POST /complete`, for each item where `counted_stock != null`:
+- If `counted_stock != current_system_stock`, the system creates a `StockMovement` with `type=ADJUST` (`reference_type=stock_opname`, `reference_id=opname.id`) and upserts the `stocks` table.
+- Uncounted items are left untouched.
+
+---
+
+## Error Codes
+
+| Code | HTTP | Meaning |
+| --- | --- | --- |
+| `VALIDATION_ERROR` | 422 | Body/query failed validation (field-level detail in `errors`) |
+| `UNAUTHORIZED` | 401 | Token invalid / expired |
+| `FORBIDDEN` | 403 | Resource does not belong to the user's company, or insufficient permissions |
+| `NOT_FOUND` | 404 | Resource not found |
+| `BAD_REQUEST` | 400 | Business rule violation (e.g. insufficient stock, opname not in_progress) |
+| `INTERNAL_ERROR` | 500 | Unexpected server error |
+
+---
+
+## Pagination Conventions
+
+Default `per_page=20`, max `100`. The first page is `1`.
+List endpoints return `meta.pagination` (see _Standard Response Format_).
+`/users` uses `limit` instead of `per_page` for backward compatibility.
+
+## Multi-tenant Scoping
+
+All protected endpoints are automatically scoped to the user's `company_id` from the JWT. Cross-company access attempts return `403 FORBIDDEN`.
+Endpoints that accept `branch_id` in the body or query validate that the branch belongs to the same company.
+
+## Receipts (Optional)
+
+If MongoDB is configured (`MONGO_URI` env set), `GET /orders/:id/receipt` is active and returns the receipt document created when the order completed. Without MongoDB, the endpoint is not registered.
