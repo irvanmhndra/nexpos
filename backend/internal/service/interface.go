@@ -154,6 +154,17 @@ type ReceiptServiceInterface interface {
 	GetByOrderID(ctx context.Context, companyID, orderID int64) (*model.Receipt, error)
 }
 
+// StockOpnameServiceInterface defines the contract for stock opname (physical count) operations
+type StockOpnameServiceInterface interface {
+	Create(ctx context.Context, companyID, userID int64, req dto.CreateStockOpnameRequest) (*dto.StockOpnameResponse, error)
+	GetByID(ctx context.Context, companyID, id int64) (*dto.StockOpnameResponse, error)
+	List(ctx context.Context, companyID int64, req dto.ListStockOpnameRequest) (*dto.StockOpnameListResponse, error)
+	UpdateItem(ctx context.Context, companyID, opnameID, itemID, userID int64, req dto.UpdateOpnameItemRequest) (*dto.StockOpnameItemResponse, error)
+	BulkUpdateItems(ctx context.Context, companyID, opnameID, userID int64, req dto.BulkUpdateOpnameItemsRequest) (*dto.StockOpnameResponse, error)
+	Complete(ctx context.Context, companyID, opnameID, userID int64, req dto.CompleteStockOpnameRequest) (*dto.StockOpnameResponse, error)
+	Cancel(ctx context.Context, companyID, opnameID int64) (*dto.StockOpnameResponse, error)
+}
+
 // Ensure concrete types implement interfaces
 var _ AuthServiceInterface = (*AuthService)(nil)
 var _ UserServiceInterface = (*UserService)(nil)
@@ -170,3 +181,4 @@ var _ PurchaseOrderServiceInterface = (*PurchaseOrderService)(nil)
 var _ ShiftServiceInterface = (*ShiftService)(nil)
 var _ ExpenseServiceInterface = (*ExpenseService)(nil)
 var _ ReceiptServiceInterface = (*ReceiptService)(nil)
+var _ StockOpnameServiceInterface = (*StockOpnameService)(nil)
