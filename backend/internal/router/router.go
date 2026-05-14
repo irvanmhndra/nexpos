@@ -24,6 +24,7 @@ type Handlers struct {
 	ExpenseCategory *handler.ExpenseCategoryHandler
 	Expense         *handler.ExpenseHandler
 	StockOpname     *handler.StockOpnameHandler
+	DailySettlement *handler.DailySettlementHandler
 	Receipt         *handler.ReceiptHandler // nil if MongoDB not configured
 }
 
@@ -187,4 +188,14 @@ func Setup(e *echo.Echo, h *Handlers, authMW echo.MiddlewareFunc) {
 	opnames.PATCH("/:id/items", h.StockOpname.BulkUpdateItems)
 	opnames.POST("/:id/complete", h.StockOpname.Complete)
 	opnames.POST("/:id/cancel", h.StockOpname.Cancel)
+
+	// Daily settlement routes
+	settlements := protected.Group("/daily-settlements")
+	settlements.GET("/report", h.DailySettlement.Report)
+	settlements.POST("", h.DailySettlement.Create)
+	settlements.GET("", h.DailySettlement.List)
+	settlements.GET("/:id", h.DailySettlement.Get)
+	settlements.PATCH("/:id/items/:itemId", h.DailySettlement.UpdateItem)
+	settlements.PATCH("/:id/items", h.DailySettlement.BulkUpdateItems)
+	settlements.POST("/:id/finalize", h.DailySettlement.Finalize)
 }

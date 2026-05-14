@@ -21,6 +21,7 @@ type Services struct {
 	Shift           *service.ShiftService
 	Expense         *service.ExpenseService
 	StockOpname     *service.StockOpnameService
+	DailySettlement *service.DailySettlementService
 	Receipt         *service.ReceiptService // nil if MongoDB not configured
 }
 
@@ -71,5 +72,6 @@ func initServices(repos *Repositories, cfg *config.Config) *Services {
 			repos.StockMovement,
 			repos.Branch,
 		),
+		DailySettlement: service.NewDailySettlementService(repos.DailySettlement, repos.Branch),
 	}
 }

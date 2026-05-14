@@ -33,6 +33,7 @@ type Repositories struct {
 	ExpenseCategory repository.ExpenseCategoryRepository
 	Expense         repository.ExpenseRepository
 	StockOpname     repository.StockOpnameRepository
+	DailySettlement repository.DailySettlementRepository
 	Receipt         repository.ReceiptRepository // nil if MongoDB not configured
 }
 
@@ -64,5 +65,6 @@ func initRepositories(db *sqlx.DB) *Repositories {
 		ExpenseCategory: postgres.NewExpenseCategoryRepository(db),
 		Expense:         postgres.NewExpenseRepository(db),
 		StockOpname:     postgres.NewStockOpnameRepository(db),
+		DailySettlement: postgres.NewDailySettlementRepository(db),
 	}
 }

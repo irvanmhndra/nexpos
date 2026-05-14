@@ -25,6 +25,7 @@ type Handlers struct {
 	ExpenseCategory *handler.ExpenseCategoryHandler
 	Expense         *handler.ExpenseHandler
 	StockOpname     *handler.StockOpnameHandler
+	DailySettlement *handler.DailySettlementHandler
 	Receipt         *handler.ReceiptHandler // nil if MongoDB not configured
 }
 
@@ -48,6 +49,7 @@ func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator)
 		ExpenseCategory: handler.NewExpenseCategoryHandler(services.Expense, v),
 		Expense:         handler.NewExpenseHandler(services.Expense, v),
 		StockOpname:     handler.NewStockOpnameHandler(services.StockOpname, v),
+		DailySettlement: handler.NewDailySettlementHandler(services.DailySettlement, v),
 	}
 	if services.Receipt != nil {
 		h.Order = handler.NewOrderHandler(services.Order, v, services.Receipt)
