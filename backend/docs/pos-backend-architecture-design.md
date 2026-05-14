@@ -68,161 +68,103 @@ The architecture follows **3-Layer Architecture** pattern — simple, pragmatic,
 
 ## Project Structure
 
+Actual structure of `nexpos-api`:
+
 ```
-pos-core-api/
+nexpos-api/
 ├── cmd/
 │   └── api/
 │       └── main.go                 # Application entry point
 │
-├── docs/                           # Documentation
-│   ├── api.md                      # API documentation
-│   ├── architecture.md             # Architecture overview
-│   ├── database-schema.md          # Database design
-│   └── setup.md                    # Setup guide
+├── docs/
+│   ├── api_documentation.md
+│   └── pos-backend-architecture-design.md
 │
 ├── internal/
-│   ├── handler/                    # HTTP handlers
-│   │   ├── auth.go
-│   │   ├── product.go
-│   │   ├── order.go
-│   │   ├── inventory.go
-│   │   └── health.go
+│   ├── app/                        # Application wiring (DI container)
+│   │   ├── app.go                  # Setup Echo, middleware, router
+│   │   ├── repositories.go         # initRepositories(db)
+│   │   ├── services.go             # initServices(repos, cfg)
+│   │   └── handlers.go             # initHandlers(db, services, v)
+│   │
+│   ├── handler/                    # HTTP handlers (one file per resource)
+│   │   ├── auth.go        branch.go        customer.go
+│   │   ├── product.go     product_category.go  order.go
+│   │   ├── inventory.go   report.go        promotion.go
+│   │   ├── company_settings.go  supplier.go  purchase_order.go
+│   │   ├── shift.go       expense.go       stock_opname.go
+│   │   ├── user.go        receipt.go       health.go
+│   │   ├── context_helpers.go      # getCompanyID, getBranchID, getUserID
+│   │   └── *_test.go               # Selected handler tests (most covered by integration)
 │   │
 │   ├── service/                    # Business logic
-│   │   ├── auth.go
-│   │   ├── product.go
-│   │   ├── order.go
-│   │   ├── inventory.go
-│   │   └── report.go
+│   │   ├── interface.go            # Service interfaces + var _ assertions
+│   │   ├── auth.go        branch.go        customer.go
+│   │   ├── product.go     product_category.go  order.go
+│   │   ├── inventory.go   report.go        promotion.go
+│   │   ├── company_settings.go  purchase_order.go
+│   │   ├── shift.go       expense.go       stock_opname.go
+│   │   ├── receipt.go     user.go
+│   │   ├── *_test.go               # Service-level unit tests (mocked repos)
+│   │   └── mocks/                  # Service mocks (for handler tests)
 │   │
-│   ├── repository/                 # Data access layer
+│   ├── repository/                 # Data access
 │   │   ├── interface.go            # All repository interfaces
-│   │   │
+│   │   ├── types.go                # Shared query result types
 │   │   ├── postgres/               # PostgreSQL implementations
-│   │   │   ├── user.go
-│   │   │   ├── company.go
-│   │   │   ├── branch.go
-│   │   │   ├── product.go
-│   │   │   ├── order.go
-│   │   │   ├── stock.go
-│   │   │   └── customer.go
-│   │   │
-│   │   └── mongo/                  # MongoDB implementations
-│   │       ├── audit_log.go
-│   │       └── activity.go
+│   │   │   └── *.go                # One file per repo
+│   │   ├── mongo/                  # MongoDB implementations (receipts only)
+│   │   └── mocks/                  # Mockery-generated mocks
 │   │
-│   ├── model/                      # Database/domain models
-│   │   ├── user.go
-│   │   ├── company.go
-│   │   ├── branch.go
-│   │   ├── product.go
-│   │   ├── order.go
-│   │   ├── stock.go
-│   │   ├── customer.go
-│   │   ├── payment.go
-│   │   └── audit_log.go
+│   ├── model/                      # DB / domain structs (sqlx tags)
+│   │   └── *.go                    # One file per entity
 │   │
-│   ├── dto/                        # Data Transfer Objects
-│   │   ├── request/                # API input contracts
-│   │   │   ├── auth.go
-│   │   │   ├── user.go
-│   │   │   ├── product.go
-│   │   │   ├── order.go
-│   │   │   └── inventory.go
-│   │   │
-│   │   └── response/               # API output contracts
-│   │       ├── common.go           # Pagination, etc.
-│   │       ├── auth.go
-│   │       ├── user.go
-│   │       ├── product.go
-│   │       ├── order.go
-│   │       └── inventory.go
-│   │
-│   ├── client/                     # Third-party API clients
-│   │   ├── payment/
-│   │   │   ├── interface.go
-│   │   │   ├── midtrans.go
-│   │   │   └── xendit.go
-│   │   │
-│   │   ├── notification/
-│   │   │   ├── interface.go
-│   │   │   ├── firebase.go
-│   │   │   └── twilio.go
-│   │   │
-│   │   └── shipping/
-│   │       ├── interface.go
-│   │       └── jne.go
-│   │
-│   ├── event/                      # Message broker (Kafka)
-│   │   ├── publisher/
-│   │   │   ├── interface.go
-│   │   │   └── kafka.go
-│   │   │
-│   │   ├── consumer/
-│   │   │   ├── order_consumer.go
-│   │   │   └── inventory_consumer.go
-│   │   │
-│   │   └── message/                # Event definitions
-│   │       ├── order.go
-│   │       └── inventory.go
+│   ├── dto/                        # Request + response payloads (flat)
+│   │   └── *.go                    # One file per resource (auth.go, order.go, ...)
 │   │
 │   ├── middleware/
-│   │   ├── auth.go
-│   │   ├── tenant.go
-│   │   ├── rbac.go
-│   │   ├── logging.go
-│   │   ├── recovery.go
-│   │   └── request_id.go
+│   │   └── auth.go                 # JWT auth middleware (sets company_id, user_id, branch_id)
 │   │
 │   └── router/
-│       └── router.go
+│       └── router.go               # Route table (Echo group definitions)
 │
-├── pkg/                            # Shared packages
-│   ├── apperror/
-│   │   └── error.go
-│   │
-│   ├── httputil/
-│   │   └── response.go
-│   │
-│   ├── logger/
-│   │   └── logger.go
-│   │
-│   ├── pagination/
-│   │   └── pagination.go
-│   │
-│   └── validator/
-│       └── validator.go
+├── pkg/                            # Reusable shared packages
+│   ├── apperror/                   # Typed application errors + HTTP mapping
+│   ├── httputil/                   # Response builders, pagination meta
+│   └── validator/                  # go-playground/validator wrapper
 │
-├── migrations/
+├── migrations/                     # golang-migrate SQL files (numbered)
 │   ├── 000001_create_companies_table.up.sql
 │   ├── 000001_create_companies_table.down.sql
 │   └── ...
 │
 ├── config/
-│   └── config.go
+│   └── config.go                   # Env-based config loader
 │
-├── scripts/
-│   ├── setup.sh
-│   └── seed.sh
+├── tests/                          # Integration tests
+│   ├── integration/
+│   │   ├── auth_test.go
+│   │   ├── customer_test.go
+│   │   ├── order_test.go
+│   │   ├── product_test.go
+│   │   └── health_test.go
+│   └── testutil/                   # Testcontainers helpers (postgres, mongo)
 │
-├── tests/
-│   └── integration/
-│       ├── auth_test.go
-│       ├── order_test.go
-│       └── testhelper/
-│           ├── database.go
-│           ├── fixtures.go
-│           └── http.go
-│
-├── .golangci.yml
-├── .env.example
 ├── docker-compose.yml
+├── docker-compose.test.yml
 ├── Dockerfile
-├── Makefile
+├── makefile
 ├── go.mod
 ├── go.sum
 └── README.md
 ```
+
+**Differences from earlier drafts of this document:**
+- DTOs are **flat** (`internal/dto/*.go`) — not split into `request/` & `response/`.
+- No `internal/client/` (no external payment gateways).
+- No `internal/event/` (no Kafka).
+- `internal/app/` is the DI container wiring repositories → services → handlers.
+- `pkg/` is minimal: only `apperror`, `httputil`, `validator`.
 
 ---
 
@@ -230,80 +172,57 @@ pos-core-api/
 
 ### Core Dependencies
 
-```go
-module github.com/yourusername/pos-core-api
+Reflecting the actual `go.mod`:
 
-go 1.23
+```go
+module github.com/irvanmhndra/nexpos-api
+
+go 1.26.2
 
 require (
     // Web framework
-    github.com/labstack/echo/v4 v4.12.0
+    github.com/labstack/echo/v5 v5.0.1
 
     // PostgreSQL
     github.com/jmoiron/sqlx v1.4.0
     github.com/lib/pq v1.10.9
 
-    // MongoDB
-    go.mongodb.org/mongo-driver v1.17.1
-
-    // Redis
-    github.com/redis/go-redis/v9 v9.7.0
-
-    // Kafka
-    github.com/segmentio/kafka-go v0.4.47
-
-    // Configuration
-    github.com/spf13/viper v1.19.0
+    // MongoDB (optional, for receipts)
+    go.mongodb.org/mongo-driver v1.17.9
 
     // Validation
-    github.com/go-playground/validator/v10 v10.22.1
+    github.com/go-playground/validator/v10 v10.24.0
 
     // Utilities
     github.com/google/uuid v1.6.0
-    github.com/golang-jwt/jwt/v5 v5.2.1
-    github.com/rs/zerolog v1.33.0
-    golang.org/x/crypto v0.28.0
-
-    // Testing
-    github.com/stretchr/testify v1.9.0
-    github.com/DATA-DOG/go-sqlmock v1.5.2
-    github.com/testcontainers/testcontainers-go v0.34.0
+    golang.org/x/crypto v0.48.0          // bcrypt password hashing
 
     // Migration
-    github.com/golang-migrate/migrate/v4 v4.18.1
+    github.com/golang-migrate/migrate/v4 v4.19.1
+
+    // Testing
+    github.com/stretchr/testify v1.11.1
+    github.com/testcontainers/testcontainers-go v0.42.0
+    github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
+    github.com/testcontainers/testcontainers-go/modules/mongodb v0.42.0
 )
 ```
+
+**JWT** is handled inside the `auth` service (no third-party JWT library at go.mod root; add one if needed). **Logging** uses Go's standard `log/slog`.
+
+**Not (yet) used** — mentioned in earlier drafts but absent from current code: Redis, Kafka, viper, zerolog, sqlmock, midtrans/xendit/firebase/twilio clients. Add as real needs arise.
 
 ### Installation Commands
 
 ```bash
-# Web framework
-go get github.com/labstack/echo/v4
-
-# Databases
-go get github.com/jmoiron/sqlx
-go get github.com/lib/pq
-go get go.mongodb.org/mongo-driver/mongo
-go get github.com/redis/go-redis/v9
-
-# Message broker
-go get github.com/segmentio/kafka-go
-
-# Configuration & utilities
-go get github.com/spf13/viper
-go get github.com/go-playground/validator/v10
-go get github.com/google/uuid
-go get github.com/golang-jwt/jwt/v5
-go get github.com/rs/zerolog
-go get golang.org/x/crypto
-
-# Testing
-go get github.com/stretchr/testify
-go get github.com/DATA-DOG/go-sqlmock
-go get github.com/testcontainers/testcontainers-go
+# Standard go module dependencies
+go mod tidy
 
 # Migration CLI
 go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+
+# Mock generation
+go install github.com/vektra/mockery/v2@latest
 
 # Linter
 brew install golangci-lint  # macOS
@@ -325,11 +244,11 @@ import (
     "net/http"
 
     "github.com/google/uuid"
-    "github.com/labstack/echo/v4"
-    "github.com/yourusername/pos-core-api/internal/dto/request"
-    "github.com/yourusername/pos-core-api/internal/service"
-    "github.com/yourusername/pos-core-api/pkg/apperror"
-    "github.com/yourusername/pos-core-api/pkg/httputil"
+    "github.com/labstack/echo/v5"
+    "github.com/irvanmhndra/nexpos-api/internal/dto/request"
+    "github.com/irvanmhndra/nexpos-api/internal/service"
+    "github.com/irvanmhndra/nexpos-api/pkg/apperror"
+    "github.com/irvanmhndra/nexpos-api/pkg/httputil"
 )
 
 type OrderHandler struct {
@@ -444,14 +363,14 @@ import (
 
     "github.com/google/uuid"
     "github.com/jmoiron/sqlx"
-    "github.com/yourusername/pos-core-api/internal/client/payment"
-    "github.com/yourusername/pos-core-api/internal/dto/request"
-    "github.com/yourusername/pos-core-api/internal/dto/response"
-    "github.com/yourusername/pos-core-api/internal/event/message"
-    "github.com/yourusername/pos-core-api/internal/event/publisher"
-    "github.com/yourusername/pos-core-api/internal/model"
-    "github.com/yourusername/pos-core-api/internal/repository"
-    "github.com/yourusername/pos-core-api/pkg/apperror"
+    "github.com/irvanmhndra/nexpos-api/internal/client/payment"
+    "github.com/irvanmhndra/nexpos-api/internal/dto/request"
+    "github.com/irvanmhndra/nexpos-api/internal/dto/response"
+    "github.com/irvanmhndra/nexpos-api/internal/event/message"
+    "github.com/irvanmhndra/nexpos-api/internal/event/publisher"
+    "github.com/irvanmhndra/nexpos-api/internal/model"
+    "github.com/irvanmhndra/nexpos-api/internal/repository"
+    "github.com/irvanmhndra/nexpos-api/pkg/apperror"
 )
 
 type OrderService struct {
@@ -696,7 +615,7 @@ import (
 
     "github.com/google/uuid"
     "github.com/jmoiron/sqlx"
-    "github.com/yourusername/pos-core-api/internal/model"
+    "github.com/irvanmhndra/nexpos-api/internal/model"
 )
 
 // ==================== User ====================
@@ -794,8 +713,8 @@ import (
 
     "github.com/google/uuid"
     "github.com/jmoiron/sqlx"
-    "github.com/yourusername/pos-core-api/internal/model"
-    "github.com/yourusername/pos-core-api/internal/repository"
+    "github.com/irvanmhndra/nexpos-api/internal/model"
+    "github.com/irvanmhndra/nexpos-api/internal/repository"
 )
 
 type orderRepository struct {
@@ -1220,7 +1139,7 @@ package response
 
 import (
     "time"
-    "github.com/yourusername/pos-core-api/internal/model"
+    "github.com/irvanmhndra/nexpos-api/internal/model"
 )
 
 type Order struct {
@@ -1353,7 +1272,7 @@ package response
 
 import (
     "time"
-    "github.com/yourusername/pos-core-api/internal/model"
+    "github.com/irvanmhndra/nexpos-api/internal/model"
 )
 
 type User struct {
@@ -1399,9 +1318,11 @@ func NewUserListResponse(users []model.User, total int64, page, pageSize int) *U
 
 ## External Integrations
 
-### Client Layer (`internal/client/`)
+> **Current status:** Nexpos does not integrate any external payment gateway or message broker. This section is kept as guidance **if** these are added later.
 
-Third-party API integrations.
+### Pattern: Client Layer (`internal/client/`)
+
+If third-party integrations are needed (e.g. Midtrans, Xendit, Firebase, Twilio):
 
 ```go
 // internal/client/payment/interface.go
@@ -1414,192 +1335,46 @@ type Gateway interface {
     CheckStatus(ctx context.Context, transactionID string) (*StatusResponse, error)
     Refund(ctx context.Context, transactionID string, amount int64) error
 }
-
-type ChargeRequest struct {
-    OrderID string
-    Amount  int64
-    Method  string
-}
-
-type ChargeResponse struct {
-    TransactionID string
-    Status        string
-    PaymentURL    string
-}
-
-type StatusResponse struct {
-    TransactionID string
-    Status        string
-}
 ```
 
-```go
-// internal/client/payment/midtrans.go
-package payment
+Services that need a gateway receive it via constructor injection; the concrete implementation (Midtrans, Xendit, mock) is swapped in `internal/app/services.go`. Goal: services stay testable via a mock gateway without network calls.
 
-import (
-    "context"
-    "github.com/midtrans/midtrans-go"
-    "github.com/midtrans/midtrans-go/coreapi"
-)
+### Pattern: Event Layer (`internal/event/`)
 
-type MidtransClient struct {
-    client coreapi.Client
-}
-
-func NewMidtransClient(serverKey string, isProduction bool) *MidtransClient {
-    env := midtrans.Sandbox
-    if isProduction {
-        env = midtrans.Production
-    }
-
-    c := coreapi.Client{}
-    c.New(serverKey, env)
-
-    return &MidtransClient{client: c}
-}
-
-func (m *MidtransClient) Charge(ctx context.Context, req ChargeRequest) (*ChargeResponse, error) {
-    resp, err := m.client.ChargeTransaction(&coreapi.ChargeReq{
-        TransactionDetails: midtrans.TransactionDetails{
-            OrderID:  req.OrderID,
-            GrossAmt: req.Amount,
-        },
-    })
-    if err != nil {
-        return nil, err
-    }
-
-    return &ChargeResponse{
-        TransactionID: resp.TransactionID,
-        Status:        resp.TransactionStatus,
-    }, nil
-}
-
-func (m *MidtransClient) CheckStatus(ctx context.Context, transactionID string) (*StatusResponse, error) {
-    resp, err := m.client.CheckTransaction(transactionID)
-    if err != nil {
-        return nil, err
-    }
-
-    return &StatusResponse{
-        TransactionID: resp.TransactionID,
-        Status:        resp.TransactionStatus,
-    }, nil
-}
-
-func (m *MidtransClient) Refund(ctx context.Context, transactionID string, amount int64) error {
-    _, err := m.client.RefundTransaction(transactionID, &coreapi.RefundReq{
-        Amount: amount,
-        Reason: "Order voided",
-    })
-    return err
-}
-```
-
-### Event Layer (`internal/event/`)
-
-Message broker integration.
+If async eventing is needed (e.g. async stock reconcile, push notifications):
 
 ```go
-// internal/event/publisher/interface.go
-package publisher
-
-import "context"
-
 type EventPublisher interface {
     Publish(ctx context.Context, topic string, message any) error
     Close() error
 }
 ```
 
-```go
-// internal/event/publisher/kafka.go
-package publisher
+Services publish events at the end of an operation (post-commit). Initial implementation can use `kafka-go` or `nats.go`; start with an in-memory publisher for tests.
 
-import (
-    "context"
-    "encoding/json"
-    "github.com/segmentio/kafka-go"
-)
-
-type KafkaPublisher struct {
-    writer *kafka.Writer
-}
-
-func NewKafkaPublisher(brokers []string) *KafkaPublisher {
-    return &KafkaPublisher{
-        writer: &kafka.Writer{
-            Addr:     kafka.TCP(brokers...),
-            Balancer: &kafka.LeastBytes{},
-        },
-    }
-}
-
-func (p *KafkaPublisher) Publish(ctx context.Context, topic string, message any) error {
-    data, err := json.Marshal(message)
-    if err != nil {
-        return err
-    }
-
-    return p.writer.WriteMessages(ctx, kafka.Message{
-        Topic: topic,
-        Value: data,
-    })
-}
-
-func (p *KafkaPublisher) Close() error {
-    return p.writer.Close()
-}
-```
-
-```go
-// internal/event/message/order.go
-package message
-
-import (
-    "time"
-    "github.com/google/uuid"
-)
-
-type OrderCreated struct {
-    OrderID   uuid.UUID `json:"order_id"`
-    CompanyID int64     `json:"company_id"`
-    BranchID  int64     `json:"branch_id"`
-    Total     int64     `json:"total"`
-    CreatedAt time.Time `json:"created_at"`
-}
-
-type OrderVoided struct {
-    OrderID   uuid.UUID `json:"order_id"`
-    CompanyID int64     `json:"company_id"`
-    VoidedBy  int64     `json:"voided_by"`
-    Reason    string    `json:"reason"`
-    VoidedAt  time.Time `json:"voided_at"`
-}
-```
+**Nexpos currently needs neither** — completed orders are handled synchronously inside the service, and receipt persistence to MongoDB is enough for audit. Add these only when a real need emerges.
 
 ---
 
 ## Configuration Management
+
+Configuration is loaded from environment variables (no third-party `.env` reader — just `os.Getenv`). See `config/config.go`.
 
 ```go
 // config/config.go
 package config
 
 import (
-    "fmt"
-    "github.com/spf13/viper"
+    "os"
+    "strconv"
+    "time"
 )
 
 type Config struct {
     Server   ServerConfig
     Postgres PostgresConfig
-    Mongo    MongoConfig
-    Redis    RedisConfig
-    Kafka    KafkaConfig
     JWT      JWTConfig
-    Midtrans MidtransConfig
+    Mongo    MongoConfig
 }
 
 type ServerConfig struct {
@@ -1608,95 +1383,84 @@ type ServerConfig struct {
 }
 
 type PostgresConfig struct {
-    Host     string
-    Port     string
-    User     string
-    Password string
-    DBName   string
-    SSLMode  string
+    Host        string
+    Port        string
+    User        string
+    Password    string
+    DB          string
+    SSLMode     string
+    DSNOverride string // used by integration tests
 }
 
-func (c PostgresConfig) DSN() string {
-    return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-        c.Host, c.Port, c.User, c.Password, c.DBName, c.SSLMode)
+func (p PostgresConfig) DSN() string {
+    if p.DSNOverride != "" {
+        return p.DSNOverride
+    }
+    return "postgres://" + p.User + ":" + p.Password + "@" + p.Host + ":" + p.Port +
+        "/" + p.DB + "?sslmode=" + p.SSLMode
 }
 
 type MongoConfig struct {
-    URI    string
-    DBName string
-}
-
-type RedisConfig struct {
-    Host     string
-    Port     string
-    Password string
-    DB       int
-}
-
-func (c RedisConfig) Addr() string {
-    return fmt.Sprintf("%s:%s", c.Host, c.Port)
-}
-
-type KafkaConfig struct {
-    Brokers []string
-    GroupID string
+    URI      string
+    Database string
 }
 
 type JWTConfig struct {
-    Secret           string
-    AccessExpiresIn  int
-    RefreshExpiresIn int
-}
-
-type MidtransConfig struct {
-    ServerKey    string
-    IsProduction bool
+    Secret             string
+    AccessExpiresHours int
+    RefreshExpiresDays int
+    AccessTokenExpiry  time.Duration
+    RefreshTokenExpiry time.Duration
 }
 
 func Load() *Config {
-    viper.SetConfigFile(".env")
-    viper.AutomaticEnv()
-    viper.ReadInConfig()
-
+    accessHours := getEnvInt("JWT_ACCESS_EXPIRES_HOURS", 2)
+    refreshDays := getEnvInt("JWT_REFRESH_EXPIRES_DAYS", 7)
     return &Config{
         Server: ServerConfig{
-            Port: viper.GetString("SERVER_PORT"),
-            Env:  viper.GetString("SERVER_ENV"),
+            Port: getEnv("SERVER_PORT", "8080"),
+            Env:  getEnv("SERVER_ENV", "development"),
         },
         Postgres: PostgresConfig{
-            Host:     viper.GetString("POSTGRES_HOST"),
-            Port:     viper.GetString("POSTGRES_PORT"),
-            User:     viper.GetString("POSTGRES_USER"),
-            Password: viper.GetString("POSTGRES_PASSWORD"),
-            DBName:   viper.GetString("POSTGRES_DB"),
-            SSLMode:  viper.GetString("POSTGRES_SSLMODE"),
+            Host:     getEnv("POSTGRES_HOST", "localhost"),
+            Port:     getEnv("POSTGRES_PORT", "5432"),
+            User:     getEnv("POSTGRES_USER", "pos_user"),
+            Password: getEnv("POSTGRES_PASSWORD", ""),
+            DB:       getEnv("POSTGRES_DB", "pos_db"),
+            SSLMode:  getEnv("POSTGRES_SSLMODE", "disable"),
         },
         Mongo: MongoConfig{
-            URI:    viper.GetString("MONGO_URI"),
-            DBName: viper.GetString("MONGO_DB"),
-        },
-        Redis: RedisConfig{
-            Host:     viper.GetString("REDIS_HOST"),
-            Port:     viper.GetString("REDIS_PORT"),
-            Password: viper.GetString("REDIS_PASSWORD"),
-            DB:       viper.GetInt("REDIS_DB"),
-        },
-        Kafka: KafkaConfig{
-            Brokers: viper.GetStringSlice("KAFKA_BROKERS"),
-            GroupID: viper.GetString("KAFKA_GROUP_ID"),
+            URI:      getEnv("MONGO_URI", ""),
+            Database: getEnv("MONGO_DB", "nexpos"),
         },
         JWT: JWTConfig{
-            Secret:           viper.GetString("JWT_SECRET"),
-            AccessExpiresIn:  viper.GetInt("JWT_ACCESS_EXPIRES_HOURS"),
-            RefreshExpiresIn: viper.GetInt("JWT_REFRESH_EXPIRES_DAYS"),
-        },
-        Midtrans: MidtransConfig{
-            ServerKey:    viper.GetString("MIDTRANS_SERVER_KEY"),
-            IsProduction: viper.GetBool("MIDTRANS_IS_PRODUCTION"),
+            Secret:             getEnv("JWT_SECRET", "secret"),
+            AccessExpiresHours: accessHours,
+            RefreshExpiresDays: refreshDays,
+            AccessTokenExpiry:  time.Duration(accessHours) * time.Hour,
+            RefreshTokenExpiry: time.Duration(refreshDays) * 24 * time.Hour,
         },
     }
 }
+
+func getEnv(key, defaultValue string) string {
+    if value := os.Getenv(key); value != "" {
+        return value
+    }
+    return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+    if value := os.Getenv(key); value != "" {
+        if intValue, err := strconv.Atoi(value); err == nil {
+            return intValue
+        }
+    }
+    return defaultValue
+}
 ```
+
+**MongoDB is optional**: if `MONGO_URI` is empty, the MongoDB client is not created and `GET /orders/:id/receipt` is not registered. The receipt service becomes `nil` and the order service continues to run without receipt persistence.
 
 ---
 
@@ -1768,8 +1532,8 @@ func RefundFailed(reason string) *AppError {
 package httputil
 
 import (
-    "github.com/labstack/echo/v4"
-    "github.com/yourusername/pos-core-api/pkg/apperror"
+    "github.com/labstack/echo/v5"
+    "github.com/irvanmhndra/nexpos-api/pkg/apperror"
 )
 
 type Response struct {
@@ -1814,7 +1578,7 @@ func ValidationError(c echo.Context, err error) error {
 ### Test Directory Structure
 
 ```
-pos-core-api/
+nexpos-api/
 ├── internal/
 │   ├── handler/
 │   │   ├── order.go
@@ -1825,50 +1589,33 @@ pos-core-api/
 │   │   └── order_test.go              # Unit test (same package)
 │   │
 │   ├── repository/
-│   │   ├── postgres/
-│   │   │   ├── order.go
-│   │   │   └── order_test.go          # Unit test with sqlmock
+│   │   ├── postgres/                  # Tidak ada unit test di sini
+│   │   │   ├── order.go               # (Postgres repo dicover via integration tests)
+│   │   │   └── ...
 │   │   │
-│   │   └── mocks/                     # Generated mocks
-│   │       ├── order_repository.go
-│   │       ├── stock_repository.go
-│   │       ├── product_repository.go
-│   │       └── user_repository.go
-│   │
-│   ├── client/
-│   │   ├── payment/
-│   │   │   ├── midtrans.go
-│   │   │   └── midtrans_test.go       # Unit test with HTTP mock
-│   │   │
-│   │   └── mocks/
-│   │       └── payment_gateway.go
-│   │
-│   ├── event/
-│   │   └── mocks/
-│   │       └── event_publisher.go
+│   │   └── mocks/                     # Mockery-generated repository mocks
+│   │       ├── order.go
+│   │       ├── stock.go
+│   │       ├── product.go
+│   │       └── ...
 │   │
 │   └── dto/
-│       └── response/
-│           ├── order.go
-│           └── order_test.go          # Test converters
+│       └── *.go                       # Flat DTOs (auth.go, order.go, ...)
 │
-├── tests/                             # Integration & E2E tests
+├── tests/                             # Integration tests
 │   ├── integration/
 │   │   ├── auth_test.go
+│   │   ├── customer_test.go
 │   │   ├── order_test.go
 │   │   ├── product_test.go
-│   │   ├── inventory_test.go
-│   │   │
-│   │   └── helper/
-│   │       ├── app.go                 # Test app setup
-│   │       ├── database.go            # DB helpers
-│   │       ├── fixtures.go            # Test data seeding
-│   │       └── auth.go                # Auth helpers
+│   │   └── health_test.go
 │   │
-│   └── e2e/                           # End-to-end tests (optional)
-│       └── checkout_flow_test.go
+│   └── testutil/                      # Test helpers
+│       ├── db.go                      # Postgres testcontainer setup
+│       ├── mongo.go                   # Mongo testcontainer setup
+│       └── http.go                    # Test HTTP client + JWT helpers
 │
-└── Makefile
+└── makefile
 ```
 
 ### Unit vs Integration Tests
@@ -1879,7 +1626,7 @@ pos-core-api/
 | **Dependencies** | Mocked | Real (testcontainers) |
 | **Speed** | Fast (milliseconds) | Slower (seconds) |
 | **Scope** | Single function/method | Full HTTP request flow |
-| **Database** | sqlmock / in-memory | Real PostgreSQL container |
+| **Database** | Mocked via repository interface | Real PostgreSQL container |
 | **Run** | `make test-unit` | `make test-integration` |
 
 ### Mock Generation
@@ -1896,31 +1643,40 @@ Create config file:
 # .mockery.yaml
 with-expecter: true
 packages:
-  github.com/yourusername/pos-core-api/internal/repository:
+  github.com/irvanmhndra/nexpos-api/internal/repository:
     interfaces:
       UserRepository:
+      CompanyRepository:
+      BranchRepository:
+      UserSessionRepository:
+      RoleRepository:
+      PermissionRepository:
+      RolePermissionRepository:
+      UserBranchRepository:
+      CustomerRepository:
+      ProductCategoryRepository:
       ProductRepository:
+      ProductVariantRepository:
       OrderRepository:
+      OrderItemRepository:
+      PaymentRepository:
+      CompanySettingsRepository:
+      PromotionRepository:
+      ReportRepository:
       StockRepository:
-      AuditLogRepository:
+      StockMovementRepository:
+      SupplierRepository:
+      PurchaseOrderRepository:
+      ShiftRepository:
+      ExpenseCategoryRepository:
+      ExpenseRepository:
+      StockOpnameRepository:
     config:
       dir: internal/repository/mocks
       outpkg: mocks
-
-  github.com/yourusername/pos-core-api/internal/client/payment:
-    interfaces:
-      Gateway:
-    config:
-      dir: internal/client/mocks
-      outpkg: mocks
-
-  github.com/yourusername/pos-core-api/internal/event/publisher:
-    interfaces:
-      EventPublisher:
-    config:
-      dir: internal/event/mocks
-      outpkg: mocks
 ```
+
+> Tidak ada `internal/client/` atau `internal/event/` yet. Tambah package + entri mockery saat butuh.
 
 Generate mocks:
 
@@ -1932,9 +1688,10 @@ mockery
 
 #### Service Layer Test
 
+Real example from `internal/service/stock_opname_test.go` — pattern: mock all repository dependencies, call service method, assert behavior.
+
 ```go
-// internal/service/order_test.go
-package service_test
+package service
 
 import (
     "context"
@@ -1942,236 +1699,106 @@ import (
 
     "github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/mock"
+    "github.com/stretchr/testify/require"
 
-    "github.com/yourusername/pos-core-api/internal/dto/request"
-    "github.com/yourusername/pos-core-api/internal/model"
-    "github.com/yourusername/pos-core-api/internal/service"
-    repoMock "github.com/yourusername/pos-core-api/internal/repository/mocks"
-    clientMock "github.com/yourusername/pos-core-api/internal/client/mocks"
-    eventMock "github.com/yourusername/pos-core-api/internal/event/mocks"
+    "github.com/irvanmhndra/nexpos-api/internal/dto"
+    "github.com/irvanmhndra/nexpos-api/internal/model"
+    repoMocks "github.com/irvanmhndra/nexpos-api/internal/repository/mocks"
 )
 
-func TestOrderService_Create_Success(t *testing.T) {
-    // Arrange
-    mockOrderRepo := repoMock.NewMockOrderRepository(t)
-    mockStockRepo := repoMock.NewMockStockRepository(t)
-    mockProductRepo := repoMock.NewMockProductRepository(t)
-    mockAuditRepo := repoMock.NewMockAuditLogRepository(t)
-    mockPaymentGw := clientMock.NewMockGateway(t)
-    mockPublisher := eventMock.NewMockEventPublisher(t)
-
-    mockStockRepo.On("GetAvailable", mock.Anything, int64(1), int64(1)).Return(100, nil)
-    mockProductRepo.On("GetVariantByID", mock.Anything, int64(1), int64(1)).Return(&model.ProductVariant{
-        ID: 1, ProductName: "Product A", Name: "Default", SKU: "SKU001", Price: 10000,
-    }, nil)
-    mockStockRepo.On("DeductTx", mock.Anything, mock.Anything, int64(1), int64(1), 2).Return(nil)
-    mockOrderRepo.On("CreateTx", mock.Anything, mock.Anything, mock.AnythingOfType("*model.Order")).Return(nil)
-    mockOrderRepo.On("GetByIDWithRelations", mock.Anything, int64(1), mock.Anything).Return(&model.Order{
-        GrandTotal: 20000,
-        Cashier:    &model.User{ID: 1, Name: "Cashier"},
-    }, nil)
-    mockPublisher.On("Publish", mock.Anything, "order.created", mock.Anything).Return(nil)
-    mockAuditRepo.On("Insert", mock.Anything, mock.Anything).Return(nil)
-
-    svc := service.NewOrderService(nil, mockOrderRepo, mockStockRepo, mockProductRepo, mockAuditRepo, mockPaymentGw, mockPublisher)
-
-    req := request.CreateOrder{
-        Items:    []request.CreateOrderItem{{ProductVariantID: 1, Quantity: 2}},
-        Payments: []request.CreatePayment{{Method: "cash", Amount: 20000}},
-    }
-
-    // Act
-    result, err := svc.Create(context.Background(), 1, 1, 1, req)
-
-    // Assert
-    assert.NoError(t, err)
-    assert.NotNil(t, result)
-    assert.Equal(t, int64(20000), result.GrandTotal)
+type opnameTestSetup struct {
+    svc          *StockOpnameService
+    opnameRepo   *repoMocks.MockStockOpnameRepository
+    stockRepo    *repoMocks.MockStockRepository
+    movementRepo *repoMocks.MockStockMovementRepository
+    branchRepo   *repoMocks.MockBranchRepository
 }
 
-func TestOrderService_Create_InsufficientStock(t *testing.T) {
-    // Arrange
-    mockStockRepo := repoMock.NewMockStockRepository(t)
-    mockStockRepo.On("GetAvailable", mock.Anything, int64(1), int64(1)).Return(1, nil)
-
-    svc := service.NewOrderService(nil, nil, mockStockRepo, nil, nil, nil, nil)
-
-    req := request.CreateOrder{
-        Items: []request.CreateOrderItem{{ProductVariantID: 1, Quantity: 10}},
+func setupOpnameTest(t *testing.T) *opnameTestSetup {
+    t.Helper()
+    s := &opnameTestSetup{
+        opnameRepo:   repoMocks.NewMockStockOpnameRepository(t),
+        stockRepo:    repoMocks.NewMockStockRepository(t),
+        movementRepo: repoMocks.NewMockStockMovementRepository(t),
+        branchRepo:   repoMocks.NewMockBranchRepository(t),
     }
-
-    // Act
-    result, err := svc.Create(context.Background(), 1, 1, 1, req)
-
-    // Assert
-    assert.Error(t, err)
-    assert.Nil(t, result)
-    assert.Contains(t, err.Error(), "insufficient")
+    s.svc = NewStockOpnameService(s.opnameRepo, s.stockRepo, s.movementRepo, s.branchRepo)
+    return s
 }
 
-func TestOrderService_Void_Success(t *testing.T) {
-    // Arrange
-    orderID := uuid.New()
-    mockOrderRepo := repoMock.NewMockOrderRepository(t)
-    mockStockRepo := repoMock.NewMockStockRepository(t)
-    mockAuditRepo := repoMock.NewMockAuditLogRepository(t)
-    mockPaymentGw := clientMock.NewMockGateway(t)
+func TestStockOpnameService_Create_Success(t *testing.T) {
+    s := setupOpnameTest(t)
+    ctx := context.Background()
+    companyID, userID, branchID := int64(1), int64(7), int64(2)
 
-    mockOrderRepo.On("GetByIDWithRelations", mock.Anything, int64(1), orderID).Return(&model.Order{
-        ID:         orderID,
-        Status:     model.OrderStatusCompleted,
-        GrandTotal: 20000,
-        PaymentRef: "TXN123",
-        Items: []model.OrderItem{
-            {ProductVariantID: 1, Quantity: 2},
-        },
-    }, nil)
-    mockPaymentGw.On("Refund", mock.Anything, "TXN123", int64(20000)).Return(nil)
-    mockOrderRepo.On("UpdateStatus", mock.Anything, orderID, model.OrderStatusVoided).Return(nil)
-    mockStockRepo.On("Add", mock.Anything, int64(1), int64(0), 2).Return(nil)
-    mockAuditRepo.On("Insert", mock.Anything, mock.Anything).Return(nil)
+    s.branchRepo.EXPECT().GetByID(ctx, branchID).
+        Return(&model.Branch{ID: branchID, CompanyID: companyID}, nil).Once()
+    s.opnameRepo.EXPECT().GenerateOpnameNumber(ctx, companyID).
+        Return("OPN-20260514-0001", nil).Once()
+    s.opnameRepo.EXPECT().Create(ctx, mock.MatchedBy(func(op *model.StockOpname) bool {
+        return op.Status == model.StockOpnameStatusInProgress
+    })).Run(func(args mock.Arguments) {
+        args.Get(1).(*model.StockOpname).ID = 100
+    }).Return(nil).Once()
+    s.opnameRepo.EXPECT().SnapshotItems(ctx, int64(100), companyID, branchID, (*int64)(nil)).
+        Return(5, nil).Once()
+    s.opnameRepo.EXPECT().GetByID(ctx, companyID, int64(100)).
+        Return(&model.StockOpname{ID: 100, Status: model.StockOpnameStatusInProgress}, nil).Once()
+    s.opnameRepo.EXPECT().GetItems(ctx, int64(100)).Return([]*model.StockOpnameItem{}, nil).Once()
+    s.opnameRepo.EXPECT().GetItemStats(ctx, int64(100)).Return(5, 0, nil).Once()
 
-    svc := service.NewOrderService(nil, mockOrderRepo, mockStockRepo, nil, mockAuditRepo, mockPaymentGw, nil)
+    resp, err := s.svc.Create(ctx, companyID, userID, dto.CreateStockOpnameRequest{BranchID: branchID})
 
-    // Act
-    err := svc.Void(context.Background(), 1, orderID, 1, "Customer request")
-
-    // Assert
-    assert.NoError(t, err)
-    mockPaymentGw.AssertCalled(t, "Refund", mock.Anything, "TXN123", int64(20000))
+    require.NoError(t, err)
+    assert.Equal(t, int64(100), resp.ID)
+    assert.Equal(t, 5, resp.TotalItems)
 }
 ```
+
+Conventions:
+- Tests live in the same package as the code under test (no `_test` suffix on package).
+- Use mockery-generated mocks with `.EXPECT()` API for type-safe expectations.
+- Helper `setupXxxTest(t)` per service to centralize wiring.
+- One assertion focus per test; cover happy + failure paths separately.
 
 #### Handler Layer Test
 
+Most handler coverage is delivered by integration tests (real HTTP request flow with a testcontainer Postgres). Selected handlers that need fine-grained unit tests (e.g. auth) use mocked services:
+
 ```go
-// internal/handler/order_test.go
-package handler_test
+// internal/handler/auth_test.go (excerpt)
+package handler
 
 import (
-    "bytes"
-    "encoding/json"
-    "net/http"
     "net/http/httptest"
+    "strings"
     "testing"
 
-    "github.com/labstack/echo/v4"
-    "github.com/stretchr/testify/assert"
-    "github.com/stretchr/testify/mock"
+    "github.com/labstack/echo/v5"
+    "github.com/stretchr/testify/require"
 
-    "github.com/yourusername/pos-core-api/internal/dto/response"
-    "github.com/yourusername/pos-core-api/internal/handler"
-    serviceMock "github.com/yourusername/pos-core-api/internal/service/mocks"
+    serviceMock "github.com/irvanmhndra/nexpos-api/internal/service/mocks"
 )
 
-func TestOrderHandler_Create_Success(t *testing.T) {
-    // Arrange
-    mockOrderSvc := serviceMock.NewMockOrderService(t)
-    mockOrderSvc.On("Create", mock.Anything, int64(1), int64(1), int64(1), mock.Anything).
-        Return(&response.Order{
-            ID:         "uuid-123",
-            OrderNo:    "ORD-1-123",
-            GrandTotal: 20000,
-        }, nil)
+func TestAuthHandler_Login_ValidationErrors(t *testing.T) {
+    mockSvc := serviceMock.NewMockAuthServiceInterface(t)
+    h := NewAuthHandler(mockSvc, testValidator())
 
-    h := handler.NewOrderHandler(mockOrderSvc)
-
-    e := echo.New()
-    body, _ := json.Marshal(map[string]any{
-        "items":    []map[string]any{{"product_variant_id": 1, "quantity": 2}},
-        "payments": []map[string]any{{"method": "cash", "amount": 20000}},
-    })
-
-    req := httptest.NewRequest(http.MethodPost, "/orders", bytes.NewReader(body))
+    req := httptest.NewRequest("POST", "/auth/login", strings.NewReader(`{}`))
     req.Header.Set("Content-Type", "application/json")
     rec := httptest.NewRecorder()
+    c := echo.New().NewContext(req, rec)
 
-    c := e.NewContext(req, rec)
-    c.Set("company_id", int64(1))
-    c.Set("branch_id", int64(1))
-    c.Set("user_id", int64(1))
-
-    // Act
-    err := h.Create(c)
-
-    // Assert
-    assert.NoError(t, err)
-    assert.Equal(t, http.StatusCreated, rec.Code)
-
-    var resp map[string]any
-    json.Unmarshal(rec.Body.Bytes(), &resp)
-    assert.True(t, resp["success"].(bool))
-    assert.Equal(t, "ORD-1-123", resp["data"].(map[string]any)["order_no"])
+    require.NoError(t, h.Login(c))
+    require.Equal(t, 422, rec.Code)
 }
 ```
 
-#### Repository Layer Test (with sqlmock)
+Pattern: same-package tests, mocked service interface, assert HTTP status + response body fields.
 
-```go
-// internal/repository/postgres/order_test.go
-package postgres_test
+#### Repository Layer
 
-import (
-    "context"
-    "testing"
-    "time"
-
-    "github.com/DATA-DOG/go-sqlmock"
-    "github.com/google/uuid"
-    "github.com/jmoiron/sqlx"
-    "github.com/stretchr/testify/assert"
-
-    "github.com/yourusername/pos-core-api/internal/model"
-    "github.com/yourusername/pos-core-api/internal/repository/postgres"
-)
-
-func TestOrderRepository_GetByID_Found(t *testing.T) {
-    // Arrange
-    db, mock, _ := sqlmock.New()
-    defer db.Close()
-    sqlxDB := sqlx.NewDb(db, "postgres")
-
-    orderID := uuid.New()
-    rows := sqlmock.NewRows([]string{"id", "company_id", "branch_id", "order_no", "status", "grand_total", "created_at"}).
-        AddRow(orderID, 1, 1, "ORD-1-123", "completed", 20000, time.Now())
-
-    mock.ExpectQuery("SELECT \\* FROM orders WHERE").
-        WithArgs(orderID, int64(1)).
-        WillReturnRows(rows)
-
-    repo := postgres.NewOrderRepository(sqlxDB)
-
-    // Act
-    order, err := repo.GetByID(context.Background(), 1, orderID)
-
-    // Assert
-    assert.NoError(t, err)
-    assert.NotNil(t, order)
-    assert.Equal(t, "ORD-1-123", order.OrderNo)
-    assert.Equal(t, int64(20000), order.GrandTotal)
-}
-
-func TestOrderRepository_GetByID_NotFound(t *testing.T) {
-    // Arrange
-    db, mock, _ := sqlmock.New()
-    defer db.Close()
-    sqlxDB := sqlx.NewDb(db, "postgres")
-
-    orderID := uuid.New()
-    mock.ExpectQuery("SELECT \\* FROM orders WHERE").
-        WithArgs(orderID, int64(1)).
-        WillReturnRows(sqlmock.NewRows(nil)) // Empty result
-
-    repo := postgres.NewOrderRepository(sqlxDB)
-
-    // Act
-    order, err := repo.GetByID(context.Background(), 1, orderID)
-
-    // Assert
-    assert.NoError(t, err)
-    assert.Nil(t, order)
-}
-```
+Postgres repository implementations are **not** unit-tested with sqlmock. Instead they are covered end-to-end via `tests/integration/*` with a real Postgres testcontainer. Rationale: the SQL is the contract here, and mocking it just tests that strings match, not behaviour. Integration tests give real confidence at small additional cost (containers cached after first run).
 
 ### Integration Test Examples
 
@@ -2186,16 +1813,16 @@ import (
     "testing"
 
     "github.com/jmoiron/sqlx"
-    "github.com/labstack/echo/v4"
+    "github.com/labstack/echo/v5"
     _ "github.com/lib/pq"
     "github.com/testcontainers/testcontainers-go"
     "github.com/testcontainers/testcontainers-go/modules/postgres"
 
-    "github.com/yourusername/pos-core-api/config"
-    "github.com/yourusername/pos-core-api/internal/handler"
-    "github.com/yourusername/pos-core-api/internal/repository/postgres"
-    "github.com/yourusername/pos-core-api/internal/router"
-    "github.com/yourusername/pos-core-api/internal/service"
+    "github.com/irvanmhndra/nexpos-api/config"
+    "github.com/irvanmhndra/nexpos-api/internal/handler"
+    "github.com/irvanmhndra/nexpos-api/internal/repository/postgres"
+    "github.com/irvanmhndra/nexpos-api/internal/router"
+    "github.com/irvanmhndra/nexpos-api/internal/service"
 )
 
 type TestApp struct {
@@ -2368,7 +1995,7 @@ package helper
 
 import (
     "github.com/google/uuid"
-    "github.com/yourusername/pos-core-api/internal/model"
+    "github.com/irvanmhndra/nexpos-api/internal/model"
 )
 
 func (a *TestApp) SeedProduct(id int64, name string, price int64) {
@@ -2485,7 +2112,7 @@ import (
 
     "github.com/stretchr/testify/suite"
 
-    "github.com/yourusername/pos-core-api/tests/integration/helper"
+    "github.com/irvanmhndra/nexpos-api/tests/integration/helper"
 )
 
 type OrderTestSuite struct {
@@ -2876,52 +2503,49 @@ issues:
 ### 1. Initialize Project
 
 ```bash
-mkdir pos-core-api && cd pos-core-api
-go mod init github.com/irvanmhndra/pos-core-api
+mkdir nexpos-api && cd nexpos-api
+go mod init github.com/irvanmhndra/nexpos-api
 
 # Create directory structure
 mkdir -p cmd/api
 mkdir -p docs
-mkdir -p internal/{handler,service,repository/{postgres,mongo},model,dto/{request,response},client/{payment,notification},event/{publisher,consumer,message},middleware,router}
-mkdir -p pkg/{apperror,httputil,logger,pagination,validator}
-mkdir -p migrations config scripts tests/integration/testhelper
+mkdir -p internal/{app,handler,service/mocks,repository/{postgres,mongo,mocks},model,dto,middleware,router}
+mkdir -p pkg/{apperror,httputil,validator}
+mkdir -p migrations config tests/{integration,testutil}
 ```
 
 ### 2. Install Dependencies
 
 ```bash
-# Core
+# Core web + DB
 go get github.com/labstack/echo/v5
 go get github.com/jmoiron/sqlx github.com/lib/pq
+
+# MongoDB (optional — for receipts persistence)
 go get go.mongodb.org/mongo-driver/mongo
-go get github.com/redis/go-redis/v9
-go get github.com/segmentio/kafka-go
 
 # Utils
-go get github.com/spf13/viper
 go get github.com/go-playground/validator/v10
 go get github.com/google/uuid
-go get github.com/golang-jwt/jwt/v5
-go get github.com/rs/zerolog
 go get golang.org/x/crypto
 
 # Testing
 go get github.com/stretchr/testify
-go get github.com/DATA-DOG/go-sqlmock
 go get github.com/testcontainers/testcontainers-go
+go get github.com/testcontainers/testcontainers-go/modules/postgres
+go get github.com/testcontainers/testcontainers-go/modules/mongodb
 
 # Migration CLI
 go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 
 # Mock generator
-go install github.com/vektra/mockery/v3@latest
+go install github.com/vektra/mockery/v2@latest
 
 # Hot reload (optional)
 go install github.com/air-verse/air@latest
 
 # Linter
 brew install golangci-lint  # macOS
-# curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.62.2
 
 go mod tidy
 ```
@@ -2940,23 +2564,13 @@ POSTGRES_PASSWORD=pos_password
 POSTGRES_DB=pos_db
 POSTGRES_SSLMODE=disable
 
-MONGO_URI=mongodb://localhost:27017
-MONGO_DB=pos_audit
+# Optional — set to enable receipt persistence
+MONGO_URI=
+MONGO_DB=nexpos
 
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=
-REDIS_DB=0
-
-KAFKA_BROKERS=localhost:9092
-KAFKA_GROUP_ID=pos-core-api
-
-JWT_SECRET=your-secret-key
+JWT_SECRET=replace-me
 JWT_ACCESS_EXPIRES_HOURS=2
 JWT_REFRESH_EXPIRES_DAYS=7
-
-MIDTRANS_SERVER_KEY=your-server-key
-MIDTRANS_IS_PRODUCTION=false
 EOF
 
 cp .env.example .env
@@ -2964,48 +2578,59 @@ cp .env.example .env
 
 ### 4. Docker Compose
 
+The real `docker-compose.yml` ships Postgres + Mongo + the API service:
+
 ```yaml
-# docker-compose.yml
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
+    container_name: nexpos_db
     environment:
-      POSTGRES_USER: pos_user
-      POSTGRES_PASSWORD: pos_password
-      POSTGRES_DB: pos_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - nexpos_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   mongo:
     image: mongo:7
+    container_name: nexpos_mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DB}
     ports:
       - "27017:27017"
     volumes:
-      - mongo_data:/data/db
+      - nexpos_mongodata:/data/db
 
-  redis:
-    image: redis:7-alpine
+  nexpos-api:
+    build: .
+    image: nexpos-api:latest
+    container_name: nexpos_api
+    env_file: .env
     ports:
-      - "6379:6379"
-
-  kafka:
-    image: bitnami/kafka:latest
-    environment:
-      - KAFKA_CFG_NODE_ID=0
-      - KAFKA_CFG_PROCESS_ROLES=controller,broker
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
-    ports:
-      - "9092:9092"
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    restart: always
 
 volumes:
-  postgres_data:
-  mongo_data:
+  nexpos_pgdata:
+  nexpos_mongodata:
 ```
+
+No Redis, Kafka, or external gateway containers are required by current code.
 
 ### 5. Makefile
 
@@ -3144,7 +2769,7 @@ help:
 # .mockery.yaml
 with-expecter: true
 packages:
-  github.com/yourusername/pos-core-api/internal/repository:
+  github.com/irvanmhndra/nexpos-api/internal/repository:
     interfaces:
       UserRepository:
       ProductRepository:
@@ -3155,14 +2780,14 @@ packages:
       dir: internal/repository/mocks
       outpkg: mocks
 
-  github.com/yourusername/pos-core-api/internal/client/payment:
+  github.com/irvanmhndra/nexpos-api/internal/client/payment:
     interfaces:
       Gateway:
     config:
       dir: internal/client/mocks
       outpkg: mocks
 
-  github.com/yourusername/pos-core-api/internal/event/publisher:
+  github.com/irvanmhndra/nexpos-api/internal/event/publisher:
     interfaces:
       EventPublisher:
     config:
