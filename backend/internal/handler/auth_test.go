@@ -151,7 +151,7 @@ func TestAuthHandler_Login_InvalidJSON(t *testing.T) {
 
 	var response map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-	assert.Contains(t, response["message"], "invalid request body")
+	assert.Contains(t, response["message"], "malformed JSON body")
 }
 
 func TestAuthHandler_Login_ValidationErrors(t *testing.T) {
@@ -189,7 +189,7 @@ func TestAuthHandler_Login_ValidationErrors(t *testing.T) {
 			name:        "malformed json",
 			requestBody: `{email: test}`,
 			wantStatus:  http.StatusBadRequest,
-			wantMessage: "invalid request body",
+			wantMessage: "malformed JSON body",
 		},
 	}
 
