@@ -666,6 +666,93 @@ On `POST /complete`, for each item where `counted_stock != null`:
 
 ---
 
+## 17. Daily Settlement
+
+Per-branch per-day cash reconciliation. The system snapshots expected amounts per payment method (sales − refunds, minus cash expenses for the cash bucket); the user records actual amounts received in the till / settled to the bank; variance = actual − expected.
+
+Status: `draft` | `finalized`.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/daily-settlements/report` | Read-only preview (query: `branch_id`, `date`) |
+| `POST` | `/daily-settlements` | Create + snapshot expected amounts |
+| `GET` | `/daily-settlements` | List (query: `page`, `per_page`, `status`, `branch_id`, `date_from`, `date_to`) |
+| `GET` | `/daily-settlements/:id` | Get with items |
+| `PATCH` | `/daily-settlements/:id/items/:itemId` | Update actual amount for one method |
+| `PATCH` | `/daily-settlements/:id/items` | Bulk update actual amounts |
+| `POST` | `/daily-settlements/:id/finalize` | Lock the settlement |
+
+`GET /daily-settlements/report` returns expected amounts without persisting. Useful for browsing past days before creating a formal settlement.
+
+**Report response:**
+```json
+{
+  "branch_id": 1,
+  "settlement_date": "2026-05-14",
+  "total_sales": 2300000,
+  "total_refunds": 50000,
+  "total_expenses": 100000,
+  "total_expected": 2150000,
+  "by_method": [
+    { "payment_method": "cash", "gross_sales": 1500000, "refunds": 50000, "expenses_out": 100000, "expected_amount": 1350000 },
+    { "payment_method": "qris", "gross_sales": 800000, "refunds": 0, "expenses_out": 0, "expected_amount": 800000 }
+  ]
+}
+```
+
+The report always returns the full canonical method set (`cash`, `debit_card`, `credit_card`, `e_wallet`, `bank_transfer`, `qris`) — methods with zero activity show `0`.
+
+**Create body:**
+```json
+{ "branch_id": 1, "settlement_date": "2026-05-14", "notes": "Daily close" }
+```
+`settlement_date` must be `YYYY-MM-DD`. Duplicates for the same `(branch_id, settlement_date)` are rejected. The created settlement starts in `draft` with one item per canonical payment method.
+
+**Update single item body:**
+```json
+{ "actual_amount": 1340000, "notes": "Short 10k, double-counted on receipt" }
+```
+
+**Bulk update body:**
+```json
+{
+  "items": [
+    { "item_id": 12, "actual_amount": 1340000 },
+    { "item_id": 13, "actual_amount": 800000 }
+  ]
+}
+```
+
+**Settlement response (excerpt):**
+```json
+{
+  "id": 5,
+  "branch_id": 1,
+  "settlement_date": "2026-05-14",
+  "status": "draft",
+  "total_sales": 2300000,
+  "total_refunds": 50000,
+  "total_expenses": 100000,
+  "total_expected": 2150000,
+  "total_actual": 2140000,
+  "total_variance": -10000,
+  "items": [
+    {
+      "id": 12,
+      "payment_method": "cash",
+      "expected_amount": 1350000,
+      "actual_amount": 1340000,
+      "variance_amount": -10000,
+      "notes": "Short 10k"
+    }
+  ]
+}
+```
+
+Finalized settlements reject further edits to items. There is no un-finalize endpoint — corrections must happen via fresh daily entries or manual notes.
+
+---
+
 ## Error Codes
 
 | Code | HTTP | Meaning |
