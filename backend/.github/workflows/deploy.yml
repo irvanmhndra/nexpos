@@ -103,7 +103,6 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd ~/nexpos
-            docker compose up -d mongo
             docker compose pull nexpos-api
             docker compose up -d nexpos-api
             docker image prune -f
