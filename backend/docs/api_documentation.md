@@ -292,7 +292,7 @@ Order lifecycle: `draft → confirmed → completed/cancelled/voided`, with a se
 | `POST` | `/orders/:id/cancel` | Cancel (before payment) |
 | `POST` | `/orders/:id/void` | Void (after completed, for corrections) |
 | `POST` | `/orders/:id/refund` | Refund a payment |
-| `GET` | `/orders/:id/receipt` | Get receipt (requires the MongoDB receipt store) |
+| `GET` | `/orders/:id/receipt` | Get receipt snapshot (created automatically when the order is completed) |
 
 **List query:** `page`, `per_page`, `search`, `status`, `payment_status`, `fulfillment_type`, `fulfillment_status`, `customer_id`, `payment_method`, `date_from`, `date_to`.
 
@@ -777,6 +777,6 @@ List endpoints return `meta.pagination` (see _Standard Response Format_).
 All protected endpoints are automatically scoped to the user's `company_id` from the JWT. Cross-company access attempts return `403 FORBIDDEN`.
 Endpoints that accept `branch_id` in the body or query validate that the branch belongs to the same company.
 
-## Receipts (Optional)
+## Receipts
 
-If MongoDB is configured (`MONGO_URI` env set), `GET /orders/:id/receipt` is active and returns the receipt document created when the order completed. Without MongoDB, the endpoint is not registered.
+When an order completes, the system automatically writes an immutable receipt snapshot into the `receipts` Postgres table (items and payments stored as JSONB). `GET /orders/:id/receipt` returns that snapshot.

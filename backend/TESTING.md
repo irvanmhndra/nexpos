@@ -50,17 +50,16 @@ internal/
 tests/
   testutil/
     db.go               ← PostgreSQL testcontainer + migrations + truncate helpers
-    mongo.go            ← MongoDB testcontainer + drop collections
     http.go             ← test HTTP client (GET, POST, PUT, DELETE)
     fixtures.go         ← test data factories (company, branch, user, product, stock, etc.)
-    setup.go            ← TestEnv: boots full app wiring both containers
+    setup.go            ← TestEnv: boots full app wiring
   integration/
     setup_test.go         ← TestMain: start containers, boot app, teardown
     helpers_test.go       ← doPost/doGet/doPut/doDelete/decodeResponse/registerTestUser
     auth_test.go          ← full-stack integration tests
     customer_test.go
     order_test.go         ← includes DB assertions for stock/payment
-    receipt_test.go       ← MongoDB receipt snapshot tests
+    receipt_test.go       ← receipt snapshot tests (Postgres JSONB)
     ...
 ```
 
@@ -77,7 +76,7 @@ go test -race -short ./internal/...
 ```
 
 ### Integration tests (no external database needed)
-Testcontainers automatically starts PostgreSQL and MongoDB containers during the test run.
+Testcontainers automatically starts a PostgreSQL container during the test run.
 Requires Docker to be running.
 
 ```bash
@@ -287,14 +286,13 @@ This section explains the full lifecycle of an integration test run: from `go te
 
 ### 1. Test entry point — `TestMain`
 
-`tests/integration/setup_test.go` declares `TestMain(m *testing.M)`. Go calls this before any test in the package runs. It is the single place where shared infrastructure (database, MongoDB, app, HTTP server) is initialized and later torn down:
+`tests/integration/setup_test.go` declares `TestMain(m *testing.M)`. Go calls this before any test in the package runs. It is the single place where shared infrastructure (database, app, HTTP server) is initialized and later torn down:
 
 ```
 go test ./tests/integration/...
     └── TestMain(m)
           ├── NewTestDB(ctx)       → starts PostgreSQL container
           ├── RunMigrations()      → applies all SQL migrations
-          ├── NewTestMongo(ctx)    → starts MongoDB container
           ├── app.New(cfg)         → boots the full application
           ├── NewTestServer(echo)  → wraps echo in httptest.Server
           └── m.Run()              → runs all Test* functions
@@ -330,17 +328,7 @@ pgContainer, err := postgres.Run(ctx, "postgres:18-alpine",
 - `WithWaitStrategy` blocks until the log line appears twice — this is the PostgreSQL readiness signal. The test will not proceed until the database is truly ready to accept connections, preventing flaky "connection refused" errors.
 - `pgContainer.ConnectionString(ctx, "sslmode=disable")` returns a dynamic DSN like `postgres://pos_test_user:pos_test_password@localhost:49821/pos_test_db?sslmode=disable`. The port is random (Docker assigns it), so there are no port conflicts.
 
-**MongoDB container** (`tests/testutil/mongo.go`):
-
-```go
-container, err := mongodb.Run(ctx, "mongo:7")
-uri, err := container.ConnectionString(ctx)
-// uri → "mongodb://localhost:49822"
-```
-
-MongoDB requires no database/username/password configuration — it starts in open mode for tests. The URI is similarly dynamic.
-
-Both containers are terminated in `env.Cleanup()`, which is called after `m.Run()` returns.
+The container is terminated in `env.Cleanup()`, which is called after `m.Run()` returns.
 
 ### 3. golang-migrate — schema management
 
@@ -377,23 +365,6 @@ if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 
 `m.Up()` applies all unapplied files in numeric order. Each migration runs in a transaction — if any file fails, the migration halts and reports which file failed.
 
-**MongoDB does not use file-based migrations.** Instead, `mongorepo.NewReceiptRepository()` calls `ensureReceiptIndexes()` at startup:
-
-```go
-func ensureIndexes(col *mongo.Collection) error {
-    _, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
-        {
-            Keys:    bson.D{{Key: "order_id", Value: 1}, {Key: "company_id", Value: 1}},
-            Options: options.Index().SetUnique(true),
-        },
-        ...
-    })
-    return err
-}
-```
-
-`CreateMany` is idempotent — calling it on an already-indexed collection is a no-op. This runs on every app startup (both in production and in tests), so index definitions are always in sync with the code.
-
 ### 4. App boot — `app.New(cfg)`
 
 The test passes a `*config.Config` built entirely from testcontainer outputs — no environment variables needed:
@@ -403,10 +374,6 @@ cfg := &config.Config{
     Postgres: config.PostgresConfig{
         DSNOverride: tdb.DSN,  // e.g. "postgres://...@localhost:49821/..."
     },
-    Mongo: config.MongoConfig{
-        URI:      tmongo.URI,   // e.g. "mongodb://localhost:49822"
-        Database: "nexpos_test",
-    },
     JWT: config.JWTConfig{
         Secret: "test-secret-key-for-integration-tests",
         ...
@@ -415,7 +382,7 @@ cfg := &config.Config{
 a, err := app.New(cfg)
 ```
 
-`app.New` initializes the full stack in the same way production does: Postgres connection pool, MongoDB client, repository layer, service layer, handler layer, Echo routes, and middleware. The test app is **identical** to production — not a stripped-down version.
+`app.New` initializes the full stack in the same way production does: Postgres connection pool, repository layer, service layer, handler layer, Echo routes, and middleware. The test app is **identical** to production — not a stripped-down version.
 
 ### 5. HTTP test server — `httptest.Server`
 
@@ -436,15 +403,10 @@ func cleanupDatabase(t *testing.T) {
     if err := testEnv.TestDB.TruncateAllTables(); err != nil {
         t.Fatalf("Failed to truncate tables: %v", err)
     }
-    if err := testEnv.TestMongo.DropCollections("nexpos_test"); err != nil {
-        t.Fatalf("Failed to drop mongo collections: %v", err)
-    }
 }
 ```
 
-MongoDB collections are also dropped in `cleanupDatabase` because PostgreSQL sequences reset on `RESTART IDENTITY`, meaning order IDs restart from 1 each test — which would cause a receipt from a previous test to be returned for a newly created order with the same ID.
-
-`TruncateAllTables()` truncates all application tables with `RESTART IDENTITY CASCADE` (resets auto-increment sequences too) and re-seeds system data (roles, permissions, role_permissions). This brings the database back to a known state in milliseconds — much faster than restarting containers or re-running migrations.
+`TruncateAllTables()` truncates all application tables (including `receipts`) with `RESTART IDENTITY CASCADE` (resets auto-increment sequences too) and re-seeds system data (roles, permissions, role_permissions). This brings the database back to a known state in milliseconds — much faster than restarting containers or re-running migrations.
 
 ### 7. End-to-end request flow in a test
 
@@ -477,25 +439,20 @@ go test ./tests/integration/...
    ├── docker run postgres:18-alpine   → port 49821
    ├── wait for "database system is ready" × 2
    ├── DROP SCHEMA public CASCADE; CREATE SCHEMA public
-   ├── golang-migrate: apply 000001..000030 migrations to port 49821
-   ├── docker pull mongo:7             (first run only)
-   ├── docker run mongo:7              → port 49822
-   ├── mongo.Connect to port 49822
-   ├── mongorepo.NewReceiptRepository() → creates MongoDB indexes (idempotent)
+   ├── golang-migrate: apply all migrations to port 49821
    ├── app.New(cfg)                    → full app boot (repos, services, handlers, routes)
-   └── httptest.NewServer(echo)        → TCP listener on port 49823
+   └── httptest.NewServer(echo)        → TCP listener on port 49822
 
 2. m.Run() — for each Test* function:
    ├── cleanupDatabase(t)              → TRUNCATE + re-seed in ~10ms
    ├── registerTestUser(t)             → POST /api/v1/auth/register → JWT token
-   ├── ... test-specific API calls ... → real HTTP → Echo → service → PostgreSQL/MongoDB
+   ├── ... test-specific API calls ... → real HTTP → Echo → service → PostgreSQL
    └── assertions on HTTP responses and/or direct DB queries
 
 3. TestMain cleanup
    ├── httptest.Server.Close()
-   ├── app.Close()                     → disconnect Postgres pool, disconnect MongoDB
-   ├── postgres container.Terminate()
-   └── mongodb container.Terminate()
+   ├── app.Close()                     → disconnect Postgres pool
+   └── postgres container.Terminate()
 ```
 
 ## Test Utilities
@@ -507,11 +464,6 @@ go test ./tests/integration/...
 - `TruncateTables(tables...)` — truncates specific tables
 - `BeginTx(ctx)` — starts a transaction for test isolation
 - `UniqueCounter()` — exported atomic counter for generating unique test data (e.g. emails, SKUs)
-
-### `testutil/mongo.go`
-- `NewTestMongo(ctx)` — starts a `mongo:7` container via testcontainers, connects, and returns a `TestMongo` with URI
-- `DropCollections(dbName)` — drops all collections in the given database (used for MongoDB cleanup between tests)
-- `Close()` — disconnects the client and terminates the container
 
 ### `testutil/fixtures.go`
 - `CreateBaseTestData(ctx)` — creates a complete set: company, branch, role, user, customer, category, product, variant (used for DB-level fixture creation; prefer API-based setup for integration tests)

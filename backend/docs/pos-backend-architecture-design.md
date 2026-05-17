@@ -52,7 +52,7 @@ The architecture follows **3-Layer Architecture** pattern — simple, pragmatic,
 │  (Database)   │  │ (Third-party) │  │  (Kafka)  │  │  (Redis)  │
 ├───────────────┤  ├───────────────┤  ├───────────┤  ├───────────┤
 │ - PostgreSQL  │  │ - Payment GW  │  │ - Publish │  │ - Session │
-│ - MongoDB     │  │ - SMS/Notif   │  │ - Consume │  │ - Cache   │
+│               │  │ - SMS/Notif   │  │ - Consume │  │ - Cache   │
 │               │  │ - Shipping    │  │           │  │           │
 └───────────────┘  └───────────────┘  └───────────┘  └───────────┘
 ```
@@ -113,7 +113,6 @@ nexpos-api/
 │   │   ├── types.go                # Shared query result types
 │   │   ├── postgres/               # PostgreSQL implementations
 │   │   │   └── *.go                # One file per repo
-│   │   ├── mongo/                  # MongoDB implementations (receipts only)
 │   │   └── mocks/                  # Mockery-generated mocks
 │   │
 │   ├── model/                      # DB / domain structs (sqlx tags)
@@ -148,7 +147,7 @@ nexpos-api/
 │   │   ├── order_test.go
 │   │   ├── product_test.go
 │   │   └── health_test.go
-│   └── testutil/                   # Testcontainers helpers (postgres, mongo)
+│   └── testutil/                   # Testcontainers helpers (postgres)
 │
 ├── docker-compose.yml
 ├── docker-compose.test.yml
@@ -187,9 +186,6 @@ require (
     github.com/jmoiron/sqlx v1.4.0
     github.com/lib/pq v1.10.9
 
-    // MongoDB (optional, for receipts)
-    go.mongodb.org/mongo-driver v1.17.9
-
     // Validation
     github.com/go-playground/validator/v10 v10.24.0
 
@@ -204,7 +200,6 @@ require (
     github.com/stretchr/testify v1.11.1
     github.com/testcontainers/testcontainers-go v0.42.0
     github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
-    github.com/testcontainers/testcontainers-go/modules/mongodb v0.42.0
 )
 ```
 
@@ -692,14 +687,6 @@ type ListStockParams struct {
     CategoryID *int64
     LowStock   bool
     Search     string
-}
-
-// ==================== Audit Log (MongoDB) ====================
-
-type AuditLogRepository interface {
-    Insert(ctx context.Context, log *model.AuditLog) error
-    FindByEntity(ctx context.Context, entityType, entityID string) ([]model.AuditLog, error)
-    FindByActor(ctx context.Context, actorID int64, limit int) ([]model.AuditLog, error)
 }
 ```
 
@@ -1352,7 +1339,7 @@ type EventPublisher interface {
 
 Services publish events at the end of an operation (post-commit). Initial implementation can use `kafka-go` or `nats.go`; start with an in-memory publisher for tests.
 
-**Nexpos currently needs neither** — completed orders are handled synchronously inside the service, and receipt persistence to MongoDB is enough for audit. Add these only when a real need emerges.
+**Nexpos currently needs neither** — completed orders are handled synchronously inside the service, and receipt persistence to Postgres is enough for audit. Add these only when a real need emerges.
 
 ---
 
@@ -1374,7 +1361,6 @@ type Config struct {
     Server   ServerConfig
     Postgres PostgresConfig
     JWT      JWTConfig
-    Mongo    MongoConfig
 }
 
 type ServerConfig struct {
@@ -1400,11 +1386,6 @@ func (p PostgresConfig) DSN() string {
         "/" + p.DB + "?sslmode=" + p.SSLMode
 }
 
-type MongoConfig struct {
-    URI      string
-    Database string
-}
-
 type JWTConfig struct {
     Secret             string
     AccessExpiresHours int
@@ -1428,10 +1409,6 @@ func Load() *Config {
             Password: getEnv("POSTGRES_PASSWORD", ""),
             DB:       getEnv("POSTGRES_DB", "pos_db"),
             SSLMode:  getEnv("POSTGRES_SSLMODE", "disable"),
-        },
-        Mongo: MongoConfig{
-            URI:      getEnv("MONGO_URI", ""),
-            Database: getEnv("MONGO_DB", "nexpos"),
         },
         JWT: JWTConfig{
             Secret:             getEnv("JWT_SECRET", "secret"),
@@ -1460,7 +1437,7 @@ func getEnvInt(key string, defaultValue int) int {
 }
 ```
 
-**MongoDB is optional**: if `MONGO_URI` is empty, the MongoDB client is not created and `GET /orders/:id/receipt` is not registered. The receipt service becomes `nil` and the order service continues to run without receipt persistence.
+**Receipts**: snapshots are stored in a Postgres `receipts` table (items and payments as JSONB). Each order completion writes one row best-effort — a failed write is logged but does not fail the order completion.
 
 ---
 
@@ -1612,7 +1589,6 @@ nexpos-api/
 │   │
 │   └── testutil/                      # Test helpers
 │       ├── db.go                      # Postgres testcontainer setup
-│       ├── mongo.go                   # Mongo testcontainer setup
 │       └── http.go                    # Test HTTP client + JWT helpers
 │
 └── makefile
@@ -2509,7 +2485,7 @@ go mod init github.com/irvanmhndra/nexpos-api
 # Create directory structure
 mkdir -p cmd/api
 mkdir -p docs
-mkdir -p internal/{app,handler,service/mocks,repository/{postgres,mongo,mocks},model,dto,middleware,router}
+mkdir -p internal/{app,handler,service/mocks,repository/{postgres,mocks},model,dto,middleware,router}
 mkdir -p pkg/{apperror,httputil,validator}
 mkdir -p migrations config tests/{integration,testutil}
 ```
@@ -2521,9 +2497,6 @@ mkdir -p migrations config tests/{integration,testutil}
 go get github.com/labstack/echo/v5
 go get github.com/jmoiron/sqlx github.com/lib/pq
 
-# MongoDB (optional — for receipts persistence)
-go get go.mongodb.org/mongo-driver/mongo
-
 # Utils
 go get github.com/go-playground/validator/v10
 go get github.com/google/uuid
@@ -2533,7 +2506,6 @@ go get golang.org/x/crypto
 go get github.com/stretchr/testify
 go get github.com/testcontainers/testcontainers-go
 go get github.com/testcontainers/testcontainers-go/modules/postgres
-go get github.com/testcontainers/testcontainers-go/modules/mongodb
 
 # Migration CLI
 go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
@@ -2564,10 +2536,6 @@ POSTGRES_PASSWORD=pos_password
 POSTGRES_DB=pos_db
 POSTGRES_SSLMODE=disable
 
-# Optional — set to enable receipt persistence
-MONGO_URI=
-MONGO_DB=nexpos
-
 JWT_SECRET=replace-me
 JWT_ACCESS_EXPIRES_HOURS=2
 JWT_REFRESH_EXPIRES_DAYS=7
@@ -2578,7 +2546,7 @@ cp .env.example .env
 
 ### 4. Docker Compose
 
-The real `docker-compose.yml` ships Postgres + Mongo + the API service:
+The real `docker-compose.yml` ships Postgres + the API service:
 
 ```yaml
 services:
@@ -2599,18 +2567,6 @@ services:
       timeout: 5s
       retries: 5
 
-  mongo:
-    image: mongo:7
-    container_name: nexpos_mongo
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
-      MONGO_INITDB_DATABASE: ${MONGO_DB}
-    ports:
-      - "27017:27017"
-    volumes:
-      - nexpos_mongodata:/data/db
-
   nexpos-api:
     build: .
     image: nexpos-api:latest
@@ -2621,16 +2577,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      mongo:
-        condition: service_healthy
     restart: always
 
 volumes:
   nexpos_pgdata:
-  nexpos_mongodata:
 ```
 
-No Redis, Kafka, or external gateway containers are required by current code.
+No MongoDB, Redis, Kafka, or external gateway containers are required by current code.
 
 ### 5. Makefile
 
@@ -2863,7 +2816,7 @@ make dev
 |--------|---------|
 | `handler/` | HTTP request handling |
 | `service/` | Business logic orchestration |
-| `repository/` | Data access (postgres/, mongo/) |
+| `repository/` | Data access (postgres/) |
 | `model/` | Database/domain models |
 | `dto/request/` | API input contracts |
 | `dto/response/` | API output contracts (with converters) |
