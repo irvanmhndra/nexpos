@@ -26,11 +26,11 @@ type Handlers struct {
 	Expense         *handler.ExpenseHandler
 	StockOpname     *handler.StockOpnameHandler
 	DailySettlement *handler.DailySettlementHandler
-	Receipt         *handler.ReceiptHandler // nil if MongoDB not configured
+	Receipt         *handler.ReceiptHandler
 }
 
 func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator) *Handlers {
-	h := &Handlers{
+	return &Handlers{
 		Health:          handler.NewHealthHandler(db),
 		Auth:            handler.NewAuthHandler(services.Auth, v),
 		User:            handler.NewUserHandler(services.User, v),
@@ -38,7 +38,7 @@ func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator)
 		Customer:        handler.NewCustomerHandler(services.Customer, v),
 		ProductCategory: handler.NewProductCategoryHandler(services.ProductCategory, v),
 		Product:         handler.NewProductHandler(services.Product, v),
-		Order:           handler.NewOrderHandler(services.Order, v),
+		Order:           handler.NewOrderHandler(services.Order, v, services.Receipt),
 		Report:          handler.NewReportHandler(services.Report, v),
 		Promotion:       handler.NewPromotionHandler(services.Promotion, v),
 		Inventory:       handler.NewInventoryHandler(services.Inventory, v),
@@ -50,10 +50,6 @@ func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator)
 		Expense:         handler.NewExpenseHandler(services.Expense, v),
 		StockOpname:     handler.NewStockOpnameHandler(services.StockOpname, v),
 		DailySettlement: handler.NewDailySettlementHandler(services.DailySettlement, v),
+		Receipt:         handler.NewReceiptHandler(services.Receipt),
 	}
-	if services.Receipt != nil {
-		h.Order = handler.NewOrderHandler(services.Order, v, services.Receipt)
-		h.Receipt = handler.NewReceiptHandler(services.Receipt)
-	}
-	return h
 }

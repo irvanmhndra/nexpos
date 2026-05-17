@@ -22,7 +22,7 @@ type Services struct {
 	Expense         *service.ExpenseService
 	StockOpname     *service.StockOpnameService
 	DailySettlement *service.DailySettlementService
-	Receipt         *service.ReceiptService // nil if MongoDB not configured
+	Receipt         *service.ReceiptService
 }
 
 func initServices(repos *Repositories, cfg *config.Config) *Services {
@@ -73,5 +73,6 @@ func initServices(repos *Repositories, cfg *config.Config) *Services {
 			repos.Branch,
 		),
 		DailySettlement: service.NewDailySettlementService(repos.DailySettlement, repos.Branch),
+		Receipt:         service.NewReceiptService(repos.Receipt),
 	}
 }
