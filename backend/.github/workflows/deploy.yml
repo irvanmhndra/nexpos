@@ -105,7 +105,7 @@ jobs:
             cd ~/nexpos
             docker compose pull nexpos-api
             docker compose up -d nexpos-api
-            docker image prune -f
+            docker image prune -af
             echo "✅ API deployed: $(date)"
 
       - name: Run Migrations
