@@ -243,3 +243,85 @@ func TestProductService_Delete_RepoError(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, apperror.IsInternalError(err))
 }
+
+// LookupByCode (barcode scan resolution)
+func TestProductService_LookupByCode_MatchBarcode(t *testing.T) {
+	svc, productRepo, variantRepo, _ := setupProductTest(t)
+	ctx := context.Background()
+	companyID := int64(1)
+	code := "8991234567890"
+
+	variant := createTestVariant(1, 1, "SKU001")
+	variant.Barcode = &code
+	variantRepo.EXPECT().FindByCodeInCompany(ctx, companyID, code).Return(variant, nil).Once()
+	productRepo.EXPECT().GetByID(ctx, companyID, int64(1)).Return(createTestProduct(1, companyID), nil).Once()
+	variantRepo.EXPECT().GetByProductID(ctx, int64(1)).Return([]*model.ProductVariant{variant}, nil).Once()
+
+	res, err := svc.LookupByCode(ctx, companyID, code)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.Equal(t, int64(1), res.MatchedVariantID)
+	assert.Equal(t, "barcode", res.MatchedBy)
+	assert.Equal(t, int64(1), res.Product.ID)
+}
+
+func TestProductService_LookupByCode_MatchSKUFallback(t *testing.T) {
+	svc, productRepo, variantRepo, _ := setupProductTest(t)
+	ctx := context.Background()
+	companyID := int64(1)
+	code := "SKU001"
+
+	variant := createTestVariant(2, 1, "SKU001") // no barcode → matched on SKU
+	variantRepo.EXPECT().FindByCodeInCompany(ctx, companyID, code).Return(variant, nil).Once()
+	productRepo.EXPECT().GetByID(ctx, companyID, int64(1)).Return(createTestProduct(1, companyID), nil).Once()
+	variantRepo.EXPECT().GetByProductID(ctx, int64(1)).Return([]*model.ProductVariant{variant}, nil).Once()
+
+	res, err := svc.LookupByCode(ctx, companyID, code)
+	require.NoError(t, err)
+	assert.Equal(t, "sku", res.MatchedBy)
+	assert.Equal(t, int64(2), res.MatchedVariantID)
+}
+
+func TestProductService_LookupByCode_NotFound(t *testing.T) {
+	svc, _, variantRepo, _ := setupProductTest(t)
+	ctx := context.Background()
+	companyID := int64(1)
+	code := "0000000000000"
+
+	variantRepo.EXPECT().FindByCodeInCompany(ctx, companyID, code).Return(nil, nil).Once()
+
+	res, err := svc.LookupByCode(ctx, companyID, code)
+	require.Error(t, err)
+	assert.Nil(t, res)
+	assert.True(t, apperror.IsNotFound(err))
+}
+
+func TestProductService_LookupByCode_EmptyCode(t *testing.T) {
+	svc, _, _, _ := setupProductTest(t)
+	res, err := svc.LookupByCode(context.Background(), 1, "   ")
+	require.Error(t, err)
+	assert.Nil(t, res)
+	assert.True(t, apperror.IsBadRequest(err))
+}
+
+// Create rejects a barcode already registered to another product
+func TestProductService_Create_DuplicateBarcode_Rejected(t *testing.T) {
+	svc, productRepo, variantRepo, _ := setupProductTest(t)
+	ctx := context.Background()
+	companyID := int64(1)
+	barcode := "8991234567890"
+
+	req := dto.CreateProductRequest{
+		Name:     "New Product",
+		Variants: []dto.ProductVariantInput{{SKU: "SKU001", Barcode: &barcode, Name: "Default", Price: 10000}},
+	}
+
+	variantRepo.EXPECT().SKUExists(ctx, "SKU001", int64(0)).Return(false, nil).Once()
+	variantRepo.EXPECT().BarcodeExistsInOtherProduct(ctx, companyID, barcode, int64(0)).Return(true, nil).Once()
+
+	res, err := svc.Create(ctx, companyID, req)
+	require.Error(t, err)
+	assert.Nil(t, res)
+	assert.True(t, apperror.IsBadRequest(err))
+	productRepo.AssertNotCalled(t, "Create")
+}

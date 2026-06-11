@@ -189,6 +189,8 @@ type ProductVariantRepository interface {
 	DeleteByProductID(ctx context.Context, productID int64) error
 	SKUExists(ctx context.Context, sku string, excludeID int64) (bool, error)
 	SKUExistsInOtherProduct(ctx context.Context, sku string, productID int64) (bool, error)
+	FindByCodeInCompany(ctx context.Context, companyID int64, code string) (*model.ProductVariant, error)
+	BarcodeExistsInOtherProduct(ctx context.Context, companyID int64, barcode string, productID int64) (bool, error)
 }
 
 type OrderRepository interface {

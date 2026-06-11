@@ -62,6 +62,23 @@ func (h *ProductHandler) Get(c *echo.Context) error {
 	return httputil.Success(c, http.StatusOK, "Product retrieved successfully", result)
 }
 
+func (h *ProductHandler) Lookup(c *echo.Context) error {
+	code := c.QueryParam("code")
+	if code == "" {
+		return httputil.Error(c, apperror.BadRequest("code query parameter is required"))
+	}
+
+	ctx := c.Request().Context()
+	companyID := getCompanyID(c)
+
+	result, err := h.productSvc.LookupByCode(ctx, companyID, code)
+	if err != nil {
+		return httputil.Error(c, err)
+	}
+
+	return httputil.Success(c, http.StatusOK, "Product found", result)
+}
+
 func (h *ProductHandler) List(c *echo.Context) error {
 	var req dto.ListProductRequest
 

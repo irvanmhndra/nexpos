@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/irvanmhndra/nexpos-api/internal/dto"
@@ -59,6 +60,11 @@ func (s *ProductService) Create(ctx context.Context, companyID int64, req dto.Cr
 		}
 	}
 
+	// Validate barcodes (per-company, optional) don't collide
+	if err := s.validateBarcodes(ctx, companyID, 0, req.Variants); err != nil {
+		return nil, err
+	}
+
 	isActive := true
 	if req.IsActive != nil {
 		isActive = *req.IsActive
@@ -97,6 +103,7 @@ func (s *ProductService) Create(ctx context.Context, companyID int64, req dto.Cr
 		variant := &model.ProductVariant{
 			ProductID:        product.ID,
 			SKU:              v.SKU,
+			Barcode:          normalizeBarcode(v.Barcode),
 			Name:             v.Name,
 			Attributes:       model.JSONMap(v.Attributes),
 			Price:            v.Price,
@@ -234,6 +241,11 @@ func (s *ProductService) Update(ctx context.Context, companyID, id int64, req dt
 		}
 	}
 
+	// Validate barcodes (per-company, optional) don't collide with other products
+	if err := s.validateBarcodes(ctx, companyID, id, req.Variants); err != nil {
+		return nil, err
+	}
+
 	// Update product
 	product.ProductCategoryID = req.CategoryID
 	product.Name = req.Name
@@ -278,6 +290,7 @@ func (s *ProductService) Update(ctx context.Context, companyID, id int64, req dt
 		return &model.ProductVariant{
 			ProductID:        id,
 			SKU:              v.SKU,
+			Barcode:          normalizeBarcode(v.Barcode),
 			Name:             v.Name,
 			Attributes:       model.JSONMap(v.Attributes),
 			Price:            v.Price,
@@ -386,6 +399,7 @@ func (s *ProductService) toResponse(ctx context.Context, companyID int64, p *mod
 		resp.Variants[i] = &dto.ProductVariantResponse{
 			ID:               v.ID,
 			SKU:              v.SKU,
+			Barcode:          v.Barcode,
 			Name:             v.Name,
 			Attributes:       v.Attributes,
 			Price:            v.Price,
@@ -410,6 +424,77 @@ func parseOptionalTime(s *string) *time.Time {
 	}
 	t, err := time.Parse(time.RFC3339, *s)
 	if err != nil {
+		return nil
+	}
+	return &t
+}
+
+// LookupByCode resolves a scanned code to its product + matched variant within
+// the company, matching barcode first and falling back to SKU.
+func (s *ProductService) LookupByCode(ctx context.Context, companyID int64, code string) (*dto.ProductLookupResponse, error) {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return nil, apperror.BadRequest("code is required")
+	}
+
+	variant, err := s.variantRepo.FindByCodeInCompany(ctx, companyID, code)
+	if err != nil {
+		return nil, apperror.InternalError(err)
+	}
+	if variant == nil {
+		return nil, apperror.NotFound("No product found for code: " + code)
+	}
+
+	product, err := s.GetByID(ctx, companyID, variant.ProductID)
+	if err != nil {
+		return nil, err
+	}
+
+	matchedBy := "sku"
+	if variant.Barcode != nil && *variant.Barcode == code {
+		matchedBy = "barcode"
+	}
+
+	return &dto.ProductLookupResponse{
+		Product:          product,
+		MatchedVariantID: variant.ID,
+		MatchedBy:        matchedBy,
+	}, nil
+}
+
+// validateBarcodes ensures each provided (non-empty) barcode is unique within
+// the request and not already used by another product in the company. Pass
+// productID 0 on create.
+func (s *ProductService) validateBarcodes(ctx context.Context, companyID, productID int64, variants []dto.ProductVariantInput) error {
+	seen := make(map[string]bool)
+	for _, v := range variants {
+		bc := normalizeBarcode(v.Barcode)
+		if bc == nil {
+			continue
+		}
+		if seen[*bc] {
+			return apperror.BadRequest("Duplicate barcode in request: " + *bc)
+		}
+		seen[*bc] = true
+
+		exists, err := s.variantRepo.BarcodeExistsInOtherProduct(ctx, companyID, *bc, productID)
+		if err != nil {
+			return apperror.InternalError(err)
+		}
+		if exists {
+			return apperror.BadRequest("Barcode already registered: " + *bc)
+		}
+	}
+	return nil
+}
+
+// normalizeBarcode trims a barcode and treats blank as absent (nil).
+func normalizeBarcode(b *string) *string {
+	if b == nil {
+		return nil
+	}
+	t := strings.TrimSpace(*b)
+	if t == "" {
 		return nil
 	}
 	return &t

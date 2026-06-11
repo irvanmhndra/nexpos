@@ -86,6 +86,7 @@ func Setup(e *echo.Echo, h *Handlers, authMW echo.MiddlewareFunc) {
 	products := protected.Group("/products")
 	products.POST("", h.Product.Create)
 	products.GET("", h.Product.List)
+	products.GET("/lookup", h.Product.Lookup) // before /:id so it isn't captured as an ID
 	products.GET("/:id", h.Product.Get)
 	products.PUT("/:id", h.Product.Update)
 	products.DELETE("/:id", h.Product.Delete)

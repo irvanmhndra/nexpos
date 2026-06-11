@@ -7,6 +7,7 @@ import "time"
 type ProductVariantInput struct {
 	ID               *int64                 `json:"id"`
 	SKU              string                 `json:"sku" validate:"required,min=1,max=100"`
+	Barcode          *string                `json:"barcode" validate:"omitempty,max=100"`
 	Name             string                 `json:"name" validate:"required,min=1,max=255"`
 	Attributes       map[string]interface{} `json:"attributes"`
 	Price            float64                `json:"price" validate:"gte=0"`
@@ -22,6 +23,7 @@ type ProductVariantInput struct {
 type ProductVariantResponse struct {
 	ID               int64                  `json:"id"`
 	SKU              string                 `json:"sku"`
+	Barcode          *string                `json:"barcode,omitempty"`
 	Name             string                 `json:"name"`
 	Attributes       map[string]interface{} `json:"attributes"`
 	Price            float64                `json:"price"`
@@ -82,4 +84,12 @@ type ProductResponse struct {
 type ProductListResponse struct {
 	Products   []*ProductResponse `json:"products"`
 	Pagination *PaginationMeta    `json:"pagination"`
+}
+
+// ProductLookupResponse is returned when scanning a code at the POS: the owning
+// product plus which variant matched and whether it matched on barcode or SKU.
+type ProductLookupResponse struct {
+	Product          *ProductResponse `json:"product"`
+	MatchedVariantID int64            `json:"matched_variant_id"`
+	MatchedBy        string           `json:"matched_by"` // "barcode" | "sku"
 }

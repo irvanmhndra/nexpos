@@ -52,6 +52,7 @@ type ProductServiceInterface interface {
 	List(ctx context.Context, companyID int64, req dto.ListProductRequest) (*dto.ProductListResponse, error)
 	Update(ctx context.Context, companyID, id int64, req dto.UpdateProductRequest) (*dto.ProductResponse, error)
 	Delete(ctx context.Context, companyID, id int64) error
+	LookupByCode(ctx context.Context, companyID int64, code string) (*dto.ProductLookupResponse, error)
 }
 
 // OrderServiceInterface defines the contract for order operations

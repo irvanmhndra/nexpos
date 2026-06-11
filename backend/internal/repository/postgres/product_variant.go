@@ -18,8 +18,8 @@ func NewProductVariantRepository(db *sqlx.DB) *ProductVariantRepository {
 
 func (r *ProductVariantRepository) Create(ctx context.Context, variant *model.ProductVariant) error {
 	query := `
-		INSERT INTO product_variants (product_id, sku, name, attributes, price, standard_cost, last_purchase_cost, is_default, is_active, sale_price, sale_start, sale_end)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		INSERT INTO product_variants (product_id, sku, name, attributes, price, standard_cost, last_purchase_cost, is_default, is_active, sale_price, sale_start, sale_end, barcode)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING id, created_at, updated_at
 	`
 	return r.db.QueryRowContext(ctx, query,
@@ -35,6 +35,7 @@ func (r *ProductVariantRepository) Create(ctx context.Context, variant *model.Pr
 		variant.SalePrice,
 		variant.SaleStart,
 		variant.SaleEnd,
+		variant.Barcode,
 	).Scan(&variant.ID, &variant.CreatedAt, &variant.UpdatedAt)
 }
 
@@ -76,8 +77,8 @@ func (r *ProductVariantRepository) GetBySKU(ctx context.Context, sku string) (*m
 func (r *ProductVariantRepository) Update(ctx context.Context, variant *model.ProductVariant) error {
 	query := `
 		UPDATE product_variants
-		SET sku = $1, name = $2, attributes = $3, price = $4, standard_cost = $5, last_purchase_cost = $6, is_default = $7, is_active = $8, sale_price = $9, sale_start = $10, sale_end = $11, updated_at = NOW()
-		WHERE id = $12
+		SET sku = $1, name = $2, attributes = $3, price = $4, standard_cost = $5, last_purchase_cost = $6, is_default = $7, is_active = $8, sale_price = $9, sale_start = $10, sale_end = $11, barcode = $12, updated_at = NOW()
+		WHERE id = $13
 	`
 	result, err := r.db.ExecContext(ctx, query,
 		variant.SKU,
@@ -91,6 +92,7 @@ func (r *ProductVariantRepository) Update(ctx context.Context, variant *model.Pr
 		variant.SalePrice,
 		variant.SaleStart,
 		variant.SaleEnd,
+		variant.Barcode,
 		variant.ID,
 	)
 	if err != nil {
@@ -141,5 +143,43 @@ func (r *ProductVariantRepository) SKUExistsInOtherProduct(ctx context.Context, 
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM product_variants WHERE sku = $1 AND product_id != $2)`
 	err := r.db.GetContext(ctx, &exists, query, sku, productID)
+	return exists, err
+}
+
+// FindByCodeInCompany resolves a scanned code to a variant within a company,
+// matching the barcode first and falling back to the SKU. Active variants and
+// barcode matches are preferred. Returns nil when nothing matches.
+func (r *ProductVariantRepository) FindByCodeInCompany(ctx context.Context, companyID int64, code string) (*model.ProductVariant, error) {
+	var variant model.ProductVariant
+	query := `
+		SELECT pv.* FROM product_variants pv
+		JOIN products p ON p.id = pv.product_id
+		WHERE p.company_id = $1 AND (pv.barcode = $2 OR pv.sku = $2)
+		ORDER BY (pv.barcode = $2) DESC, pv.is_active DESC
+		LIMIT 1
+	`
+	err := r.db.GetContext(ctx, &variant, query, companyID, code)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &variant, nil
+}
+
+// BarcodeExistsInOtherProduct reports whether a barcode is already used by a
+// variant of a *different* product in the same company (uniqueness is scoped
+// per-tenant). Pass productID 0 on create to check against every product.
+func (r *ProductVariantRepository) BarcodeExistsInOtherProduct(ctx context.Context, companyID int64, barcode string, productID int64) (bool, error) {
+	var exists bool
+	query := `
+		SELECT EXISTS(
+			SELECT 1 FROM product_variants pv
+			JOIN products p ON p.id = pv.product_id
+			WHERE p.company_id = $1 AND pv.barcode = $2 AND pv.product_id != $3
+		)
+	`
+	err := r.db.GetContext(ctx, &exists, query, companyID, barcode, productID)
 	return exists, err
 }

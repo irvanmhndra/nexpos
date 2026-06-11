@@ -82,6 +82,19 @@ func (m *MockProductVariantRepository) SKUExistsInOtherProduct(ctx context.Conte
 	return ret.Bool(0), ret.Error(1)
 }
 
+func (m *MockProductVariantRepository) FindByCodeInCompany(ctx context.Context, companyID int64, code string) (*model.ProductVariant, error) {
+	ret := m.Called(ctx, companyID, code)
+	if ret.Get(0) == nil {
+		return nil, ret.Error(1)
+	}
+	return ret.Get(0).(*model.ProductVariant), ret.Error(1)
+}
+
+func (m *MockProductVariantRepository) BarcodeExistsInOtherProduct(ctx context.Context, companyID int64, barcode string, productID int64) (bool, error) {
+	ret := m.Called(ctx, companyID, barcode, productID)
+	return ret.Bool(0), ret.Error(1)
+}
+
 type MockProductVariantRepositoryExpectation struct {
 	mock *MockProductVariantRepository
 }
@@ -120,4 +133,12 @@ func (e *MockProductVariantRepositoryExpectation) SKUExists(ctx context.Context,
 
 func (e *MockProductVariantRepositoryExpectation) SKUExistsInOtherProduct(ctx context.Context, sku string, productID int64) *mock.Call {
 	return e.mock.On("SKUExistsInOtherProduct", ctx, sku, productID)
+}
+
+func (e *MockProductVariantRepositoryExpectation) FindByCodeInCompany(ctx context.Context, companyID int64, code string) *mock.Call {
+	return e.mock.On("FindByCodeInCompany", ctx, companyID, code)
+}
+
+func (e *MockProductVariantRepositoryExpectation) BarcodeExistsInOtherProduct(ctx context.Context, companyID int64, barcode string, productID int64) *mock.Call {
+	return e.mock.On("BarcodeExistsInOtherProduct", ctx, companyID, barcode, productID)
 }
