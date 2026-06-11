@@ -1,5 +1,10 @@
 import { api } from './api';
-import type { Product, CreateProductRequest, UpdateProductRequest } from '@/types/product';
+import type {
+  Product,
+  CreateProductRequest,
+  UpdateProductRequest,
+  ProductLookupResponse,
+} from '@/types/product';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -39,6 +44,15 @@ export const productsService = {
 
   getProduct: async (id: number) => {
     const { data } = await api.get<ApiResponse<Product>>(`/products/${id}`);
+    return data.data;
+  },
+
+  // Resolve a scanned code (barcode first, SKU fallback) to its product +
+  // matched variant. Throws (404) when nothing matches.
+  lookupByCode: async (code: string) => {
+    const { data } = await api.get<ApiResponse<ProductLookupResponse>>('/products/lookup', {
+      params: { code },
+    });
     return data.data;
   },
 

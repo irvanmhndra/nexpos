@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { Card, Badge, Button, Input, Dropdown, Icon } from '@/components/ui';
 import { DeleteConfirmModal } from '@/components/common';
+import { BarcodeScannerModal } from '@/components/features/pos/BarcodeScannerModal';
 import { useProducts, useDeleteProduct } from '@/hooks/useProducts';
 import { useAllProductCategories } from '@/hooks/useProductCategories';
+import { productsService } from '@/services/productsService';
 import { formatCurrency } from '@/utils';
 import type { Product, ProductVariant } from '@/types/product';
 
@@ -26,6 +29,7 @@ export function ProductsPage() {
   // Modal states
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isScanModalOpen, setIsScanModalOpen] = useState(false);
 
   const { data, isLoading } = useProducts({
     page,
@@ -61,6 +65,33 @@ export function ProductsPage() {
   // CRUD handlers
   const handleAddProduct = () => {
     navigate('/products/new');
+  };
+
+  // Add product via barcode scan: if the code already maps to a product,
+  // warn and jump to it (validation against duplicates); otherwise open the
+  // create form with the barcode prefilled.
+  const handleScanToAdd = async (code: string) => {
+    setIsScanModalOpen(false);
+    const trimmed = code.trim();
+    if (!trimmed) return;
+
+    try {
+      const res = await productsService.lookupByCode(trimmed);
+      const matchedVariant = res.product.variants?.find(v => v.id === res.matched_variant_id);
+      const label = res.matched_by === 'barcode' ? 'barcode' : 'SKU';
+      toast.error(
+        `Produk "${res.product.name}"${matchedVariant ? ` (${matchedVariant.name})` : ''} sudah terdaftar dengan ${label} ini`,
+      );
+      navigate(`/products/${res.product.id}/edit`);
+    } catch (err) {
+      const status = (err as { response?: { status?: number } }).response?.status;
+      if (status === 404) {
+        toast.success('Barcode belum terdaftar — silakan lengkapi produk baru');
+        navigate(`/products/new?barcode=${encodeURIComponent(trimmed)}`);
+      } else {
+        toast.error('Gagal memeriksa barcode. Coba lagi.');
+      }
+    }
   };
 
   const handleEditProduct = (product: Product) => {
@@ -112,6 +143,13 @@ export function ProductsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            leftIcon={<Icon name="qr_code_scanner" size={20} />}
+            onClick={() => setIsScanModalOpen(true)}
+          >
+            Scan Barcode
+          </Button>
           <Button leftIcon={<Icon name="add" size={20} />} onClick={handleAddProduct}>
             Tambah Produk
           </Button>
@@ -296,6 +334,13 @@ export function ProductsPage() {
         message="Apakah Anda yakin ingin menghapus produk"
         isLoading={deleteProduct.isPending}
       />
+
+      {/* Scan barcode to add / find a product */}
+      <BarcodeScannerModal
+        isOpen={isScanModalOpen}
+        onClose={() => setIsScanModalOpen(false)}
+        onScan={handleScanToAdd}
+      />
     </div>
   );
 }
@@ -355,9 +400,16 @@ function ProductRow({
             <div>
               <p className="font-medium text-text-main dark:text-white">{product.name}</p>
               {!hasMultipleVariants && product.variants?.[0] && (
-                <p className="text-xs text-text-sub dark:text-gray-400">
-                  SKU: {product.variants[0].sku}
-                </p>
+                <>
+                  <p className="text-xs text-text-sub dark:text-gray-400">
+                    SKU: {product.variants[0].sku}
+                  </p>
+                  {product.variants[0].barcode && (
+                    <p className="text-xs text-text-sub dark:text-gray-400">
+                      Barcode: {product.variants[0].barcode}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -440,6 +492,7 @@ function ProductRow({
                   <tr className="text-xs text-text-sub dark:text-gray-400">
                     <th className="pb-2 text-left font-medium">Nama Varian</th>
                     <th className="pb-2 text-left font-medium">SKU</th>
+                    <th className="pb-2 text-left font-medium">Barcode</th>
                     <th className="pb-2 text-left font-medium">Harga</th>
                     <th className="pb-2 text-left font-medium">Modal</th>
                     <th className="pb-2 text-left font-medium">Status</th>
@@ -458,6 +511,9 @@ function ProductRow({
                       </td>
                       <td className="py-2 text-text-sub dark:text-gray-400 font-mono text-xs">
                         {variant.sku}
+                      </td>
+                      <td className="py-2 text-text-sub dark:text-gray-400 font-mono text-xs">
+                        {variant.barcode || '-'}
                       </td>
                       <td className="py-2 text-text-main dark:text-white font-medium">
                         {formatCurrency(variant.price)}

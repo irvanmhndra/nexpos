@@ -177,26 +177,30 @@ export function POSPage() {
     setVariantPickerProduct(null);
   };
 
-  // Barcode scan handler — looks up product by exact SKU and adds to cart
-  const handleBarcodeScan = useCallback(async (barcode: string) => {
+  // Barcode scan handler — resolves a scanned code (barcode first, then SKU)
+  // to a product and adds it to the cart.
+  const handleBarcodeScan = useCallback(async (code: string) => {
     let found: { product: Product; variant: ProductVariant } | null = null;
+
+    // Fast path: match against already-loaded products by barcode or SKU.
     for (const p of products) {
-      const v = p.variants?.find(v => v.sku === barcode);
+      const v = p.variants?.find(v => v.barcode === code || v.sku === code);
       if (v) { found = { product: p, variant: v }; break; }
     }
+
+    // Fallback: server lookup (barcode first, SKU fallback, tenant-scoped).
     if (!found) {
       try {
-        const res = await productsService.getProducts({ search: barcode, per_page: 10, is_active: true });
-        for (const p of res.data) {
-          const v = p.variants?.find(v => v.sku === barcode);
-          if (v) { found = { product: p, variant: v }; break; }
-        }
+        const res = await productsService.lookupByCode(code);
+        const v = res.product.variants?.find(v => v.id === res.matched_variant_id);
+        if (v) found = { product: res.product, variant: v };
       } catch {
-        // ignore fetch error
+        // 404 / network → handled by the not-found branch below
       }
     }
+
     if (!found) {
-      toast.error(`Produk dengan SKU "${barcode}" tidak ditemukan`);
+      toast.error(`Produk dengan kode "${code}" tidak ditemukan`);
       return;
     }
     addToCart(found.product, found.variant);

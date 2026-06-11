@@ -33,6 +33,7 @@ export interface UpdateProductCategoryRequest {
 export interface ProductVariant {
   id: number;
   sku: string;
+  barcode?: string | null;
   name: string;
   attributes: Record<string, unknown> | null;
   price: number;
@@ -50,6 +51,7 @@ export interface ProductVariant {
 export interface ProductVariantInput {
   id?: number;
   sku: string;
+  barcode?: string | null;
   name: string;
   attributes?: Record<string, unknown>;
   price: number;
@@ -107,6 +109,13 @@ export interface ProductCategoryListResponse {
     next_page: number | null;
     prev_page: number | null;
   };
+}
+
+// Returned by the barcode-scan lookup endpoint.
+export interface ProductLookupResponse {
+  product: Product;
+  matched_variant_id: number;
+  matched_by: 'barcode' | 'sku';
 }
 
 export interface ProductListResponse {

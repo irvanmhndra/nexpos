@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button, Input, Icon, ImageUpload, Card } from '@/components/ui';
+import { BarcodeScannerModal } from '@/components/features/pos/BarcodeScannerModal';
 import { useProduct, useCreateProduct, useUpdateProduct } from '@/hooks/useProducts';
 import { useAllProductCategories } from '@/hooks/useProductCategories';
 import type { CreateProductRequest, UpdateProductRequest, ProductVariantInput } from '@/types/product';
@@ -9,6 +10,7 @@ interface VariantFormData {
   id?: number;
   name: string;
   sku: string;
+  barcode: string;
   price: number;
   standard_cost: number;
   is_default: boolean;
@@ -27,6 +29,7 @@ interface ProductFormData {
   // Single variant fields (when toggle OFF)
   single_variant_id?: number; // store existing variant ID for update
   sku: string;
+  barcode: string;
   price: number;
   standard_cost: number;
   sale_enabled: boolean;
@@ -56,6 +59,7 @@ export function ProductFormPage() {
     hasMultipleVariants: false,
     // Single variant defaults
     sku: '',
+    barcode: '',
     price: 0,
     standard_cost: 0,
     sale_enabled: false,
@@ -67,6 +71,29 @@ export function ProductFormPage() {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Scan-to-fill: which barcode field the camera scanner should write into.
+  // 'single' = single-variant mode field; number = variant index.
+  const [searchParams] = useSearchParams();
+  const [scanTarget, setScanTarget] = useState<number | 'single' | null>(null);
+
+  // Prefill barcode when arriving from the "add product via scan" flow.
+  useEffect(() => {
+    const scanned = searchParams.get('barcode');
+    if (scanned && !isEditing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFormData(prev => ({ ...prev, barcode: scanned }));
+    }
+  }, [searchParams, isEditing]);
+
+  const handleScanFill = (code: string) => {
+    if (scanTarget === 'single') {
+      setFormData(prev => ({ ...prev, barcode: code }));
+    } else if (typeof scanTarget === 'number') {
+      updateVariant(scanTarget, 'barcode', code);
+    }
+    setScanTarget(null);
+  };
 
   useEffect(() => {
     if (product) {
@@ -83,6 +110,7 @@ export function ProductFormPage() {
         // Single variant from first variant
         single_variant_id: hasMultipleVariants ? undefined : firstVariant?.id,
         sku: firstVariant?.sku || '',
+        barcode: firstVariant?.barcode || '',
         price: firstVariant?.price || 0,
         standard_cost: firstVariant?.standard_cost || 0,
         sale_enabled: !hasMultipleVariants && !!firstVariant?.sale_price,
@@ -95,6 +123,7 @@ export function ProductFormPage() {
               id: v.id,
               name: v.name,
               sku: v.sku,
+              barcode: v.barcode || '',
               price: v.price,
               standard_cost: v.standard_cost,
               is_default: v.is_default,
@@ -160,6 +189,7 @@ export function ProductFormPage() {
           id: v.id,
           name: v.name,
           sku: v.sku,
+          barcode: v.barcode.trim() || null,
           price: v.price,
           standard_cost: v.standard_cost,
           is_default: v.is_default || idx === 0,
@@ -172,6 +202,7 @@ export function ProductFormPage() {
             id: formData.single_variant_id,
             name: 'Default',
             sku: formData.sku,
+            barcode: formData.barcode.trim() || null,
             price: formData.price,
             standard_cost: formData.standard_cost,
             is_default: true,
@@ -212,6 +243,7 @@ export function ProductFormPage() {
           {
             name: '',
             sku: generateVariantSku(0),
+            barcode: formData.barcode,
             price: formData.price || 0,
             standard_cost: formData.standard_cost || 0,
             is_default: true,
@@ -223,6 +255,7 @@ export function ProductFormPage() {
           {
             name: '',
             sku: generateVariantSku(1),
+            barcode: '',
             price: formData.price || 0,
             standard_cost: formData.standard_cost || 0,
             is_default: false,
@@ -240,6 +273,7 @@ export function ProductFormPage() {
         ...formData,
         hasMultipleVariants: false,
         sku: firstVariant?.sku || formData.sku,
+        barcode: firstVariant?.barcode || formData.barcode,
         price: firstVariant?.price || formData.price,
         standard_cost: firstVariant?.standard_cost || formData.standard_cost,
         sale_enabled: firstVariant?.sale_enabled || false,
@@ -261,6 +295,7 @@ export function ProductFormPage() {
         {
           name: '',
           sku: generateVariantSku(newIndex),
+          barcode: '',
           price: lastVariant?.price || formData.price || 0,
           standard_cost: lastVariant?.standard_cost || formData.standard_cost || 0,
           is_default: false,
@@ -503,6 +538,33 @@ export function ProductFormPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-text-main dark:text-gray-200 mb-2">
+                      Barcode
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <Input
+                          value={formData.barcode}
+                          onChange={e => setFormData({ ...formData, barcode: e.target.value })}
+                          placeholder="Scan atau ketik barcode (EAN/UPC)"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setScanTarget('single')}
+                        className="flex items-center gap-1.5 h-10 px-3 rounded-lg border border-border-light dark:border-gray-600 text-text-sub dark:text-gray-300 hover:bg-background-light dark:hover:bg-background-dark transition-colors shrink-0"
+                        title="Scan barcode dengan kamera"
+                      >
+                        <Icon name="qr_code_scanner" size={18} />
+                        <span className="text-sm hidden sm:inline">Scan</span>
+                      </button>
+                    </div>
+                    <p className="text-xs text-text-sub dark:text-gray-400 mt-1">
+                      Kode dari kemasan produk untuk pemindaian di kasir. Kosongkan jika tidak ada.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-text-main dark:text-gray-200 mb-2">
                       Harga Modal (Rp)
                     </label>
                     <Input
@@ -670,6 +732,31 @@ export function ProductFormPage() {
                           </div>
                         </div>
 
+                        {/* Barcode per variant */}
+                        <div className="mt-3">
+                          <label className="block text-xs text-text-sub dark:text-gray-400 mb-1">
+                            Barcode
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1">
+                              <Input
+                                value={variant.barcode}
+                                onChange={e => updateVariant(index, 'barcode', e.target.value)}
+                                placeholder="Scan atau ketik barcode (EAN/UPC)"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setScanTarget(index)}
+                              className="flex items-center gap-1.5 h-10 px-3 rounded-lg border border-border-light dark:border-gray-600 text-text-sub dark:text-gray-300 hover:bg-card-light dark:hover:bg-card-dark transition-colors shrink-0"
+                              title="Scan barcode dengan kamera"
+                            >
+                              <Icon name="qr_code_scanner" size={18} />
+                              <span className="text-sm hidden sm:inline">Scan</span>
+                            </button>
+                          </div>
+                        </div>
+
                         {/* Sale price per variant */}
                         <div className="mt-3 pt-2 border-t border-border-light/50 dark:border-border-dark/50">
                           <label className="flex items-center gap-2 cursor-pointer">
@@ -788,6 +875,7 @@ export function ProductFormPage() {
                   <ul className="text-xs text-blue-700 dark:text-blue-300 mt-1 space-y-1">
                     <li>- Gunakan nama produk yang jelas dan deskriptif</li>
                     <li>- SKU harus unik untuk setiap varian</li>
+                    <li>- Barcode (EAN/UPC) dipakai untuk scan cepat di kasir</li>
                     <li>- Aktifkan toggle jika produk punya variasi (ukuran/warna)</li>
                   </ul>
                 </div>
@@ -796,6 +884,13 @@ export function ProductFormPage() {
           </div>
         </div>
       </form>
+
+      {/* Camera barcode scanner for filling the barcode field */}
+      <BarcodeScannerModal
+        isOpen={scanTarget !== null}
+        onClose={() => setScanTarget(null)}
+        onScan={handleScanFill}
+      />
     </div>
   );
 }
