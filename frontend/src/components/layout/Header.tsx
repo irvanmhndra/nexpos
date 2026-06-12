@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon, Avatar } from '@/components/ui';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBranch } from '@/contexts/BranchContext';
 
 interface HeaderProps {
   title?: string;
@@ -10,9 +11,12 @@ interface HeaderProps {
 
 export function Header({ title = 'Dashboard', onMenuClick }: HeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isBranchOpen, setIsBranchOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const branchRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { activeBranch, setActiveBranch, branches, isLoading: isBranchLoading } = useBranch();
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -30,6 +34,23 @@ export function Header({ title = 'Dashboard', onMenuClick }: HeaderProps) {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isDropdownOpen]);
+
+  // Close branch selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (branchRef.current && !branchRef.current.contains(event.target as Node)) {
+        setIsBranchOpen(false);
+      }
+    };
+
+    if (isBranchOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isBranchOpen]);
 
   const handleLogout = () => {
     logout();
@@ -56,12 +77,54 @@ export function Header({ title = 'Dashboard', onMenuClick }: HeaderProps) {
         </div>
 
         {/* Branch Selector */}
-        <div className="hidden md:flex relative group">
-          <button className="flex items-center gap-2 px-3 py-1.5 bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark rounded-lg text-sm font-medium text-text-main dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        <div className="hidden md:flex relative" ref={branchRef}>
+          <button
+            onClick={() => setIsBranchOpen(open => !open)}
+            disabled={isBranchLoading || branches.length === 0}
+            className="flex items-center gap-2 px-3 py-1.5 bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark rounded-lg text-sm font-medium text-text-main dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
             <Icon name="store" size="sm" className="text-text-sub dark:text-gray-400" />
-            <span>Semua Cabang</span>
-            <Icon name="expand_more" size="sm" className="text-text-sub dark:text-gray-400" />
+            <span className="max-w-[160px] truncate">
+              {isBranchLoading
+                ? 'Memuat…'
+                : activeBranch?.name ?? (branches.length === 0 ? 'Tidak ada cabang' : 'Pilih Cabang')}
+            </span>
+            <Icon
+              name="expand_more"
+              size="sm"
+              className={`text-text-sub dark:text-gray-400 transition-transform ${isBranchOpen ? 'rotate-180' : ''}`}
+            />
           </button>
+
+          {isBranchOpen && branches.length > 0 && (
+            <div className="absolute left-0 top-full mt-2 w-64 bg-white dark:bg-card-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark overflow-hidden z-50 py-2 max-h-80 overflow-y-auto">
+              {branches.map(branch => (
+                <button
+                  key={branch.id}
+                  onClick={() => {
+                    setActiveBranch(branch);
+                    setIsBranchOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-background-light dark:hover:bg-background-dark text-left transition-colors"
+                >
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    <Icon name="store" size={18} className="text-text-sub dark:text-gray-400 shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-text-main dark:text-white truncate">
+                        {branch.name}
+                      </span>
+                      <span className="block text-xs text-text-sub dark:text-gray-400 truncate">
+                        {branch.code}
+                      </span>
+                    </span>
+                  </span>
+                  {activeBranch?.id === branch.id && (
+                    <Icon name="check" size={18} className="text-primary shrink-0" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
