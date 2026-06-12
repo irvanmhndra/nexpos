@@ -65,7 +65,14 @@ const navGroups: NavGroup[] = [
   },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  /** Rendered inside the mobile drawer: always visible, fills the drawer. */
+  mobile?: boolean;
+  /** Called when a navigation item is tapped (used to close the mobile drawer). */
+  onNavigate?: () => void;
+}
+
+export function Sidebar({ mobile = false, onNavigate }: SidebarProps = {}) {
   const location = useLocation();
   const { activeBranch, branches, setActiveBranch } = useBranch();
 
@@ -75,11 +82,16 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="hidden lg:flex w-72 flex-col bg-card-light dark:bg-card-dark border-r border-border-light dark:border-border-dark flex-shrink-0 transition-colors duration-200">
+    <aside
+      className={cn(
+        'flex-col bg-card-light dark:bg-card-dark border-r border-border-light dark:border-border-dark flex-shrink-0 transition-colors duration-200',
+        mobile ? 'flex w-full h-full' : 'hidden lg:flex w-72'
+      )}
+    >
       <div className="flex h-full min-h-0 flex-col justify-between p-4">
         {/* Logo & Brand */}
         <div className="flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto">
-          <Link to="/" className="flex items-center gap-3 px-2 group">
+          <Link to="/" onClick={onNavigate} className="flex items-center gap-3 px-2 group">
             <div className="bg-primary/10 p-2 rounded-lg">
               <Icon name="analytics" filled className="text-primary" size={28} />
             </div>
@@ -137,6 +149,7 @@ export function Sidebar() {
                   <Link
                     key={item.path}
                     to={item.path}
+                    onClick={onNavigate}
                     className={cn(
                       'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group',
                       isActive(item.path)

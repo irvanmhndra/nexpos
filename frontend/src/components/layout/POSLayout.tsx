@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import { cn } from '@/utils';
 
 /**
  * POSLayout — like MainLayout but the content area is full-height with no
@@ -23,13 +22,8 @@ export function POSLayout() {
             className="fixed inset-0 bg-black/50 z-40 lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
-          <div
-            className={cn(
-              'fixed inset-y-0 left-0 w-72 bg-card-light dark:bg-card-dark z-50 transform transition-transform lg:hidden',
-              sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-            )}
-          >
-            <Sidebar />
+          <div className="fixed inset-y-0 left-0 w-72 max-w-[85vw] z-50 lg:hidden shadow-xl">
+            <Sidebar mobile onNavigate={() => setSidebarOpen(false)} />
           </div>
         </>
       )}

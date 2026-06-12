@@ -419,21 +419,23 @@ export function SettingsPage() {
         </div>
       </aside>
 
-      {/* Mobile Navigation */}
+      {/* Mobile Navigation — horizontally scrollable so every section is reachable */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-card-dark border-t border-border-light dark:border-border-dark p-2">
-        <div className="flex justify-around">
-          {settingsSections.slice(0, 4).map((section) => (
+        <div className="flex gap-1 overflow-x-auto scrollbar-hide">
+          {settingsSections.map((section) => (
             <button
               key={section.id}
               onClick={() => setActiveSection(section.id)}
-              className={`flex flex-col items-center gap-1 p-2 rounded-lg ${
+              className={`flex flex-col items-center gap-1 p-2 rounded-lg shrink-0 min-w-[68px] ${
                 activeSection === section.id
-                  ? 'text-primary'
+                  ? 'text-primary bg-primary/5'
                   : 'text-text-sub'
               }`}
             >
               <Icon name={section.icon} size={20} />
-              <span className="text-[10px] font-medium">{section.label.split(' ')[0]}</span>
+              <span className="text-[10px] font-medium whitespace-nowrap">
+                {section.label.split(' ')[0]}
+              </span>
             </button>
           ))}
         </div>

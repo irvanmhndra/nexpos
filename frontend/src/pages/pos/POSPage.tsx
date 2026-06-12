@@ -7,7 +7,7 @@ import { useCustomers } from '@/hooks/useCustomers';
 import { useCreateOrder, useOrderPreview } from '@/hooks/useOrders';
 import { useInventory } from '@/hooks/useInventory';
 import { useBranch } from '@/contexts/BranchContext';
-import { formatCurrency, getApiErrorMessage } from '@/utils';
+import { formatCurrency, getApiErrorMessage, cn } from '@/utils';
 import { ReceiptModal } from '@/components/features/orders/ReceiptModal';
 import { BarcodeScannerModal } from '@/components/features/pos/BarcodeScannerModal';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
@@ -63,6 +63,7 @@ export function POSPage() {
   const [search, setSearch] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [isCartOpen, setIsCartOpen] = useState(false); // mobile cart sheet visibility
   const [variantPickerProduct, setVariantPickerProduct] = useState<Product | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -528,8 +529,25 @@ export function POSPage() {
         </div>
       </div>
 
-      {/* Right: Cart Panel */}
-      <div className="w-80 xl:w-96 flex flex-col bg-white dark:bg-card-dark shrink-0">
+      {/* Right: Cart Panel — side column on desktop, slide-up sheet on mobile */}
+      <div
+        className={cn(
+          'flex flex-col bg-white dark:bg-card-dark',
+          // Mobile: fixed bottom sheet that slides up
+          'fixed inset-x-0 bottom-0 z-40 max-h-[88vh] rounded-t-2xl shadow-2xl transition-transform duration-300',
+          isCartOpen ? 'translate-y-0' : 'translate-y-full',
+          // Desktop (lg+): in-flow side column
+          'lg:static lg:inset-auto lg:max-h-none lg:w-80 xl:w-96 lg:shrink-0 lg:translate-y-0 lg:rounded-none lg:shadow-none lg:z-auto'
+        )}
+      >
+        {/* Mobile grab handle — tap to close the sheet */}
+        <button
+          onClick={() => setIsCartOpen(false)}
+          aria-label="Tutup keranjang"
+          className="lg:hidden flex items-center justify-center pt-2 pb-1 shrink-0"
+        >
+          <span className="h-1.5 w-10 rounded-full bg-border-light dark:bg-border-dark" />
+        </button>
         {/* Cart header + customer */}
         <div className="px-4 pt-4 pb-3 border-b border-border-light dark:border-border-dark space-y-3">
           <div className="flex items-center justify-between">
@@ -908,6 +926,32 @@ export function POSPage() {
           )}
         </div>
       </div>
+
+      {/* Mobile cart backdrop */}
+      {isCartOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/50 z-30"
+          onClick={() => setIsCartOpen(false)}
+        />
+      )}
+
+      {/* Mobile cart toggle (floating button) */}
+      {!isCartOpen && (
+        <button
+          onClick={() => setIsCartOpen(true)}
+          className="lg:hidden fixed bottom-4 right-4 z-30 flex items-center gap-2 rounded-full bg-primary text-white pl-4 pr-5 py-3 shadow-lg active:scale-95 transition-transform"
+        >
+          <span className="relative flex items-center">
+            <Icon name="shopping_cart" size={22} />
+            {totalItems > 0 && (
+              <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] rounded-full bg-white text-primary text-[10px] font-bold flex items-center justify-center px-1">
+                {totalItems}
+              </span>
+            )}
+          </span>
+          <span className="text-sm font-semibold">{formatCurrency(subtotal)}</span>
+        </button>
+      )}
 
       {/* Camera Barcode Scanner Modal */}
       <BarcodeScannerModal
