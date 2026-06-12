@@ -13,16 +13,16 @@ Frontend for Nexpos — a multi-tenant Point of Sale (POS) web application.
 
 ## Features
 
-- **POS Terminal** — Cart management, sale price display, promo codes, barcode scanning (USB + camera), server-side order preview, stock-aware cart, payment processing
-- **Products** — Product catalog with multi-variant support, sale price (harga coret) with optional date range
-- **Inventory** — Stock levels, adjustments (in/out/adjustment), movement history
+- **POS Terminal** — Cart management, sale price display, promo codes, barcode scanning (USB + camera) with barcode→SKU product lookup, server-side order preview, stock-aware cart, payment processing; cart collapses to a slide-up sheet on mobile
+- **Products** — Product catalog with multi-variant support, per-variant barcode (EAN/UPC) with scan-to-fill, add-product-via-scan with duplicate detection, sale price (harga coret) with optional date range
+- **Inventory** — Stock levels, adjustments (in/out/adjustment), movement history; low/out-of-stock alerts surfaced in the header notification bell
 - **Orders** — Order history and details
 - **Promotions** — Promo code management (fixed/percentage discounts)
 - **Customers** — Customer profiles
-- **Branches** — Branch management
+- **Branches** — Branch management with an active-branch switcher in the header & sidebar
 - **Categories** — Product category management
 - **Reports** — Sales summary, trends, top products, category/payment breakdowns
-- **Settings** — Company settings, user management
+- **Settings** — Company settings, user management, scanner devices (camera / USB / WebHID) status
 
 ## Getting Started
 
@@ -133,7 +133,10 @@ Plug in any USB or Bluetooth barcode scanner. The app detects scanner input by k
 ### Camera Scanner
 Click the QR code icon next to the POS search bar. The camera modal uses `@zxing/browser` and supports Code128, EAN-13, QR codes, and more. On mobile, the rear camera is preferred automatically.
 
-Both modes look up the product by **exact SKU match** and add it to the cart.
+Both modes resolve the scanned code via `GET /products/lookup` — matching the **barcode first, then falling back to SKU** (scoped to the active company) — and add the matched variant to the cart.
+
+### Managing barcodes
+Each variant has an optional barcode (EAN/UPC) on the product form — type it or use scan-to-fill. From the Products page, **Scan Barcode** opens the matching product if the code is already registered, or pre-fills a new product form with the scanned code otherwise. Connected scanner devices and their status are listed under **Settings → Perangkat**.
 
 ## Backend
 
