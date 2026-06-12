@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Icon, Input, Button, Avatar } from '@/components/ui';
+import { Icon, Avatar } from '@/components/ui';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface HeaderProps {
@@ -9,7 +9,6 @@ interface HeaderProps {
 }
 
 export function Header({ title = 'Dashboard', onMenuClick }: HeaderProps) {
-  const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -64,32 +63,10 @@ export function Header({ title = 'Dashboard', onMenuClick }: HeaderProps) {
             <Icon name="expand_more" size="sm" className="text-text-sub dark:text-gray-400" />
           </button>
         </div>
-
-        {/* Search Bar */}
-        <div className="flex flex-1 max-w-[400px]">
-          <Input
-            type="text"
-            placeholder="Cari pesanan, produk..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            leftIcon={<Icon name="search" size="sm" />}
-            className="h-10 border-transparent focus:border-primary bg-background-light dark:bg-background-dark"
-          />
-        </div>
       </div>
 
       {/* Right Section */}
       <div className="flex items-center gap-3 md:gap-4 pl-4">
-        {/* Date Filter Button - Desktop Only */}
-        <Button
-          variant="primary"
-          size="md"
-          className="hidden md:flex"
-          leftIcon={<Icon name="calendar_today" size="sm" />}
-        >
-          Filter Date
-        </Button>
-
         {/* Notifications */}
         <button className="flex items-center justify-center size-10 rounded-full hover:bg-background-light dark:hover:bg-background-dark text-text-main dark:text-white transition-colors relative">
           <Icon name="notifications" size="md" />
