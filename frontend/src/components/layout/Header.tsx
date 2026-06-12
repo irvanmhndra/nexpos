@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Icon, Avatar } from '@/components/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBranch } from '@/contexts/BranchContext';
+import { useInventoryStats } from '@/hooks/useInventory';
+import { useStockAlerts } from '@/hooks/useStockAlerts';
 
 interface HeaderProps {
   title?: string;
@@ -12,11 +14,18 @@ interface HeaderProps {
 export function Header({ title = 'Dashboard', onMenuClick }: HeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isBranchOpen, setIsBranchOpen] = useState(false);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const branchRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { activeBranch, setActiveBranch, branches, isLoading: isBranchLoading } = useBranch();
+
+  // Notifications: stock alerts for the active branch.
+  const { data: stats } = useInventoryStats();
+  const alertCount = (stats?.low_stock ?? 0) + (stats?.out_of_stock ?? 0);
+  const { data: alerts } = useStockAlerts(isNotifOpen);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -51,6 +60,23 @@ export function Header({ title = 'Dashboard', onMenuClick }: HeaderProps) {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isBranchOpen]);
+
+  // Close notifications when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setIsNotifOpen(false);
+      }
+    };
+
+    if (isNotifOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isNotifOpen]);
 
   const handleLogout = () => {
     logout();
@@ -131,10 +157,100 @@ export function Header({ title = 'Dashboard', onMenuClick }: HeaderProps) {
       {/* Right Section */}
       <div className="flex items-center gap-3 md:gap-4 pl-4">
         {/* Notifications */}
-        <button className="flex items-center justify-center size-10 rounded-full hover:bg-background-light dark:hover:bg-background-dark text-text-main dark:text-white transition-colors relative">
-          <Icon name="notifications" size="md" />
-          <span className="absolute top-2 right-2 size-2 bg-red-500 rounded-full border border-white dark:border-card-dark"></span>
-        </button>
+        <div className="relative" ref={notifRef}>
+          <button
+            onClick={() => setIsNotifOpen(open => !open)}
+            className="flex items-center justify-center size-10 rounded-full hover:bg-background-light dark:hover:bg-background-dark text-text-main dark:text-white transition-colors relative"
+            aria-label="Notifikasi"
+          >
+            <Icon name="notifications" size="md" />
+            {alertCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full border border-white dark:border-card-dark flex items-center justify-center">
+                {alertCount > 9 ? '9+' : alertCount}
+              </span>
+            )}
+          </button>
+
+          {isNotifOpen && (
+            <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white dark:bg-card-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark overflow-hidden z-50">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border-light dark:border-border-dark">
+                <p className="text-sm font-bold text-text-main dark:text-white">Notifikasi</p>
+                {alertCount > 0 && (
+                  <span className="text-xs font-medium text-text-sub dark:text-gray-400">
+                    {alertCount} stok perlu perhatian
+                  </span>
+                )}
+              </div>
+
+              <div className="max-h-80 overflow-y-auto">
+                {alertCount === 0 ? (
+                  <div className="px-4 py-8 text-center">
+                    <Icon name="check_circle" size={28} className="text-green-500 mx-auto mb-2" />
+                    <p className="text-sm text-text-sub dark:text-gray-400">Tidak ada notifikasi</p>
+                  </div>
+                ) : (
+                  <>
+                    {alerts?.outOfStock.map(item => (
+                      <button
+                        key={`out-${item.product_variant_id}`}
+                        onClick={() => {
+                          setIsNotifOpen(false);
+                          navigate('/inventory');
+                        }}
+                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-background-light dark:hover:bg-background-dark text-left transition-colors border-b border-border-light dark:border-border-dark last:border-0"
+                      >
+                        <Icon name="error" size={20} className="text-red-500 shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-text-main dark:text-white truncate">
+                            {item.product_name}
+                            {item.variant_name && item.variant_name !== 'Default' && ` · ${item.variant_name}`}
+                          </p>
+                          <p className="text-xs text-red-600 dark:text-red-400">Stok habis</p>
+                        </div>
+                      </button>
+                    ))}
+                    {alerts?.lowStock.map(item => (
+                      <button
+                        key={`low-${item.product_variant_id}`}
+                        onClick={() => {
+                          setIsNotifOpen(false);
+                          navigate('/inventory');
+                        }}
+                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-background-light dark:hover:bg-background-dark text-left transition-colors border-b border-border-light dark:border-border-dark last:border-0"
+                      >
+                        <Icon name="warning" size={20} className="text-amber-500 shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-text-main dark:text-white truncate">
+                            {item.product_name}
+                            {item.variant_name && item.variant_name !== 'Default' && ` · ${item.variant_name}`}
+                          </p>
+                          <p className="text-xs text-amber-600 dark:text-amber-400">
+                            Stok menipis ({item.current_stock}/{item.min_stock})
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                    {!alerts && (
+                      <div className="px-4 py-6 text-center text-sm text-text-sub dark:text-gray-400">
+                        Memuat…
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <button
+                onClick={() => {
+                  setIsNotifOpen(false);
+                  navigate('/inventory');
+                }}
+                className="w-full px-4 py-2.5 text-sm font-medium text-primary hover:bg-background-light dark:hover:bg-background-dark border-t border-border-light dark:border-border-dark transition-colors"
+              >
+                Lihat inventaris
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* User Profile */}
         <div className="relative" ref={dropdownRef}>
