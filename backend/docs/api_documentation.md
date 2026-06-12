@@ -236,6 +236,7 @@ All endpoints require auth.
 | --- | --- | --- |
 | `POST` | `/products` | Create (with variants) |
 | `GET` | `/products` | List (query: `page`, `per_page`, `search`, `category_id`, `is_active`) |
+| `GET` | `/products/lookup` | Resolve a scanned code → product + matched variant (query: `code`) |
 | `GET` | `/products/:id` | Get |
 | `PUT` | `/products/:id` | Update (variants merged by id) |
 | `DELETE` | `/products/:id` | Delete |
@@ -251,6 +252,7 @@ All endpoints require auth.
   "variants": [
     {
       "sku": "KS-REG",
+      "barcode": "8991234567890",
       "name": "Regular",
       "attributes": { "size": "regular" },
       "price": 22000,
@@ -272,6 +274,22 @@ All endpoints require auth.
 ```
 
 **Sale price** (harga coret) bisa diset per-variant lewat field `sale_price`, `sale_start`, `sale_end`. Saat aktif, kasir akan menampilkan harga coret.
+
+**Barcode** (`barcode`, opsional per-variant) menyimpan kode EAN/UPC dari kemasan produk — terpisah dari `sku` yang merupakan identifier internal. Barcode wajib unik dalam satu perusahaan (validasi saat create/update). Kosongkan jika produk tidak punya barcode.
+
+**Lookup by code** — dipakai fitur scan barcode di kasir dan "tambah produk via scan":
+
+`GET /products/lookup?code=8991234567890`
+
+Mencari dalam perusahaan aktif: cocokkan `barcode` lebih dulu, lalu fallback ke `sku`. Mengembalikan `404` jika tidak ada yang cocok.
+```json
+{
+  "product": { "id": 12, "name": "Kopi Susu Gula Aren", "variants": [ /* ... */ ] },
+  "matched_variant_id": 34,
+  "matched_by": "barcode"
+}
+```
+`matched_by` bernilai `"barcode"` atau `"sku"` sesuai field yang cocok.
 
 ---
 

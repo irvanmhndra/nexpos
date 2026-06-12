@@ -14,11 +14,12 @@ A multi-tenant Point of Sale (POS) backend API built with Go, designed for retai
 - **Multi-Tenant Architecture** — Company and branch-based data isolation
 - **Order Management** — Full lifecycle: Draft → Confirmed → Completed (or Cancelled/Voided)
 - **Payment Processing** — Multiple payment methods and refunds
-- **Product Catalog** — Products with variants, categories, SKUs, and cost tracking
+- **Product Catalog** — Products with variants, categories, SKUs, barcodes (EAN/UPC), and cost tracking
 - **Sale Price (Harga Coret)** — Optional promotional pricing per variant with configurable start/end window; effective price applied automatically in orders
 - **Inventory Management** — Stock tracking, adjustments, movement history, min-stock alerts
 - **Promotions** — Promo codes with fixed/percentage discount types
 - **SKU Search** — Product list search matches both product name and variant SKU; pg_trgm GIN indexes for efficient ILIKE at scale
+- **Barcode Lookup** — `GET /products/lookup?code=` resolves a scanned code to its product + matched variant (barcode first, SKU fallback); barcode uniqueness enforced per company
 - **Order Preview** — Calculate totals with promo validation before committing
 - **Customer Management** — Customer profiles
 - **Sales Reports** — Summary metrics, trends, top products, category revenue, hourly sales
@@ -149,6 +150,7 @@ All protected routes require `Authorization: Bearer <token>` header.
 |--------|----------|-------------|
 | POST | `/api/v1/products` | Create product with variants |
 | GET | `/api/v1/products` | List products (paginated) |
+| GET | `/api/v1/products/lookup` | Resolve scanned code → product + matched variant (`?code=`) |
 | GET | `/api/v1/products/:id` | Get product with variants |
 | PUT | `/api/v1/products/:id` | Update product |
 | DELETE | `/api/v1/products/:id` | Delete product |
