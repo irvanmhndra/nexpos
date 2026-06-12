@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Button, Icon } from '@/components/ui';
+import { Icon } from '@/components/ui';
 
 interface NotificationToggle {
   email: boolean;
@@ -82,22 +81,16 @@ const defaultSections: NotificationSection[] = [
   },
 ];
 
-function Toggle({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
+function Toggle({ checked, disabled }: { checked: boolean; disabled?: boolean }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+      disabled={disabled}
+      className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
         checked ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-700'
-      }`}
+      } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
       <span
         className={`pointer-events-none inline-block size-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
@@ -109,64 +102,32 @@ function Toggle({
 }
 
 export function NotificationSettings() {
-  const [selectedBranch, setSelectedBranch] = useState('all');
-  const [sections, setSections] = useState(defaultSections);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const updateToggle = (
-    sectionIndex: number,
-    itemId: string,
-    type: 'email' | 'app',
-    value: boolean
-  ) => {
-    setSections(prev =>
-      prev.map((section, si) =>
-        si !== sectionIndex
-          ? section
-          : {
-              ...section,
-              items: section.items.map(item =>
-                item.id !== itemId
-                  ? item
-                  : { ...item, toggles: { ...item.toggles, [type]: value } }
-              ),
-            }
-      )
-    );
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsSaving(false);
-  };
-
   return (
     <div className="flex flex-col bg-white dark:bg-card-dark rounded-xl shadow-sm border border-border-light dark:border-border-dark overflow-hidden">
       {/* Header */}
       <div className="flex flex-col gap-2 p-6 md:p-8 border-b border-border-light dark:border-border-dark">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h2 className="text-2xl md:text-[32px] font-bold text-text-main dark:text-white">
-              Notifikasi
-            </h2>
-            <p className="text-sm md:text-base text-text-sub dark:text-gray-400 mt-1">
-              Atur preferensi notifikasi untuk setiap jenis aktivitas
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Icon name="store" size={18} className="text-text-sub dark:text-gray-400" />
-            <select
-              value={selectedBranch}
-              onChange={e => setSelectedBranch(e.target.value)}
-              className="rounded-lg border border-border-light dark:border-gray-600 bg-white dark:bg-card-dark text-text-main dark:text-white focus:border-primary focus:ring-1 focus:ring-primary h-10 px-3 pr-8 text-sm"
-            >
-              <option value="all">Semua Cabang</option>
-              <option value="hq">Pusat (HQ)</option>
-              <option value="cabang1">Cabang Jakarta Selatan</option>
-              <option value="cabang2">Cabang Bandung</option>
-            </select>
-          </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="text-2xl md:text-[32px] font-bold text-text-main dark:text-white">
+            Notifikasi
+          </h2>
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary">
+            Segera hadir
+          </span>
+        </div>
+        <p className="text-sm md:text-base text-text-sub dark:text-gray-400">
+          Atur preferensi notifikasi untuk setiap jenis aktivitas
+        </p>
+      </div>
+
+      {/* Coming-soon banner */}
+      <div className="flex items-start gap-3 px-6 md:px-8 py-4 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200/60 dark:border-amber-800/40">
+        <Icon name="info" size={20} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <div className="text-sm text-amber-800 dark:text-amber-200">
+          <p className="font-medium">Preferensi notifikasi belum aktif.</p>
+          <p className="mt-0.5 text-amber-700 dark:text-amber-300">
+            Pengaturan di bawah ini masih dalam pengembangan. Untuk saat ini, peringatan stok
+            menipis &amp; habis sudah muncul otomatis di ikon lonceng 🔔 pada bar atas.
+          </p>
         </div>
       </div>
 
@@ -183,9 +144,9 @@ export function NotificationSettings() {
         </div>
       </div>
 
-      {/* Sections */}
-      <div className="flex flex-col divide-y divide-border-light dark:divide-border-dark">
-        {sections.map((section, si) => (
+      {/* Sections — preview only, controls disabled until the feature ships */}
+      <div className="flex flex-col divide-y divide-border-light dark:divide-border-dark opacity-70">
+        {defaultSections.map(section => (
           <div key={section.title}>
             <div className="px-6 md:px-8 py-3 bg-background-light dark:bg-background-dark">
               <h3 className="text-sm font-bold text-text-main dark:text-white">{section.title}</h3>
@@ -220,19 +181,13 @@ export function NotificationSettings() {
                       <span className="text-xs text-text-sub dark:text-gray-400 md:hidden">
                         Email
                       </span>
-                      <Toggle
-                        checked={item.toggles.email}
-                        onChange={v => updateToggle(si, item.id, 'email', v)}
-                      />
+                      <Toggle checked={item.toggles.email} disabled />
                     </div>
                     <div className="flex flex-col items-center gap-1 w-16">
                       <span className="text-xs text-text-sub dark:text-gray-400 md:hidden">
                         Aplikasi
                       </span>
-                      <Toggle
-                        checked={item.toggles.app}
-                        onChange={v => updateToggle(si, item.id, 'app', v)}
-                      />
+                      <Toggle checked={item.toggles.app} disabled />
                     </div>
                   </div>
                 </div>
@@ -240,16 +195,6 @@ export function NotificationSettings() {
             </div>
           </div>
         ))}
-      </div>
-
-      {/* Footer Actions */}
-      <div className="sticky bottom-0 z-10 bg-white dark:bg-card-dark border-t border-border-light dark:border-border-dark p-6 flex flex-col-reverse sm:flex-row items-center justify-end gap-3">
-        <Button variant="outline" className="w-full sm:w-auto">
-          Batal
-        </Button>
-        <Button className="w-full sm:w-auto" onClick={handleSave} disabled={isSaving}>
-          {isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
-        </Button>
       </div>
     </div>
   );
