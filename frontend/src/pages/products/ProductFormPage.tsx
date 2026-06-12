@@ -2,9 +2,16 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button, Input, Icon, ImageUpload, Card } from '@/components/ui';
 import { BarcodeScannerModal } from '@/components/features/pos/BarcodeScannerModal';
+import { ExistingProductModal } from '@/components/features/products/ExistingProductModal';
 import { useProduct, useCreateProduct, useUpdateProduct } from '@/hooks/useProducts';
 import { useAllProductCategories } from '@/hooks/useProductCategories';
-import type { CreateProductRequest, UpdateProductRequest, ProductVariantInput } from '@/types/product';
+import { productsService } from '@/services/productsService';
+import type {
+  Product,
+  CreateProductRequest,
+  UpdateProductRequest,
+  ProductVariantInput,
+} from '@/types/product';
 
 interface VariantFormData {
   id?: number;
@@ -77,6 +84,34 @@ export function ProductFormPage() {
   const [searchParams] = useSearchParams();
   const [scanTarget, setScanTarget] = useState<number | 'single' | null>(null);
 
+  // Set when an entered/scanned barcode already belongs to another product.
+  const [existingMatch, setExistingMatch] = useState<{
+    product: Product;
+    variantId: number;
+    matchedBy: 'barcode' | 'sku';
+    code: string;
+  } | null>(null);
+
+  // Look up a barcode and, if it belongs to a *different* product, surface it
+  // so the user sees the conflict instead of only failing on submit.
+  const checkBarcodeConflict = async (rawCode: string) => {
+    const code = rawCode.trim();
+    if (!code) return;
+    try {
+      const res = await productsService.lookupByCode(code);
+      if (res.product.id !== productId) {
+        setExistingMatch({
+          product: res.product,
+          variantId: res.matched_variant_id,
+          matchedBy: res.matched_by,
+          code,
+        });
+      }
+    } catch {
+      // 404 = code is free; ignore other errors (submit still validates server-side)
+    }
+  };
+
   // Prefill barcode when arriving from the "add product via scan" flow.
   useEffect(() => {
     const scanned = searchParams.get('barcode');
@@ -93,6 +128,7 @@ export function ProductFormPage() {
       updateVariant(scanTarget, 'barcode', code);
     }
     setScanTarget(null);
+    void checkBarcodeConflict(code);
   };
 
   useEffect(() => {
@@ -545,6 +581,7 @@ export function ProductFormPage() {
                         <Input
                           value={formData.barcode}
                           onChange={e => setFormData({ ...formData, barcode: e.target.value })}
+                          onBlur={e => checkBarcodeConflict(e.target.value)}
                           placeholder="Scan atau ketik barcode (EAN/UPC)"
                         />
                       </div>
@@ -742,6 +779,7 @@ export function ProductFormPage() {
                               <Input
                                 value={variant.barcode}
                                 onChange={e => updateVariant(index, 'barcode', e.target.value)}
+                                onBlur={e => checkBarcodeConflict(e.target.value)}
                                 placeholder="Scan atau ketik barcode (EAN/UPC)"
                               />
                             </div>
@@ -890,6 +928,20 @@ export function ProductFormPage() {
         isOpen={scanTarget !== null}
         onClose={() => setScanTarget(null)}
         onScan={handleScanFill}
+      />
+
+      {/* Shown when the entered barcode already belongs to another product */}
+      <ExistingProductModal
+        isOpen={existingMatch !== null}
+        onClose={() => setExistingMatch(null)}
+        product={existingMatch?.product ?? null}
+        matchedVariantId={existingMatch?.variantId}
+        matchedBy={existingMatch?.matchedBy}
+        code={existingMatch?.code}
+        onOpenProduct={() => {
+          if (existingMatch) navigate(`/products/${existingMatch.product.id}/edit`);
+          setExistingMatch(null);
+        }}
       />
     </div>
   );

@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { Card, Badge, Button, Input, Dropdown, Icon } from '@/components/ui';
 import { DeleteConfirmModal } from '@/components/common';
 import { BarcodeScannerModal } from '@/components/features/pos/BarcodeScannerModal';
+import { ExistingProductModal } from '@/components/features/products/ExistingProductModal';
 import { useProducts, useDeleteProduct } from '@/hooks/useProducts';
 import { useAllProductCategories } from '@/hooks/useProductCategories';
 import { productsService } from '@/services/productsService';
@@ -30,6 +31,12 @@ export function ProductsPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [existingMatch, setExistingMatch] = useState<{
+    product: Product;
+    variantId: number;
+    matchedBy: 'barcode' | 'sku';
+    code: string;
+  } | null>(null);
 
   const { data, isLoading } = useProducts({
     page,
@@ -77,12 +84,13 @@ export function ProductsPage() {
 
     try {
       const res = await productsService.lookupByCode(trimmed);
-      const matchedVariant = res.product.variants?.find(v => v.id === res.matched_variant_id);
-      const label = res.matched_by === 'barcode' ? 'barcode' : 'SKU';
-      toast.error(
-        `Produk "${res.product.name}"${matchedVariant ? ` (${matchedVariant.name})` : ''} sudah terdaftar dengan ${label} ini`,
-      );
-      navigate(`/products/${res.product.id}/edit`);
+      // Already registered — show which product owns this code.
+      setExistingMatch({
+        product: res.product,
+        variantId: res.matched_variant_id,
+        matchedBy: res.matched_by,
+        code: trimmed,
+      });
     } catch (err) {
       const status = (err as { response?: { status?: number } }).response?.status;
       if (status === 404) {
@@ -340,6 +348,20 @@ export function ProductsPage() {
         isOpen={isScanModalOpen}
         onClose={() => setIsScanModalOpen(false)}
         onScan={handleScanToAdd}
+      />
+
+      {/* Shown when a scanned code is already registered to a product */}
+      <ExistingProductModal
+        isOpen={existingMatch !== null}
+        onClose={() => setExistingMatch(null)}
+        product={existingMatch?.product ?? null}
+        matchedVariantId={existingMatch?.variantId}
+        matchedBy={existingMatch?.matchedBy}
+        code={existingMatch?.code}
+        onOpenProduct={() => {
+          if (existingMatch) navigate(`/products/${existingMatch.product.id}/edit`);
+          setExistingMatch(null);
+        }}
       />
     </div>
   );
