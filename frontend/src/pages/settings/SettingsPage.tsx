@@ -6,8 +6,9 @@ import { NotificationSettings } from '@/components/features/settings/Notificatio
 import { IntegrationsSettings } from '@/components/features/settings/IntegrationsSettings';
 import { GeneralSettings } from '@/components/features/settings/GeneralSettings';
 import { BusinessSettings } from '@/components/features/settings/BusinessSettings';
+import { ScannerDevicesSettings } from '@/components/features/settings/ScannerDevicesSettings';
 
-type SettingsSection = 'user-profile' | 'company-profile' | 'users' | 'business' | 'notifications' | 'integrations' | 'general';
+type SettingsSection = 'user-profile' | 'company-profile' | 'users' | 'business' | 'devices' | 'notifications' | 'integrations' | 'general';
 
 export function SettingsPage() {
   const { user } = useAuth();
@@ -39,6 +40,7 @@ export function SettingsPage() {
     { id: 'company-profile' as const, label: 'Profil Perusahaan', icon: 'business' },
     { id: 'users' as const, label: 'Pengguna & Tim', icon: 'groups' },
     { id: 'business' as const, label: 'Pengaturan Bisnis', icon: 'storefront' },
+    { id: 'devices' as const, label: 'Perangkat', icon: 'barcode_scanner' },
     { id: 'notifications' as const, label: 'Notifikasi', icon: 'notifications' },
     { id: 'integrations' as const, label: 'Integrasi', icon: 'extension' },
     { id: 'general' as const, label: 'Umum', icon: 'settings' },
@@ -357,6 +359,8 @@ export function SettingsPage() {
         return <UserManagement />;
       case 'business':
         return <BusinessSettings />;
+      case 'devices':
+        return <ScannerDevicesSettings />;
       case 'notifications':
         return <NotificationSettings />;
       case 'integrations':
