@@ -69,6 +69,14 @@ POSTGRES_SSLMODE=disable
 JWT_SECRET=your-secret-key
 JWT_ACCESS_EXPIRES_HOURS=2
 JWT_REFRESH_EXPIRES_DAYS=7
+
+# Object storage (Cloudflare R2) — optional; upload endpoint is disabled when empty
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET=nexpos-assets
+R2_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com
+R2_PUBLIC_BASE_URL=https://cdn.nexpos.irvanmahendra.com
 ```
 
 ### 3. Start services
@@ -154,6 +162,12 @@ All protected routes require `Authorization: Bearer <token>` header.
 | GET | `/api/v1/products/:id` | Get product with variants |
 | PUT | `/api/v1/products/:id` | Update product |
 | DELETE | `/api/v1/products/:id` | Delete product |
+
+### Uploads
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/uploads/presign` | Presigned PUT URL for direct-to-R2 image upload (disabled if R2 unconfigured) |
 
 ### Customers
 

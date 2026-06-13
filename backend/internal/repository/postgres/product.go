@@ -19,8 +19,8 @@ func NewProductRepository(db *sqlx.DB) *ProductRepository {
 
 func (r *ProductRepository) Create(ctx context.Context, product *model.Product) error {
 	query := `
-		INSERT INTO products (company_id, product_category_id, name, description, image_data, is_active)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO products (company_id, product_category_id, name, description, image_data, image_url, is_active)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at, updated_at
 	`
 	return r.db.QueryRowContext(ctx, query,
@@ -29,6 +29,7 @@ func (r *ProductRepository) Create(ctx context.Context, product *model.Product) 
 		product.Name,
 		product.Description,
 		product.ImageData,
+		product.ImageURL,
 		product.IsActive,
 	).Scan(&product.ID, &product.CreatedAt, &product.UpdatedAt)
 }
@@ -97,14 +98,15 @@ func (r *ProductRepository) List(ctx context.Context, companyID int64, search st
 func (r *ProductRepository) Update(ctx context.Context, product *model.Product) error {
 	query := `
 		UPDATE products
-		SET product_category_id = $1, name = $2, description = $3, image_data = $4, is_active = $5, updated_at = NOW()
-		WHERE id = $6 AND company_id = $7
+		SET product_category_id = $1, name = $2, description = $3, image_data = $4, image_url = $5, is_active = $6, updated_at = NOW()
+		WHERE id = $7 AND company_id = $8
 	`
 	result, err := r.db.ExecContext(ctx, query,
 		product.ProductCategoryID,
 		product.Name,
 		product.Description,
 		product.ImageData,
+		product.ImageURL,
 		product.IsActive,
 		product.ID,
 		product.CompanyID,

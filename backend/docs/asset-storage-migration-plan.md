@@ -1,7 +1,8 @@
 # Asset Storage Migration Plan — base64-in-Postgres → Cloudflare R2
 
-> Status: **DRAFT / for review** (belum dieksekusi). Disusun setelah brainstorming opsi
-> object storage. Keputusan & alasan ada di bawah.
+> Status: **Phase 1 (backend) implemented** — config R2, `internal/storage`, endpoint
+> `POST /uploads/presign`, migration `image_url`, dual-read. **Phase 0** (provisioning di
+> dashboard Cloudflare) & **Phase 2** (frontend) masih pending.
 
 ## 1. Decision summary
 
@@ -119,8 +120,12 @@ Dijalankan manual di VPS setelah Phase 1+2 stabil. Bisa di-batch + resume.
 
 - Presign: **PUT only**, key spesifik, content-type spesifik, expiry pendek (±5 mnt).
 - Key di-prefix `company_id` dari JWT ⇒ tenant tak bisa menulis ke namespace tenant lain.
-- **Batas ukuran**: presigned PUT biasa tak menjamin content-length; gunakan **presigned POST
-  dengan `content-length-range`** atau validasi ukuran setelah upload (cek HEAD object) lalu tolak/hapus bila lewat batas.
+- **Batas ukuran**: dipilih **presigned PUT** (didukung pasti oleh R2). Ukuran ditahan via
+  kompresi sisi client (~1000px WebP → file kecil) + guard 5MB. Enforcement ketat di server
+  (presigned POST `content-length-range` atau HEAD-check pasca-upload) **ditunda** karena
+  dukungan presigned-POST di R2 belum terverifikasi.
+- Client **wajib** mengirim header `Content-Type` yang sama persis dengan yang diminta saat
+  presign (karena ikut ditandatangani), kalau tidak signature ditolak.
 - **Public-read via CDN + key uuid non-guessable** dipilih demi simpel + cache. Katalog produk
   bukan data sensitif; bila nanti perlu privat, ganti ke signed URL / akses lewat Worker.
 - Validasi MIME sebenarnya (magic bytes), bukan sekadar `content_type` dari client.
@@ -141,5 +146,5 @@ Karena semua additive: bila frontend bermasalah, revert frontend ke base64 — `
 2. **Format**: **WebP** utama, **otomatis fallback ke JPEG** bila encode WebP gagal. Ditangani di sisi client — tidak perlu konfigurasi.
 3. **Ukuran tersimpan**: cap sisi terpanjang **1000px**, quality **0.8**. Satu ukuran dulu (cukup untuk grid POS & detail di layar retina); varian thumbnail via Cloudflare Image Resizing nanti bila perlu.
 4. **Backfill**: `image_data` dibiarkan sampai **Phase 4** (rollback-safe).
-5. **Batas ukuran upload**: enforce via **presigned POST `content-length-range`**.
+5. **Batas ukuran upload**: pakai **presigned PUT** (reliable di R2); ukuran ditahan via kompresi client + guard 5MB. Enforcement server-side ketat ditunda (lihat §9). *(Berubah dari rencana awal presigned POST karena dukungan R2 belum terverifikasi.)*
 ```

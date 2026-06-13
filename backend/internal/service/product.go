@@ -76,6 +76,7 @@ func (s *ProductService) Create(ctx context.Context, companyID int64, req dto.Cr
 		Name:              req.Name,
 		Description:       req.Description,
 		ImageData:         req.ImageData,
+		ImageURL:          req.ImageURL,
 		IsActive:          isActive,
 	}
 
@@ -251,6 +252,7 @@ func (s *ProductService) Update(ctx context.Context, companyID, id int64, req dt
 	product.Name = req.Name
 	product.Description = req.Description
 	product.ImageData = req.ImageData
+	product.ImageURL = req.ImageURL
 	if req.IsActive != nil {
 		product.IsActive = *req.IsActive
 	}
@@ -380,6 +382,7 @@ func (s *ProductService) toResponse(ctx context.Context, companyID int64, p *mod
 		CategoryID:  p.ProductCategoryID,
 		Description: p.Description,
 		ImageData:   p.ImageData,
+		ImageURL:    p.ImageURL,
 		IsActive:    p.IsActive,
 		CreatedAt:   p.CreatedAt,
 		UpdatedAt:   p.UpdatedAt,

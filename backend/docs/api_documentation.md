@@ -291,6 +291,40 @@ Mencari dalam perusahaan aktif: cocokkan `barcode` lebih dulu, lalu fallback ke 
 ```
 `matched_by` bernilai `"barcode"` atau `"sku"` sesuai field yang cocok.
 
+**Image** — produk punya dua field gambar: `image_url` (URL CDN, **disarankan** — hasil upload
+ke object storage via `/uploads/presign`) dan `image_data` (base64 inline, legacy). Klien tampil
+pakai `image_url ?? image_data`.
+
+---
+
+## 6b. Uploads (asset storage)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/uploads/presign` | Terbitkan presigned **PUT** URL untuk upload gambar langsung ke Cloudflare R2 |
+
+Upload tidak melewati API server — klien PUT langsung ke object storage.
+
+**Request:**
+```json
+{ "content_type": "image/webp", "kind": "product" }
+```
+`content_type` ∈ `{image/webp, image/jpeg, image/png}`; `kind` = `product`.
+
+**Response:**
+```json
+{
+  "upload_url": "https://<account>.r2.cloudflarestorage.com/...<signed>",
+  "public_url": "https://cdn.nexpos.irvanmahendra.com/products/12/<uuid>.webp",
+  "key": "products/12/<uuid>.webp"
+}
+```
+
+Alur klien: (1) kompres gambar → (2) `POST /uploads/presign` → (3) `PUT upload_url` dengan blob
+(**header `Content-Type` wajib sama** dengan yang diminta) → (4) simpan `public_url` sebagai
+`image_url` produk. Key di-scope per `company_id` (dari JWT). Mengembalikan `500` bila object
+storage belum dikonfigurasi (env `R2_*` kosong).
+
 ---
 
 ## 7. Orders

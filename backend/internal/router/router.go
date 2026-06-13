@@ -26,6 +26,7 @@ type Handlers struct {
 	StockOpname     *handler.StockOpnameHandler
 	DailySettlement *handler.DailySettlementHandler
 	Receipt         *handler.ReceiptHandler
+	Upload          *handler.UploadHandler
 }
 
 func Setup(e *echo.Echo, h *Handlers, authMW echo.MiddlewareFunc) {
@@ -134,6 +135,10 @@ func Setup(e *echo.Echo, h *Handlers, authMW echo.MiddlewareFunc) {
 	movements := protected.Group("/inventory/movements")
 	movements.GET("", h.Inventory.ListMovements)
 	movements.GET("/stats", h.Inventory.GetMovementStats)
+
+	// Upload routes (presigned URL for direct-to-R2 asset upload)
+	uploads := protected.Group("/uploads")
+	uploads.POST("/presign", h.Upload.Presign)
 
 	// Company settings routes
 	protected.GET("/company-settings", h.CompanySettings.Get)

@@ -45,6 +45,7 @@ type CreateProductRequest struct {
 	CategoryID  *int64                `json:"category_id"`
 	Description *string               `json:"description"`
 	ImageData   *string               `json:"image_data"`
+	ImageURL    *string               `json:"image_url"`
 	IsActive    *bool                 `json:"is_active"`
 	Variants    []ProductVariantInput `json:"variants" validate:"required,min=1,dive"`
 }
@@ -54,6 +55,7 @@ type UpdateProductRequest struct {
 	CategoryID  *int64                `json:"category_id"`
 	Description *string               `json:"description"`
 	ImageData   *string               `json:"image_data"`
+	ImageURL    *string               `json:"image_url"`
 	IsActive    *bool                 `json:"is_active"`
 	Variants    []ProductVariantInput `json:"variants" validate:"required,min=1,dive"`
 }
@@ -75,6 +77,7 @@ type ProductResponse struct {
 	CategoryName *string                   `json:"category_name,omitempty"`
 	Description  *string                   `json:"description"`
 	ImageData    *string                   `json:"image_data"`
+	ImageURL     *string                   `json:"image_url"`
 	IsActive     bool                      `json:"is_active"`
 	Variants     []*ProductVariantResponse `json:"variants"`
 	CreatedAt    time.Time                 `json:"created_at"`

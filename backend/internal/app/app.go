@@ -14,6 +14,7 @@ import (
 	authmiddleware "github.com/irvanmhndra/nexpos-api/internal/middleware"
 	"github.com/irvanmhndra/nexpos-api/internal/router"
 	"github.com/irvanmhndra/nexpos-api/internal/service"
+	"github.com/irvanmhndra/nexpos-api/internal/storage"
 	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
 	"github.com/irvanmhndra/nexpos-api/pkg/validator"
 	"github.com/jmoiron/sqlx"
@@ -49,7 +50,19 @@ func New(cfg *config.Config) (*App, error) {
 	services.Receipt = service.NewReceiptService(repos.Receipt)
 
 	v := validator.New()
-	handlers := initHandlers(db, services, v)
+
+	// Object storage (Cloudflare R2). Returns nil when unconfigured — the
+	// upload endpoint guards on that, so the app still boots without R2.
+	store := storage.New(storage.Config{
+		AccountID:     cfg.R2.AccountID,
+		AccessKeyID:   cfg.R2.AccessKeyID,
+		SecretKey:     cfg.R2.SecretKey,
+		Bucket:        cfg.R2.Bucket,
+		Endpoint:      cfg.R2.Endpoint,
+		PublicBaseURL: cfg.R2.PublicBaseURL,
+	})
+
+	handlers := initHandlers(db, services, v, store)
 
 	// Initialize Echo
 	e := echo.New()
@@ -123,6 +136,7 @@ func New(cfg *config.Config) (*App, error) {
 		StockOpname:     handlers.StockOpname,
 		DailySettlement: handlers.DailySettlement,
 		Receipt:         handlers.Receipt,
+		Upload:          handlers.Upload,
 	}, authmiddleware.Auth(repos.UserSession))
 
 	return &App{

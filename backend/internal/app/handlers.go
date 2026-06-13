@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/irvanmhndra/nexpos-api/internal/handler"
+	"github.com/irvanmhndra/nexpos-api/internal/storage"
 	"github.com/irvanmhndra/nexpos-api/pkg/validator"
 	"github.com/jmoiron/sqlx"
 )
@@ -27,9 +28,10 @@ type Handlers struct {
 	StockOpname     *handler.StockOpnameHandler
 	DailySettlement *handler.DailySettlementHandler
 	Receipt         *handler.ReceiptHandler
+	Upload          *handler.UploadHandler
 }
 
-func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator) *Handlers {
+func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator, store *storage.Client) *Handlers {
 	return &Handlers{
 		Health:          handler.NewHealthHandler(db),
 		Auth:            handler.NewAuthHandler(services.Auth, v),
@@ -51,5 +53,6 @@ func initHandlers(db *sqlx.DB, services *Services, v *validator.CustomValidator)
 		StockOpname:     handler.NewStockOpnameHandler(services.StockOpname, v),
 		DailySettlement: handler.NewDailySettlementHandler(services.DailySettlement, v),
 		Receipt:         handler.NewReceiptHandler(services.Receipt),
+		Upload:          handler.NewUploadHandler(store),
 	}
 }

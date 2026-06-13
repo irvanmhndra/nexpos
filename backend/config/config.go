@@ -10,6 +10,16 @@ type Config struct {
 	Server   ServerConfig
 	Postgres PostgresConfig
 	JWT      JWTConfig
+	R2       R2Config
+}
+
+type R2Config struct {
+	AccountID     string
+	AccessKeyID   string
+	SecretKey     string
+	Bucket        string
+	Endpoint      string // https://<account>.r2.cloudflarestorage.com
+	PublicBaseURL string // https://cdn.nexpos.irvanmahendra.com
 }
 
 type ServerConfig struct {
@@ -65,6 +75,14 @@ func Load() *Config {
 			RefreshExpiresDays: refreshDays,
 			AccessTokenExpiry:  time.Duration(accessHours) * time.Hour,
 			RefreshTokenExpiry: time.Duration(refreshDays) * 24 * time.Hour,
+		},
+		R2: R2Config{
+			AccountID:     getEnv("R2_ACCOUNT_ID", ""),
+			AccessKeyID:   getEnv("R2_ACCESS_KEY_ID", ""),
+			SecretKey:     getEnv("R2_SECRET_ACCESS_KEY", ""),
+			Bucket:        getEnv("R2_BUCKET", ""),
+			Endpoint:      getEnv("R2_ENDPOINT", ""),
+			PublicBaseURL: getEnv("R2_PUBLIC_BASE_URL", ""),
 		},
 	}
 }

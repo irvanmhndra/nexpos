@@ -9,6 +9,7 @@ type Product struct {
 	Name              string    `db:"name" json:"name"`
 	Description       *string   `db:"description" json:"description"`
 	ImageData         *string   `db:"image_data" json:"image_data"`
+	ImageURL          *string   `db:"image_url" json:"image_url"`
 	IsActive          bool      `db:"is_active" json:"is_active"`
 	CreatedAt         time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt         time.Time `db:"updated_at" json:"updated_at"`
