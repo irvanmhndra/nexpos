@@ -238,6 +238,13 @@ func (s *AuthService) Register(ctx context.Context, req dto.RegisterRequest, ipA
 				Code: company.Code,
 				Name: company.Name,
 			},
+			// The user was just assigned to this branch as their default
+			// above; surface it so the register response matches login.
+			DefaultBranch: &dto.BranchInfo{
+				ID:   branch.ID,
+				Code: branch.Code,
+				Name: branch.Name,
+			},
 		},
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
