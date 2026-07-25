@@ -1,12 +1,12 @@
 // Package storage wraps an S3-compatible object store (Cloudflare R2) used for
-// product images and other uploaded assets. Uploads happen client-side via a
-// presigned PUT URL; the API only mints the URL and can delete objects.
+// product images and other uploaded assets. Uploads are server-proxied: the API
+// validates the bytes then PUTs them to R2; it can also delete objects.
 package storage
 
 import (
 	"context"
+	"io"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -16,7 +16,6 @@ import (
 // Client talks to an R2 bucket over the S3 API.
 type Client struct {
 	s3            *s3.Client
-	presign       *s3.PresignClient
 	bucket        string
 	publicBaseURL string
 }
@@ -28,7 +27,7 @@ type Config struct {
 	SecretKey     string
 	Bucket        string
 	Endpoint      string // https://<account>.r2.cloudflarestorage.com
-	PublicBaseURL string // https://cdn.nexpos.irvanmahendra.com
+	PublicBaseURL string // https://nexpos-cdn.irvanmahendra.com
 }
 
 // New builds a storage client. Returns nil when not configured (so the rest of
@@ -42,27 +41,34 @@ func New(cfg Config) *Client {
 		Region:       "auto",
 		BaseEndpoint: aws.String(cfg.Endpoint),
 		Credentials:  credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.SecretKey, ""),
+		UsePathStyle: true,
+		// R2 doesn't support the SDK's default trailing checksum on PutObject;
+		// only send one when an operation explicitly requires it.
+		RequestChecksumCalculation: aws.RequestChecksumCalculationWhenRequired,
 	})
 
 	return &Client{
 		s3:            s3Client,
-		presign:       s3.NewPresignClient(s3Client),
 		bucket:        cfg.Bucket,
 		publicBaseURL: strings.TrimRight(cfg.PublicBaseURL, "/"),
 	}
 }
 
-// PresignPut returns a short-lived URL the client can PUT the object bytes to.
-func (c *Client) PresignPut(ctx context.Context, key, contentType string, expiry time.Duration) (string, error) {
-	req, err := c.presign.PresignPutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(c.bucket),
-		Key:         aws.String(key),
-		ContentType: aws.String(contentType),
-	}, s3.WithPresignExpires(expiry))
+// Upload streams body to key (immutable cache) and returns the object's public URL.
+func (c *Client) Upload(ctx context.Context, key, contentType string, body io.Reader, size int64) (string, error) {
+	_, err := c.s3.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(c.bucket),
+		Key:           aws.String(key),
+		Body:          body,
+		ContentType:   aws.String(contentType),
+		ContentLength: aws.Int64(size),
+		// Keys are random/immutable, so let the CDN cache forever.
+		CacheControl: aws.String("public, max-age=31536000, immutable"),
+	})
 	if err != nil {
 		return "", err
 	}
-	return req.URL, nil
+	return c.PublicURL(key), nil
 }
 
 // Delete removes an object by key (used for orphan cleanup on update/delete).

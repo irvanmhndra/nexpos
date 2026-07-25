@@ -136,9 +136,8 @@ func Setup(e *echo.Echo, h *Handlers, authMW echo.MiddlewareFunc) {
 	movements.GET("", h.Inventory.ListMovements)
 	movements.GET("/stats", h.Inventory.GetMovementStats)
 
-	// Upload routes (presigned URL for direct-to-R2 asset upload)
-	uploads := protected.Group("/uploads")
-	uploads.POST("/presign", h.Upload.Presign)
+	// Upload route (server-proxied image → R2)
+	protected.POST("/uploads", h.Upload.Upload)
 
 	// Company settings routes
 	protected.GET("/company-settings", h.CompanySettings.Get)

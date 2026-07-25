@@ -46,8 +46,8 @@ type CreateProductRequest struct {
 	Description *string               `json:"description"`
 	ImageData   *string               `json:"image_data"`
 	ImageURL    *string               `json:"image_url"`
-	IsActive    *bool                 `json:"is_active"`
-	Variants    []ProductVariantInput `json:"variants" validate:"required,min=1,dive"`
+	IsActive      *bool                 `json:"is_active"`
+	Variants      []ProductVariantInput `json:"variants" validate:"required,min=1,dive"`
 }
 
 type UpdateProductRequest struct {
@@ -56,8 +56,8 @@ type UpdateProductRequest struct {
 	Description *string               `json:"description"`
 	ImageData   *string               `json:"image_data"`
 	ImageURL    *string               `json:"image_url"`
-	IsActive    *bool                 `json:"is_active"`
-	Variants    []ProductVariantInput `json:"variants" validate:"required,min=1,dive"`
+	IsActive      *bool                 `json:"is_active"`
+	Variants      []ProductVariantInput `json:"variants" validate:"required,min=1,dive"`
 }
 
 type ListProductRequest struct {
@@ -77,9 +77,9 @@ type ProductResponse struct {
 	CategoryName *string                   `json:"category_name,omitempty"`
 	Description  *string                   `json:"description"`
 	ImageData    *string                   `json:"image_data"`
-	ImageURL     *string                   `json:"image_url"`
-	IsActive     bool                      `json:"is_active"`
-	Variants     []*ProductVariantResponse `json:"variants"`
+	ImageURL      *string                  `json:"image_url"`
+	IsActive      bool                     `json:"is_active"`
+	Variants      []*ProductVariantResponse `json:"variants"`
 	CreatedAt    time.Time                 `json:"created_at"`
 	UpdatedAt    time.Time                 `json:"updated_at"`
 }

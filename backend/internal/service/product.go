@@ -381,11 +381,11 @@ func (s *ProductService) toResponse(ctx context.Context, companyID int64, p *mod
 		Name:        p.Name,
 		CategoryID:  p.ProductCategoryID,
 		Description: p.Description,
-		ImageData:   p.ImageData,
-		ImageURL:    p.ImageURL,
-		IsActive:    p.IsActive,
-		CreatedAt:   p.CreatedAt,
-		UpdatedAt:   p.UpdatedAt,
+		ImageData:     p.ImageData,
+		ImageURL:      p.ImageURL,
+		IsActive:      p.IsActive,
+		CreatedAt:     p.CreatedAt,
+		UpdatedAt:     p.UpdatedAt,
 	}
 
 	// Get category name if category exists

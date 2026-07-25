@@ -1,15 +1,46 @@
 # Asset Storage Migration Plan — base64-in-Postgres → Cloudflare R2
 
-> Status: **Phase 1 (backend) implemented** — config R2, `internal/storage`, endpoint
-> `POST /uploads/presign`, migration `image_url`, dual-read. **Phase 0** (provisioning di
-> dashboard Cloudflare) & **Phase 2** (frontend) masih pending.
+> Status: **Phase 1 (backend) done — refactored to server-proxied** — config R2,
+> `internal/storage` (`Upload`/`Delete`), endpoint **`POST /uploads`** (magic-byte validated,
+> immutable cache), migration `image_url`, dual-read. Build + vet ✓.
+> **Phase 2 (frontend) done** — `uploadImage` (compress→WebP 1000px→`POST /uploads`), `ImageUpload`
+> refactored, `ProductFormPage` kirim `image_url`, semua display site dual-read (`image_url ?? image_data`).
+> Build ✓. **Phase 0** (provisioning) + **Phase 3/4** (backfill, drop `image_data`) sisa.
+>
+> ⚠️ **REVISI 2026-07-14** — setelah R2 dieksekusi beneran di [[project_undangin]], ada 3 koreksi
+> yang **override** detail di bawah. Baca **§0** dulu.
+
+## 0. Revisi dari eksekusi nyata (Undangin) — override yang di bawah
+
+Tiga pelajaran dari nge-ship R2 di Undangin yang mengoreksi plan ini:
+
+1. **CDN domain wajib 1-level: `nexpos-cdn.irvanmahendra.com`** (bukan `cdn.nexpos.…`). R2 custom
+   domain selalu proxied; Universal SSL gratis Cloudflare cuma cover `*.irvanmahendra.com` (1 level),
+   jadi hostname 2-level bikin **"not covered by a certificate"** / gagal SSL (kecuali bayar ACM).
+   *(Semua `cdn.nexpos.…` di doc ini sudah diganti ke `nexpos-cdn.…`.)*
+
+2. **Cache Rule itu WAJIB, bukan opsional.** Tanpa Cache Rule eksplisit, R2 custom domain balikin
+   `cf-cache-status: DYNAMIC` (nggak ke-edge-cache). Buat POS read-heavy ini penting — bikin Cache Rule
+   di `nexpos-cdn`: hostname match → **Eligible for cache**, Edge TTL = **honor cache-control** (objek
+   immutable, aman TTL panjang).
+
+3. **Upload flow: ganti presigned PUT → server-proxied.** Setelah dikerjain, proxied lebih pas untuk
+   gambar kecil: (a) server bisa **validasi magic-byte** sebelum simpan (§9 minta ini; presigned nggak
+   bisa karena byte langsung ke R2), (b) menghindari **footgun checksum** aws-sdk-go-v2 di presigned PUT
+   ke R2 (bakal kena di Phase 2), (c) lebih simpel, tanpa CORS. Bandwidth negligible (upload produk occasional).
+   **Konsekuensi:** Phase 1 (`/uploads/presign`) di-refactor ke **`POST /uploads`** — terima multipart →
+   validasi magic-byte → `PutObject` (set `Cache-Control: immutable` + `RequestChecksumCalculation=WhenRequired`)
+   → balikin `public_url`. Template siap: `undangin-api/internal/handler/upload.go` + `internal/storage/r2.go`.
+
+Sisa plan (§1–§12) tetap valid — tinggal disesuaikan dengan 3 koreksi ini. (Bucket name saran ikut
+konvensi `<app>-prod` → `nexpos-prod`, bukan `nexpos-assets`, biar seragam antar app.)
 
 ## 1. Decision summary
 
 | | |
 |---|---|
 | **Target storage** | **Cloudflare R2** (S3-compatible object storage) |
-| **Delivery** | Public bucket via custom domain **cdn.nexpos.irvanmahendra.com** (Cloudflare CDN cache, PoP Jakarta/SG) |
+| **Delivery** | Public bucket via custom domain **nexpos-cdn.irvanmahendra.com** (Cloudflare CDN cache, PoP Jakarta/SG) |
 | **Transform** | **Resize/compress di sisi client** sebelum upload. Cloudflare Image Resizing = opsional, ditunda. |
 | **Upload flow** | **Presigned PUT** — client upload langsung ke R2, API hanya menerbitkan URL bertanda tangan + menyimpan URL hasil |
 | **DB** | Tambah kolom `image_url`; `image_data` (base64) dipertahankan sementara untuk backward-compat, di-drop di akhir |
@@ -35,7 +66,7 @@ menutup fase awal ~$0, S3-compatible (pakai `aws-sdk-go-v2`, tidak lock-in).
   4. simpan product dengan image_url = public_url                  (ke nexpos-api)
 
 [POS / list load gambar]
-  <img src="https://cdn.nexpos.irvanmahendra.com/products/{company}/{uuid}.webp">
+  <img src="https://nexpos-cdn.irvanmahendra.com/products/{company}/{uuid}.webp">
                               │
                               ▼
                  [Cloudflare CDN cache] ──(miss)──► [R2]
@@ -51,10 +82,10 @@ products/{company_id}/{uuid}.webp
 
 1. Buat **R2 bucket** (mis. `nexpos-assets`) di dashboard Cloudflare.
 2. Buat **R2 API token** (Access Key ID + Secret) dengan akses ke bucket itu.
-3. Hubungkan **custom domain** publik untuk bucket (mis. `cdn.nexpos.irvanmahendra.com`) → otomatis lewat CDN
+3. Hubungkan **custom domain** publik untuk bucket (mis. `nexpos-cdn.irvanmahendra.com`) → otomatis lewat CDN
    Cloudflare; set **Cache rules** (cache everything, TTL panjang — aman karena key immutable).
 4. Catat: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`,
-   `R2_PUBLIC_BASE_URL` (= `https://cdn.nexpos.irvanmahendra.com`), `R2_ENDPOINT`
+   `R2_PUBLIC_BASE_URL` (= `https://nexpos-cdn.irvanmahendra.com`), `R2_ENDPOINT`
    (`https://<account_id>.r2.cloudflarestorage.com`).
 5. Tambahkan semua di atas ke env VPS (`~/nexpos/.env` + docker-compose env) dan, jika backfill
    dijalankan via CI, ke GitHub secrets. **Jangan commit secrets.**
@@ -142,7 +173,7 @@ Karena semua additive: bila frontend bermasalah, revert frontend ke base64 — `
 
 ## 12. Resolved decisions (terkunci)
 
-1. **CDN domain**: `cdn.nexpos.irvanmahendra.com`.
+1. **CDN domain**: `nexpos-cdn.irvanmahendra.com`.
 2. **Format**: **WebP** utama, **otomatis fallback ke JPEG** bila encode WebP gagal. Ditangani di sisi client — tidak perlu konfigurasi.
 3. **Ukuran tersimpan**: cap sisi terpanjang **1000px**, quality **0.8**. Satu ukuran dulu (cukup untuk grid POS & detail di layar retina); varian thumbnail via Cloudflare Image Resizing nanti bila perlu.
 4. **Backfill**: `image_data` dibiarkan sampai **Phase 4** (rollback-safe).

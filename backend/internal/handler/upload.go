@@ -1,10 +1,11 @@
 package handler
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/irvanmhndra/nexpos-api/internal/storage"
@@ -12,6 +13,8 @@ import (
 	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
 	"github.com/labstack/echo/v5"
 )
+
+const maxUploadBytes = 10 << 20 // 10 MB (client compresses first; server-side guard)
 
 type UploadHandler struct {
 	storage *storage.Client
@@ -21,56 +24,65 @@ func NewUploadHandler(s *storage.Client) *UploadHandler {
 	return &UploadHandler{storage: s}
 }
 
-type presignRequest struct {
-	ContentType string `json:"content_type"`
-	Kind        string `json:"kind"`
+type uploadResponse struct {
+	URL string `json:"url"`
+	Key string `json:"key"`
 }
 
-type presignResponse struct {
-	UploadURL string `json:"upload_url"`
-	PublicURL string `json:"public_url"`
-	Key       string `json:"key"`
-}
-
-// allowedImageTypes maps accepted MIME types to the object-key extension.
-var allowedImageTypes = map[string]string{
-	"image/webp": "webp",
-	"image/jpeg": "jpg",
-	"image/png":  "png",
-}
-
-// Presign mints a short-lived URL the client uploads the image bytes to (R2),
-// plus the public CDN URL to store on the product. Keys are scoped per company.
-func (h *UploadHandler) Presign(c *echo.Context) error {
+// Upload accepts a multipart image field "file", validates it by real magic
+// bytes (not the client Content-Type), stores it in R2 (server-proxied), and
+// returns its public CDN URL. Keys are scoped per company for tenant isolation.
+func (h *UploadHandler) Upload(c *echo.Context) error {
 	if h.storage == nil {
 		return httputil.Error(c, apperror.InternalError(errors.New("object storage is not configured")))
 	}
 
-	var req presignRequest
-	if err := c.Bind(&req); err != nil {
-		return httputil.Error(c, httputil.BindError(err))
+	fh, err := c.FormFile("file")
+	if err != nil {
+		return httputil.Error(c, apperror.BadRequest("file is required"))
+	}
+	if fh.Size > maxUploadBytes {
+		return httputil.Error(c, apperror.BadRequest("file too large (max 10MB)"))
 	}
 
-	ext, ok := allowedImageTypes[req.ContentType]
+	f, err := fh.Open()
+	if err != nil {
+		return httputil.Error(c, apperror.InternalError(err))
+	}
+	defer func() { _ = f.Close() }()
+
+	head := make([]byte, 512)
+	n, err := io.ReadFull(f, head)
+	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+		return httputil.Error(c, apperror.InternalError(err))
+	}
+	ext, contentType, ok := sniffImage(head[:n])
 	if !ok {
-		return httputil.Error(c, apperror.BadRequest("unsupported content_type (allowed: image/webp, image/jpeg, image/png)"))
+		return httputil.Error(c, apperror.BadRequest("only JPG, PNG, or WEBP images are allowed"))
 	}
-	if req.Kind != "product" {
-		return httputil.Error(c, apperror.BadRequest("unsupported kind"))
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return httputil.Error(c, apperror.InternalError(err))
 	}
 
-	companyID := getCompanyID(c)
-	key := fmt.Sprintf("products/%d/%s.%s", companyID, uuid.NewString(), ext)
-
-	ctx := c.Request().Context()
-	uploadURL, err := h.storage.PresignPut(ctx, key, req.ContentType, 5*time.Minute)
+	key := fmt.Sprintf("products/%d/%s%s", getCompanyID(c), uuid.NewString(), ext)
+	url, err := h.storage.Upload(c.Request().Context(), key, contentType, f, fh.Size)
 	if err != nil {
 		return httputil.Error(c, apperror.InternalError(err))
 	}
 
-	return httputil.Success(c, http.StatusOK, "Presigned URL created", presignResponse{
-		UploadURL: uploadURL,
-		PublicURL: h.storage.PublicURL(key),
-		Key:       key,
-	})
+	return httputil.Success(c, http.StatusCreated, "Image uploaded", uploadResponse{URL: url, Key: key})
+}
+
+// sniffImage returns the extension (with leading dot) + content type from the
+// file's magic bytes.
+func sniffImage(head []byte) (ext, contentType string, ok bool) {
+	switch {
+	case len(head) >= 3 && head[0] == 0xFF && head[1] == 0xD8 && head[2] == 0xFF:
+		return ".jpg", "image/jpeg", true
+	case len(head) >= 8 && bytes.Equal(head[:8], []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}):
+		return ".png", "image/png", true
+	case len(head) >= 12 && string(head[0:4]) == "RIFF" && string(head[8:12]) == "WEBP":
+		return ".webp", "image/webp", true
+	}
+	return "", "", false
 }
