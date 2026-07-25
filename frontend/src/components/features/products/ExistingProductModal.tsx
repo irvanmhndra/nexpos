@@ -71,9 +71,9 @@ export function ExistingProductModal({
         {/* Existing product card */}
         <div className="p-6">
           <div className="flex items-start gap-3 p-4 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark">
-            {product.image_data ? (
+            {(product.image_url ?? product.image_data) ? (
               <img
-                src={product.image_data}
+                src={(product.image_url ?? product.image_data) || undefined}
                 alt={product.name}
                 className="w-16 h-16 rounded-lg object-cover border border-border-light dark:border-border-dark shrink-0"
               />

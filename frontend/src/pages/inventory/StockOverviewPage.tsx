@@ -113,8 +113,8 @@ export function StockOverviewPage() {
           <td className="px-4 py-4 w-10"></td>
           <td className="px-4 py-4">
             <div className="flex items-center gap-3">
-              {first.image_data ? (
-                <img src={first.image_data} alt={first.product_name} className="w-10 h-10 rounded-lg object-cover border border-border-light dark:border-border-dark" />
+              {(first.image_url ?? first.image_data) ? (
+                <img src={(first.image_url ?? first.image_data) || undefined} alt={first.product_name} className="w-10 h-10 rounded-lg object-cover border border-border-light dark:border-border-dark" />
               ) : (
                 <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                   <Icon name="image" size={20} className="text-gray-400" />
@@ -181,8 +181,8 @@ export function StockOverviewPage() {
           </td>
           <td className="px-4 py-4">
             <div className="flex items-center gap-3">
-              {first.image_data ? (
-                <img src={first.image_data} alt={first.product_name} className="w-10 h-10 rounded-lg object-cover border border-border-light dark:border-border-dark" />
+              {(first.image_url ?? first.image_data) ? (
+                <img src={(first.image_url ?? first.image_data) || undefined} alt={first.product_name} className="w-10 h-10 rounded-lg object-cover border border-border-light dark:border-border-dark" />
               ) : (
                 <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                   <Icon name="image" size={20} className="text-gray-400" />

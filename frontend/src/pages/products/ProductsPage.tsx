@@ -408,9 +408,9 @@ function ProductRow({
         {/* Product Info */}
         <td className="px-4 py-4">
           <div className="flex items-center gap-3">
-            {product.image_data ? (
+            {(product.image_url ?? product.image_data) ? (
               <img
-                src={product.image_data}
+                src={(product.image_url ?? product.image_data) || undefined}
                 alt={product.name}
                 className="w-12 h-12 rounded-lg object-cover border border-border-light dark:border-border-dark"
               />

@@ -73,6 +73,7 @@ export interface Product {
   category_name?: string;
   description: string | null;
   image_data: string | null;
+  image_url: string | null;
   is_active: boolean;
   variants: ProductVariant[];
   created_at: string;
@@ -84,6 +85,7 @@ export interface CreateProductRequest {
   category_id?: number | null;
   description?: string;
   image_data?: string;
+  image_url?: string;
   is_active?: boolean;
   variants: ProductVariantInput[];
 }
@@ -93,6 +95,7 @@ export interface UpdateProductRequest {
   category_id?: number | null;
   description?: string;
   image_data?: string;
+  image_url?: string;
   is_active?: boolean;
   variants: ProductVariantInput[];
 }

@@ -13,6 +13,7 @@ export interface InventoryItem {
   sku: string;
   category_name: string;
   image_data: string | null;
+  image_url: string | null;
   branch_id: number;
   branch_name: string;
   current_stock: number;

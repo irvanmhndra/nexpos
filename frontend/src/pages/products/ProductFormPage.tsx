@@ -31,7 +31,7 @@ interface ProductFormData {
   name: string;
   category_id: string;
   description: string;
-  image_data: string;
+  image_url: string;
   hasMultipleVariants: boolean;
   // Single variant fields (when toggle OFF)
   single_variant_id?: number; // store existing variant ID for update
@@ -62,7 +62,7 @@ export function ProductFormPage() {
     name: '',
     category_id: '',
     description: '',
-    image_data: '',
+    image_url: '',
     hasMultipleVariants: false,
     // Single variant defaults
     sku: '',
@@ -141,7 +141,7 @@ export function ProductFormPage() {
         name: product.name,
         category_id: product.category_id?.toString() || '',
         description: product.description || '',
-        image_data: product.image_data || '',
+        image_url: product.image_url || product.image_data || '',
         hasMultipleVariants: !!hasMultipleVariants,
         // Single variant from first variant
         single_variant_id: hasMultipleVariants ? undefined : firstVariant?.id,
@@ -252,7 +252,7 @@ export function ProductFormPage() {
       name: formData.name,
       category_id: formData.category_id ? parseInt(formData.category_id) : null,
       description: formData.description || undefined,
-      image_data: formData.image_data || undefined,
+      image_url: formData.image_url || undefined,
       is_active: true,
       variants,
     };
@@ -867,8 +867,8 @@ export function ProductFormPage() {
                 Gambar Produk
               </h2>
               <ImageUpload
-                value={formData.image_data}
-                onChange={(imageData) => setFormData({ ...formData, image_data: imageData })}
+                value={formData.image_url}
+                onChange={(url) => setFormData({ ...formData, image_url: url })}
               />
             </Card>
 

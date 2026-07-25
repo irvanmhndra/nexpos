@@ -1,10 +1,13 @@
 import { useState, useRef, useCallback } from 'react';
 import { cn } from '@/utils';
+import { uploadImage } from '@/utils/uploadImage';
 import { Icon } from './Icon';
 
 export interface ImageUploadProps {
+  /** Public image URL (from R2). */
   value?: string;
-  onChange: (imageData: string) => void;
+  /** Called with the uploaded public URL (empty string when removed). */
+  onChange: (url: string) => void;
   className?: string;
   error?: string;
 }
@@ -12,31 +15,25 @@ export interface ImageUploadProps {
 export function ImageUpload({ value, onChange, className, error }: ImageUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(
-    (file: File) => {
+    async (file: File) => {
       if (!file.type.startsWith('image/')) {
+        setUploadError('File harus berupa gambar');
         return;
       }
-
-      // Max 5MB
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Ukuran file maksimal 5MB');
-        return;
-      }
-
+      setUploadError('');
       setIsLoading(true);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        onChange(result);
+      try {
+        const url = await uploadImage(file);
+        onChange(url);
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : 'Gagal mengunggah gambar');
+      } finally {
         setIsLoading(false);
-      };
-      reader.onerror = () => {
-        setIsLoading(false);
-      };
-      reader.readAsDataURL(file);
+      }
     },
     [onChange]
   );
@@ -45,10 +42,9 @@ export function ImageUpload({ value, onChange, className, error }: ImageUploadPr
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
-
       const file = e.dataTransfer.files[0];
       if (file) {
-        handleFile(file);
+        void handleFile(file);
       }
     },
     [handleFile]
@@ -71,24 +67,28 @@ export function ImageUpload({ value, onChange, className, error }: ImageUploadPr
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      handleFile(file);
+      void handleFile(file);
     }
+    if (inputRef.current) inputRef.current.value = '';
   };
 
   const handleRemove = (e: React.MouseEvent) => {
     e.stopPropagation();
+    setUploadError('');
     onChange('');
     if (inputRef.current) {
       inputRef.current.value = '';
     }
   };
 
+  const shownError = error || uploadError;
+
   return (
     <div className={className}>
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/png,image/jpeg,image/webp"
         onChange={handleInputChange}
         className="hidden"
       />
@@ -118,6 +118,11 @@ export function ImageUpload({ value, onChange, className, error }: ImageUploadPr
               <Icon name="delete" size={20} className="text-red-600" />
             </button>
           </div>
+          {isLoading && (
+            <div className="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center">
+              <Icon name="progress_activity" size={32} className="animate-spin text-white" />
+            </div>
+          )}
         </div>
       ) : (
         <div
@@ -129,7 +134,7 @@ export function ImageUpload({ value, onChange, className, error }: ImageUploadPr
             'relative flex flex-col items-center justify-center w-full h-48 rounded-lg border-2 border-dashed cursor-pointer transition-all',
             isDragging
               ? 'border-primary bg-primary/5'
-              : error
+              : shownError
                 ? 'border-red-500 bg-red-50 dark:bg-red-900/10'
                 : 'border-border-light dark:border-border-dark hover:border-primary hover:bg-primary/5'
           )}
@@ -145,14 +150,14 @@ export function ImageUpload({ value, onChange, className, error }: ImageUploadPr
                 {isDragging ? 'Lepaskan gambar di sini' : 'Klik atau drag gambar ke sini'}
               </p>
               <p className="text-xs text-text-sub dark:text-gray-400">
-                PNG, JPG, WEBP (Maks. 5MB)
+                PNG, JPG, WEBP (Maks. 10MB)
               </p>
             </>
           )}
         </div>
       )}
 
-      {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+      {shownError && <p className="text-red-500 text-sm mt-1">{shownError}</p>}
     </div>
   );
 }

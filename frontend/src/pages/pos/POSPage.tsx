@@ -474,9 +474,9 @@ export function POSPage() {
                       </span>
                     )}
                     <div className="aspect-square rounded-lg bg-background-light dark:bg-background-dark flex items-center justify-center mb-3 overflow-hidden">
-                      {product.image_data ? (
+                      {(product.image_url ?? product.image_data) ? (
                         <img
-                          src={product.image_data}
+                          src={(product.image_url ?? product.image_data) || undefined}
                           alt={product.name}
                           className="w-full h-full object-cover"
                         />
