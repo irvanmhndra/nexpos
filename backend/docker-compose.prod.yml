@@ -1,0 +1,46 @@
+# Production stack for nexpos — shipped from the repo on every deploy.
+#
+# This file is the SINGLE SOURCE OF TRUTH. Do NOT hand-edit the copy on the
+# server: the deploy workflow overwrites ~/nexpos/docker-compose.yml with this
+# file on every push to main. Change things here and push instead.
+#
+# Secrets are NOT in this file — they live only in ~/nexpos/.env on the server
+# (git-ignored, never committed, never overwritten by the deploy).
+name: nexpos
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: nexpos_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # NOTE: this publishes Postgres on the host's public interface. The API
+    # reaches the DB over the internal Docker network (host "nexpos_db"), so
+    # this mapping is only needed for external tools. To stop exposing the DB
+    # to the internet, change to "127.0.0.1:5432:5432" (local/SSH-tunnel only).
+    ports:
+      - "5432:5432"
+    volumes:
+      - nexpos_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  nexpos-api:
+    image: ghcr.io/irvanmhndra/nexpos-api:latest
+    container_name: nexpos_api
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  nexpos_pgdata:

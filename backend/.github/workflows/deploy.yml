@@ -95,6 +95,19 @@ jobs:
           docker build -t ghcr.io/irvanmhndra/nexpos-api:latest .
           docker push ghcr.io/irvanmhndra/nexpos-api:latest
 
+      # Ship the compose file from the repo → the server. This makes the repo
+      # the single source of truth: any manual edits on the VPS get overwritten,
+      # so config drift (leftover services, missing restart policies) can't
+      # happen again. It only copies the compose file — never .env.
+      - name: Copy compose file to VPS
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "docker-compose.prod.yml"
+          target: "~/nexpos"
+
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1
         with:
@@ -103,10 +116,11 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd ~/nexpos
+            cp docker-compose.prod.yml docker-compose.yml
             docker compose pull nexpos-api
-            docker compose up -d nexpos-api
+            docker compose up -d --remove-orphans
             docker image prune -af
-            echo "✅ API deployed: $(date)"
+            echo "✅ Stack deployed: $(date)"
 
       - name: Run Migrations
         uses: appleboy/ssh-action@v1
