@@ -5,7 +5,9 @@
 > immutable cache), migration `image_url`, dual-read. Build + vet ✓.
 > **Phase 2 (frontend) done** — `uploadImage` (compress→WebP 1000px→`POST /uploads`), `ImageUpload`
 > refactored, `ProductFormPage` kirim `image_url`, semua display site dual-read (`image_url ?? image_data`).
-> Build ✓. **Phase 0** (provisioning) + **Phase 3/4** (backfill, drop `image_data`) sisa.
+> Build ✓. **Phase 3 backfill command written** — `cmd/backfill-images` (idempotent, resumable,
+> baked into the API image; run `docker exec nexpos_api /app/backfill-images [-dry-run|-limit N]`).
+> **Phase 0** (provisioning R2 + `R2_*` env on VPS) + running the backfill + **Phase 4** (drop `image_data`) sisa.
 >
 > ⚠️ **REVISI 2026-07-14** — setelah R2 dieksekusi beneran di [[project_undangin]], ada 3 koreksi
 > yang **override** detail di bawah. Baca **§0** dulu.
