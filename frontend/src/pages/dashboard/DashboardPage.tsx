@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { Card, CardTitle, CardDescription, Badge, Avatar } from '@/components/ui';
 import { StatsCard, DataTable, SalesChart } from '@/components/common';
 import { useDashboardStats, useRecentOrders, useSalesTrend } from '@/hooks/useDashboard';
@@ -14,6 +15,7 @@ interface RecentOrder {
 }
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: recentOrders, isLoading: ordersLoading } = useRecentOrders();
   const { data: salesTrend, isLoading: trendLoading } = useSalesTrend();
@@ -198,7 +200,7 @@ export function DashboardPage() {
           columns={orderColumns}
           loading={ordersLoading}
           emptyMessage="Belum ada pesanan"
-          onRowClick={order => console.log('Order clicked:', order)}
+          onRowClick={() => navigate('/orders')}
         />
       </Card>
     </div>
