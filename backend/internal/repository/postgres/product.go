@@ -57,7 +57,7 @@ func (r *ProductRepository) List(ctx context.Context, companyID int64, search st
 	argIndex := 2
 
 	if search != "" {
-		whereClause += fmt.Sprintf(` AND (name ILIKE $%d OR EXISTS (SELECT 1 FROM product_variants WHERE product_id = id AND sku ILIKE $%d))`, argIndex, argIndex)
+		whereClause += fmt.Sprintf(` AND (products.name ILIKE $%d OR EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = products.id AND (pv.sku ILIKE $%d OR pv.barcode ILIKE $%d)))`, argIndex, argIndex, argIndex)
 		args = append(args, "%"+search+"%")
 		argIndex++
 	}
