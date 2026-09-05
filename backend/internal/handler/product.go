@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/irvanmhndra/nexpos-api/internal/dto"
 	"github.com/irvanmhndra/nexpos-api/internal/service"
@@ -92,7 +93,7 @@ func (h *ProductHandler) List(c *echo.Context) error {
 			req.PerPage = pp
 		}
 	}
-	req.Search = c.QueryParam("search")
+	req.Search = strings.TrimSpace(c.QueryParam("search"))
 	if categoryID := c.QueryParam("category_id"); categoryID != "" {
 		if cid, err := strconv.ParseInt(categoryID, 10, 64); err == nil {
 			req.CategoryID = &cid
