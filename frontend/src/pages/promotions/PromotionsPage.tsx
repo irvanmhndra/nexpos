@@ -438,7 +438,11 @@ export function PromotionsPage() {
       </div>
 
       {/* Add / Edit Modal */}
+      {/* key forces a remount when switching add/edit (or between promos) so the
+          form's useState initializer re-seeds from initialData — otherwise the
+          edit modal opens blank. */}
       <PromoFormModal
+        key={editingPromo?.id ?? 'new'}
         isOpen={isFormOpen}
         onClose={() => { setIsFormOpen(false); setEditingPromo(null); }}
         onSubmit={handleFormSubmit}

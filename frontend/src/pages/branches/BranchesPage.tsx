@@ -489,7 +489,10 @@ export function BranchesPage() {
       </div>
 
       {/* Add / Edit Modal */}
+      {/* key forces a remount so the form's useState re-seeds from initialData —
+          otherwise the edit modal opens blank. */}
       <BranchFormModal
+        key={editingBranch?.id ?? 'new'}
         isOpen={isFormOpen}
         onClose={() => { setIsFormOpen(false); setEditingBranch(null); }}
         onSubmit={handleFormSubmit}
