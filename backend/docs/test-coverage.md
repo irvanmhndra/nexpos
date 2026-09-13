@@ -7,101 +7,96 @@ so future test runs skip what's already covered and focus on the gaps.
 since the "last verified" date, or it's marked ❌/👁️.
 **After testing:** update the rows (date + status) and move covered items up.
 
-Covers `nexpos-api` (Go, Echo+Postgres) + `nexpos-web` (React SPA, served under /mybiz).
+Covers `nexpos-api` (Go, Echo+Postgres) + `nexpos-web` (React SPA).
 
-> ⚠️ **No systematic E2E test pass has been done on nexpos yet.** The 2026-09 work
-> was a production-incident fix + targeted bug fixes (below), verified by code
-> reasoning and shipped — **not** click-tested by the assistant. Treat every feature
-> table below as **needs testing** until proven otherwise.
+> A full E2E audit was done **2026-09-14** (API via curl + UI via browser) against a
+> freshly-seeded local DB. Three bugs were found and fixed (see bottom).
 
 ## Legend
 - ✅ **E2E** — action performed and result verified (curl and/or browser)
 - 👁️ **render-only** — page loads with real data, action not exercised
-- ❌ **not tested** (this cycle)
+- ❌ **not tested**
 - 🚫 **blocked** — needs an external dependency
 
 ## Test environment
-- API: `SERVER_PORT=8080`, Postgres `pos_user` / `pos_db` @ :5432.
-- Web: `pnpm dev` (or npm) → :5173.
-- ⚠️ **No `cmd/seed` exists** — there is no demo-data seeder (unlike fnb). Testing
-  needs either data entered by hand or a copy of prod-shaped data. *Building a seeder
-  is the first prerequisite for a proper E2E pass* (see gaps).
-- Prod is **live** — don't run destructive tests against it.
-- Browser pane often hidden → drive React via `javascript_tool` and verify via DOM /
-  API fetch / the API request log.
+- API: `POSTGRES_PORT=… POSTGRES_PASSWORD=… JWT_SECRET=… go run ./cmd/api` (:8080).
+  `config.Load` reads **env vars, not `.env`** — pass POSTGRES_PASSWORD/PORT explicitly
+  when running by hand (the `.env` password is only used via `make` which exports it).
+- **Local DB caveat:** a native postgres already owns host `:5432`, so the dev
+  `docker compose` DB was run on host **:5434** (`docker run … -p 5434:5432 postgres:18-alpine`)
+  and everything pointed at `POSTGRES_PORT=5434` to avoid the clash. Migrations:
+  `migrate -path migrations -database postgres://pos_user:…@localhost:5434/pos_db?sslmode=disable up`.
+- **Seeder:** `go run ./cmd/seed [-reset]` — demo shoe store (see below). Was built
+  during this audit; didn't exist before.
+- Web: `pnpm dev` (:5173), `.env.local` has `VITE_ENABLE_MSW=false` + API base :8080.
+- **Most read endpoints require an explicit `?branch_id=` query param** (multi-branch);
+  order create/POS take the branch from the session's default branch instead.
+- Browser pane often hidden → drive React via `javascript_tool`; product cards are
+  `<button>` — dispatch full mousedown/mouseup/click, not just a bare `.click()`.
+
+**Seeder demo data:** company DEMO (tax 11%, `auto_complete_counter_orders=true`),
+users owner@/admin@/kasir@demo.test (pw `password123`), branch MAIN + user_branches,
+8 products / 11 variants (2 low-stock) + stock, 3 customers, 2 promotions
+(DISKON20 %, POTONG50K fixed), 2 suppliers, 3 expense categories. **No orders/shifts**
+are seeded — create those through the API/UI.
 
 ---
 
-## Feature surface (all ❌ = not E2E-tested this cycle)
-
-### Auth & org
-| Flow | Status | How |
+## API (curl) — ✅ verified 2026-09-14
+| Flow | Status | Notes |
 |---|---|---|
-| Login / logout / token refresh / register | ❌ | |
-| Users CRUD + status | ❌ | |
-| Branches CRUD | ❌ | (branch edit modal fix shipped — see below) |
-| Company settings get/update | ❌ | (user-profile save fix shipped — see below) |
+| Login | ✅ | returns token + company + default_branch |
+| Products list / search (name+SKU, trim) | ✅ | "sepatu" & "sepatu " & "RUN" all filter correctly (old bug stays fixed) |
+| Product lookup by barcode (`?code=`) | ✅ | |
+| Inventory list + stats (`?branch_id=`) | ✅ | value/low-stock correct with branch param |
+| Inventory adjust (IN/OUT/ADJUST) | ✅ | +50 applied, movement logged |
+| Reports summary / sales-trend | ✅ | summary revenue now completed-only (bug #1 fixed) |
+| Order create → confirm → add payment → complete | ✅ | tax 11% + DISKON20 auto-applied; stock deducted; movement OUT logged |
+| Order void | ✅ | status voided + stock restored |
+| Order cancel (draft) | ✅ | |
+| Refund payment (partial) | ✅ | payment → partially_refunded, refunded_amount set |
+| Shift open / current / close | ✅ | close computes expected/actual/difference |
+| Purchase order create → receive | ✅ | received → stock increased |
+| Expense create | ✅ | |
+| CRUD create: customer / product+variant / promotion / supplier / category / user / branch | ✅ | (categories are at `/product-categories`) |
 
-### Catalog
-| Flow | Status | How |
+## Web UI (browser) — ✅ verified 2026-09-14
+| Screen | Status | Notes |
 |---|---|---|
-| Product categories CRUD | ❌ | |
-| Products CRUD + variants + image upload | ❌ | |
-| Product search (name / SKU / barcode) | ❌ | fix shipped (see below), not re-tested E2E |
-| Product lookup (barcode scan) | ❌ | |
+| Login | ✅ | |
+| Dashboard | ✅ | revenue Rp364k after bug #1 fix (was Rp1.09jt) |
+| POS: add to cart → Bayar → Cash → Konfirmasi | ✅ | order auto-completes, stock deducts, receipt shown |
+| Products list + search | ✅ | |
+| Inventory (branch context, low-stock, value) | ✅ | |
+| Reports page | ✅ | |
+| Orders management page | 👁️ | list renders; per-order actions from UI not clicked |
 
-### POS / Orders
-| Flow | Status | How |
-|---|---|---|
-| POS: build cart → preview → create order | ❌ | |
-| Order confirm / add payment / complete | ❌ | |
-| Order cancel / void / refund payment | ❌ | |
-| Receipt generation | ❌ | |
-| Customers CRUD (+ attach to order) | ❌ | |
-| Promotions CRUD + applied at checkout | ❌ | promo edit-modal fix shipped (see below) |
+## Not yet tested (future focus)
+- POS: split payment, QRIS/Transfer methods, customer attach, promo manual apply, qr scanner.
+- Order management UI: confirm/void/cancel/refund from the Orders screen (done via API only).
+- Purchase order / shift / expense / supplier / customer / promotion / product **edit + delete** (creates done; updates/deletes not).
+- Branch switcher UI (switching the active branch and re-scoping lists).
+- Reports: number correctness for top-products / category-revenue / payment-methods / hourly-sales; date-range + branch filters.
+- Stock opname, daily settlements (UI + API).
+- Users/roles/permissions management UI; company settings UI.
+- Auth: token refresh, logout.
 
-### Inventory & procurement
-| Flow | Status | How |
-|---|---|---|
-| Inventory list + stats + adjust stock + min-stock | ❌ | |
-| Stock movements list + stats | ❌ | |
-| Suppliers CRUD | ❌ | |
-| Purchase orders create → receive | ❌ | |
+## Accepted behaviors (NOT bugs)
+- `auto_complete_counter_orders` gates whether a paid counter order auto-completes
+  (and thus deducts stock / counts as revenue). Seeder sets it **true**.
+- Stock deducts at order **completion**, not at payment/confirm.
+- Read endpoints need `?branch_id=`; without it they scope to branch 0 → empty.
 
-### Ops & finance
-| Flow | Status | How |
-|---|---|---|
-| Shifts open / current / close | ❌ | |
-| Expense categories CRUD | ❌ | |
-| Expenses CRUD + summary | ❌ | |
-| Daily settlements | ❌ | |
-| Reports: summary / sales-trend / top-products / category-revenue / payment-methods / hourly | ❌ | |
-| Dashboard | ❌ | row-click→/orders fix shipped (see below) |
-
----
-
-## Shipped fixes (2026-09, code-verified + deployed; NOT formally E2E-tested)
-Re-verify these first if a full pass is done — they're the most recently touched.
-- **Prod incident**: login CORS + 502 — root cause Postgres down after reboot (missing
-  `restart: unless-stopped`). Fixed via restart policy + ship-compose-from-repo. (Infra.)
-- **Product search**: "sepatu" not filtering — uncorrelated `EXISTS` subquery returned
-  global TRUE + no `TrimSpace`. Fixed to correlated `pv.product_id = products.id` across
-  name/SKU/barcode + trim the query param.
-- **Promo edit modal opened blank** (fresh insert instead of the edited row) — stale
-  `useState(initialData)` on an always-mounted modal. Fixed with `key={editing?.id}`.
-  Same fix applied to the **branch** edit modal.
-- **Sellability facades removed**: deleted the mock Integrations tab and the fake
-  Company-Profile save; wired the user-profile save to the real `useUpdateUser` API.
-- **Dashboard** recent-orders row click → navigates to `/orders`.
-- **Fonts**: FOUC/FOUT fix (fonts in `<head>` + `display=block` for Material Symbols).
-- Infra sweep: GHCR non-expiring auth, govulncheck gate, postgres:18 parent-dir volume mount.
-
-## Prerequisites before a real E2E pass
-1. **Build a `cmd/seed`** (mirror fnb's) — company, users, branches, categories,
-   products+variants, customers, a few orders across states, promotions, inventory,
-   suppliers/POs, an open shift. Without it there's no data to test against locally.
-2. Then run the pass area-by-area (POS checkout is the highest-value / highest-risk).
+## Bugs found & fixed (2026-09-14 audit)
+1. **Reports summary counted voided + cancelled orders as revenue** — `GetSummary`
+   summed `grand_total`/discount/tax and `total_orders` over ALL statuses (every other
+   report query filters `status='completed'`). Dashboard showed Rp1.092.000 instead of
+   Rp364.000. Fixed: revenue/discount/tax/total_orders now `FILTER (WHERE status='completed')`.
+2. **Seeder had `auto_complete_counter_orders=false`** → POS sales stayed as *paid drafts*:
+   no stock deduction, not counted in reports. Fixed the seeder default to `true` (correct
+   for a counter POS); POS sales now complete + deduct.
+3. **`DateRangePicker` nested a `<button>` inside a `<button>`** (invalid HTML / React
+   hydration warning) — the clear (×) control. Changed to `<span role="button">`.
 
 ## Still open (feature, not a test gap)
-- Payment gateway (discussed, Midtrans) — not built. Same direction as fnb
-  (QRIS, per-tenant keys).
+- Payment gateway (Midtrans) — not built. Same direction as fnb (QRIS, per-tenant keys).
