@@ -7,12 +7,21 @@ import {
   useUpdatePromotion,
   useDeletePromotion,
 } from '@/hooks/usePromotions';
-import type { Promotion, CreatePromotionRequest, PromotionType, DiscountType } from '@/types/promotion';
+import type { Promotion, CreatePromotionRequest, PromotionType, DiscountType, PromotionStatus } from '@/types/promotion';
 
 const PROMO_TYPES: { value: PromotionType; label: string }[] = [
   { value: 'discount', label: 'Diskon' },
   { value: 'bundle', label: 'Paket' },
   { value: 'conditional', label: 'Bersyarat' },
+];
+
+// Derived status → label + badge color. Comes from the API (server time), so an
+// expired promo shows "Kadaluarsa" even if is_active is still true.
+const PROMO_STATUS: { value: PromotionStatus; label: string; variant: 'success' | 'info' | 'warning' | 'gray' }[] = [
+  { value: 'active', label: 'Berjalan', variant: 'success' },
+  { value: 'scheduled', label: 'Terjadwal', variant: 'info' },
+  { value: 'expired', label: 'Kadaluarsa', variant: 'warning' },
+  { value: 'inactive', label: 'Nonaktif', variant: 'gray' },
 ];
 
 const DISCOUNT_TYPES: { value: DiscountType; label: string }[] = [
@@ -217,7 +226,7 @@ export function PromotionsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [activeFilter, setActiveFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -230,7 +239,7 @@ export function PromotionsPage() {
     page,
     per_page: PER_PAGE,
     search: search || undefined,
-    is_active: activeFilter === '' ? undefined : activeFilter === 'true',
+    status: statusFilter || undefined,
     type: typeFilter || undefined,
   });
 
@@ -322,10 +331,11 @@ export function PromotionsPage() {
 
           <div className="flex flex-col w-full md:w-48 gap-1.5">
             <label className="text-sm font-semibold text-text-main dark:text-gray-200">Status</label>
-            <select value={activeFilter} onChange={e => { setActiveFilter(e.target.value); setPage(1); }} className="h-11 pl-4 pr-10 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary appearance-none text-sm cursor-pointer">
+            <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }} className="h-11 pl-4 pr-10 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary appearance-none text-sm cursor-pointer">
               <option value="">Semua Status</option>
-              <option value="true">Aktif</option>
-              <option value="false">Tidak Aktif</option>
+              {PROMO_STATUS.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -393,9 +403,10 @@ export function PromotionsPage() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <Badge variant={promo.is_active ? 'success' : 'default'} dot>
-                        {promo.is_active ? 'Aktif' : 'Tidak Aktif'}
-                      </Badge>
+                      {(() => {
+                        const st = PROMO_STATUS.find(s => s.value === promo.status) ?? PROMO_STATUS[3];
+                        return <Badge variant={st.variant} dot>{st.label}</Badge>;
+                      })()}
                     </td>
                     <td className="p-4 pr-6 text-right">
                       <div className="flex items-center justify-end gap-1">

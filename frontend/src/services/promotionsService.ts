@@ -23,6 +23,7 @@ interface GetPromotionsParams {
   search?: string;
   is_active?: boolean;
   type?: string;
+  status?: string;
 }
 
 export const promotionsService = {

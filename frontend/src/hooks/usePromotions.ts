@@ -8,6 +8,7 @@ interface UsePromotionsParams {
   search?: string;
   is_active?: boolean;
   type?: string;
+  status?: string;
 }
 
 export function usePromotions(params: UsePromotionsParams = {}) {

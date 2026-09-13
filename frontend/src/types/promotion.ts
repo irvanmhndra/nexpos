@@ -1,5 +1,7 @@
 export type PromotionType = 'discount' | 'bundle' | 'conditional';
 export type DiscountType = 'percentage' | 'fixed';
+// Derived (server-computed) lifecycle status.
+export type PromotionStatus = 'inactive' | 'scheduled' | 'active' | 'expired';
 
 export interface Promotion {
   id: number;
@@ -15,6 +17,7 @@ export interface Promotion {
   end_at: string | null;
   priority: number;
   is_active: boolean;
+  status: PromotionStatus;
   created_at: string;
   updated_at: string;
 }
