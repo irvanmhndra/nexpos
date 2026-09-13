@@ -102,16 +102,27 @@ export function DateRangePicker({
           {displayValue || placeholder}
         </span>
         {displayValue && (
-          <button
-            type="button"
+          // span (not button) — this sits inside the trigger button; nested
+          // buttons are invalid HTML and break hydration.
+          <span
+            role="button"
+            tabIndex={0}
+            aria-label="Hapus rentang tanggal"
             onClick={(e) => {
               e.stopPropagation();
               handleClear();
             }}
-            className="text-text-sub hover:text-text-main dark:hover:text-white"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                handleClear();
+              }
+            }}
+            className="text-text-sub hover:text-text-main dark:hover:text-white cursor-pointer"
           >
             <Icon name="close" size={18} />
-          </button>
+          </span>
         )}
       </button>
 
