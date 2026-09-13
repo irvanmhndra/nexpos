@@ -19,16 +19,18 @@ func (r *ReportRepository) GetSummary(ctx context.Context, companyID int64, date
 	summary := &repository.ReportSummary{}
 
 	// Get order stats
+	// Revenue/discount/tax and total_orders count COMPLETED orders only — voided
+	// and cancelled orders are not sales. (Breakdown counts below cover all statuses.)
 	orderQuery := `
 		SELECT
-			COALESCE(SUM(grand_total), 0) as total_revenue,
-			COUNT(*) as total_orders,
-			COALESCE(SUM(total_discount), 0) as total_discount,
-			COALESCE(SUM(total_tax), 0) as total_tax,
+			COALESCE(SUM(grand_total) FILTER (WHERE status = 'completed'), 0) as total_revenue,
+			COUNT(*) FILTER (WHERE status = 'completed') as total_orders,
+			COALESCE(SUM(total_discount) FILTER (WHERE status = 'completed'), 0) as total_discount,
+			COALESCE(SUM(total_tax) FILTER (WHERE status = 'completed'), 0) as total_tax,
 			COUNT(*) FILTER (WHERE status = 'completed') as completed_orders,
 			COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled_orders,
 			COUNT(*) FILTER (WHERE status = 'pending') as pending_orders,
-			COUNT(DISTINCT customer_id) as total_customers
+			COUNT(DISTINCT customer_id) FILTER (WHERE status = 'completed') as total_customers
 		FROM orders
 		WHERE company_id = $1
 		  AND created_at >= $2::date
