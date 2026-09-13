@@ -40,8 +40,8 @@ func (m *MockPromotionRepository) GetByID(ctx context.Context, companyID, id int
 	return r0, ret.Error(1)
 }
 
-func (m *MockPromotionRepository) List(ctx context.Context, companyID int64, search string, isActive *bool, promoType string, limit, offset int) ([]*model.Promotion, int, error) {
-	ret := m.Called(ctx, companyID, search, isActive, promoType, limit, offset)
+func (m *MockPromotionRepository) List(ctx context.Context, companyID int64, search string, isActive *bool, promoType, status string, limit, offset int) ([]*model.Promotion, int, error) {
+	ret := m.Called(ctx, companyID, search, isActive, promoType, status, limit, offset)
 	var r0 []*model.Promotion
 	if ret.Get(0) != nil {
 		r0 = ret.Get(0).([]*model.Promotion)
@@ -94,8 +94,8 @@ func (e *MockPromotionRepositoryExpectation) GetByID(ctx context.Context, compan
 	return e.mock.On("GetByID", ctx, companyID, id)
 }
 
-func (e *MockPromotionRepositoryExpectation) List(ctx context.Context, companyID int64, search string, isActive *bool, promoType string, limit, offset int) *mock.Call {
-	return e.mock.On("List", ctx, companyID, search, isActive, promoType, limit, offset)
+func (e *MockPromotionRepositoryExpectation) List(ctx context.Context, companyID int64, search string, isActive *bool, promoType, status string, limit, offset int) *mock.Call {
+	return e.mock.On("List", ctx, companyID, search, isActive, promoType, status, limit, offset)
 }
 
 func (e *MockPromotionRepositoryExpectation) Update(ctx context.Context, promotion interface{}) *mock.Call {

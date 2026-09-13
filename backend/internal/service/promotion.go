@@ -89,7 +89,7 @@ func (s *PromotionService) List(ctx context.Context, companyID int64, req dto.Li
 
 	offset := (req.Page - 1) * req.PerPage
 
-	promotions, total, err := s.promotionRepo.List(ctx, companyID, req.Search, req.IsActive, req.Type, req.PerPage, offset)
+	promotions, total, err := s.promotionRepo.List(ctx, companyID, req.Search, req.IsActive, req.Type, req.Status, req.PerPage, offset)
 	if err != nil {
 		return nil, apperror.InternalError(err)
 	}
@@ -205,6 +205,7 @@ func (s *PromotionService) toResponse(p *model.Promotion) *dto.PromotionResponse
 		EndAt:         p.EndAt,
 		Priority:      p.Priority,
 		IsActive:      p.IsActive,
+		Status:        p.Status(time.Now()),
 		CreatedAt:     p.CreatedAt,
 		UpdatedAt:     p.UpdatedAt,
 	}

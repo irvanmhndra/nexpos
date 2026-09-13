@@ -40,6 +40,7 @@ type ListPromotionRequest struct {
 	Search   string  `query:"search"`
 	IsActive *bool   `query:"is_active"`
 	Type     string  `query:"type"`
+	Status   string  `query:"status"` // inactive | scheduled | active | expired
 }
 
 // ============== Responses ==============
@@ -58,6 +59,8 @@ type PromotionResponse struct {
 	EndAt         *time.Time `json:"end_at"`
 	Priority      int        `json:"priority"`
 	IsActive      bool       `json:"is_active"`
+	// Derived lifecycle status: inactive | scheduled | active | expired.
+	Status        string     `json:"status"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
 }

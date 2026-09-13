@@ -98,5 +98,14 @@ are seeded — create those through the API/UI.
 3. **`DateRangePicker` nested a `<button>` inside a `<button>`** (invalid HTML / React
    hydration warning) — the clear (×) control. Changed to `<span role="button">`.
 
+## Enhancements (post-audit)
+- **Promotion lifecycle status** — added a server-derived `status`
+  (`inactive|scheduled|active|expired`) on the promotion read model, computed from
+  `is_active` + `start_at`/`end_at` vs server time (no cron, no stored status). List
+  supports `?status=` filtering (server-time via `NOW()`). UI shows a 4-state badge
+  (Berjalan/Terjadwal/Kadaluarsa/Nonaktif) + status filter. Verified E2E 2026-09-14.
+  Rationale: expiry was previously only enforced at order-apply time, so an expired
+  promo still displayed "Aktif" in the list.
+
 ## Still open (feature, not a test gap)
 - Payment gateway (Midtrans) — not built. Same direction as fnb (QRIS, per-tenant keys).

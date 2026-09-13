@@ -20,3 +20,26 @@ type Promotion struct {
 	CreatedAt     time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt     time.Time  `db:"updated_at" json:"updated_at"`
 }
+
+// Promotion lifecycle status, derived from is_active + the schedule (never stored,
+// so it can't drift). Evaluated against server time.
+const (
+	PromotionStatusInactive  = "inactive"  // manually turned off
+	PromotionStatusScheduled = "scheduled" // active but not started yet
+	PromotionStatusActive    = "active"    // active and within the window
+	PromotionStatusExpired   = "expired"   // active but past end_at
+)
+
+// Status returns the effective status at the given (server) time.
+func (p *Promotion) Status(now time.Time) string {
+	if !p.IsActive {
+		return PromotionStatusInactive
+	}
+	if p.StartAt.After(now) {
+		return PromotionStatusScheduled
+	}
+	if p.EndAt != nil && p.EndAt.Before(now) {
+		return PromotionStatusExpired
+	}
+	return PromotionStatusActive
+}

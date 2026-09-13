@@ -145,7 +145,7 @@ func TestPromotionService_List_Success(t *testing.T) {
 	promos := []*model.Promotion{createTestPromotion(1, 1, "P1")}
 
 	req := dto.ListPromotionRequest{Page: 1, PerPage: 20}
-	mockRepo.EXPECT().List(ctx, int64(1), "", (*bool)(nil), "", 20, 0).Return(promos, 1, nil).Once()
+	mockRepo.EXPECT().List(ctx, int64(1), "", (*bool)(nil), "", "", 20, 0).Return(promos, 1, nil).Once()
 
 	result, err := svc.List(ctx, 1, req)
 	require.NoError(t, err)
@@ -157,7 +157,7 @@ func TestPromotionService_List_RepoError(t *testing.T) {
 	ctx := context.Background()
 
 	req := dto.ListPromotionRequest{Page: 1, PerPage: 20}
-	mockRepo.EXPECT().List(ctx, int64(1), "", (*bool)(nil), "", 20, 0).Return(nil, 0, errors.New("db error")).Once()
+	mockRepo.EXPECT().List(ctx, int64(1), "", (*bool)(nil), "", "", 20, 0).Return(nil, 0, errors.New("db error")).Once()
 
 	result, err := svc.List(ctx, 1, req)
 	require.Error(t, err)

@@ -300,7 +300,7 @@ type HourlySalesItem struct {
 type PromotionRepository interface {
 	Create(ctx context.Context, promotion *model.Promotion) error
 	GetByID(ctx context.Context, companyID, id int64) (*model.Promotion, error)
-	List(ctx context.Context, companyID int64, search string, isActive *bool, promoType string, limit, offset int) ([]*model.Promotion, int, error)
+	List(ctx context.Context, companyID int64, search string, isActive *bool, promoType, status string, limit, offset int) ([]*model.Promotion, int, error)
 	Update(ctx context.Context, promotion *model.Promotion) error
 	Delete(ctx context.Context, companyID, id int64) error
 	CodeExists(ctx context.Context, companyID int64, code string, excludeID int64) (bool, error)

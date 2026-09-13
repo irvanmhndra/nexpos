@@ -77,6 +77,7 @@ func (h *PromotionHandler) List(c *echo.Context) error {
 	}
 	req.Search = c.QueryParam("search")
 	req.Type = c.QueryParam("type")
+	req.Status = c.QueryParam("status")
 	if isActive := c.QueryParam("is_active"); isActive != "" {
 		if b, err := strconv.ParseBool(isActive); err == nil {
 			req.IsActive = &b

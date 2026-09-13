@@ -61,7 +61,7 @@ func (r *promotionRepository) GetByID(ctx context.Context, companyID, id int64) 
 	return &promo, nil
 }
 
-func (r *promotionRepository) List(ctx context.Context, companyID int64, search string, isActive *bool, promoType string, limit, offset int) ([]*model.Promotion, int, error) {
+func (r *promotionRepository) List(ctx context.Context, companyID int64, search string, isActive *bool, promoType, status string, limit, offset int) ([]*model.Promotion, int, error) {
 	args := []any{companyID}
 	conditions := []string{"company_id = $1"}
 	argIdx := 2
@@ -86,6 +86,19 @@ func (r *promotionRepository) List(ctx context.Context, companyID int64, search 
 		conditions = append(conditions, fmt.Sprintf("type = $%d", argIdx))
 		args = append(args, promoType)
 		argIdx++
+	}
+
+	// Derived-status filter, evaluated against server time (NOW()) — matches how
+	// promotions are actually applied at order time.
+	switch status {
+	case model.PromotionStatusInactive:
+		conditions = append(conditions, "is_active = false")
+	case model.PromotionStatusScheduled:
+		conditions = append(conditions, "is_active = true AND start_at > NOW()")
+	case model.PromotionStatusActive:
+		conditions = append(conditions, "is_active = true AND start_at <= NOW() AND (end_at IS NULL OR end_at >= NOW())")
+	case model.PromotionStatusExpired:
+		conditions = append(conditions, "is_active = true AND end_at IS NOT NULL AND end_at < NOW()")
 	}
 
 	where := strings.Join(conditions, " AND ")
