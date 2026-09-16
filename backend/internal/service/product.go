@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/irvanmhndra/nexpos-api/internal/dto"
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/irvanmhndra/nexpos-api/internal/repository"
+	"github.com/irvanmhndra/nexpos-api/internal/storage"
 	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
 	"github.com/lib/pq"
 )
@@ -18,17 +20,36 @@ type ProductService struct {
 	productRepo  repository.ProductRepository
 	variantRepo  repository.ProductVariantRepository
 	categoryRepo repository.ProductCategoryRepository
+	store        *storage.Client // may be nil (uploads disabled)
 }
 
 func NewProductService(
 	productRepo repository.ProductRepository,
 	variantRepo repository.ProductVariantRepository,
 	categoryRepo repository.ProductCategoryRepository,
+	store *storage.Client,
 ) *ProductService {
 	return &ProductService{
 		productRepo:  productRepo,
 		variantRepo:  variantRepo,
 		categoryRepo: categoryRepo,
+		store:        store,
+	}
+}
+
+// deleteImage best-effort removes an image object from R2 by its stored URL. It
+// never fails the caller: a leftover object is far less bad than a failed
+// update/delete, and it's a no-op for empty/foreign URLs or when R2 is off.
+func (s *ProductService) deleteImage(ctx context.Context, url string) {
+	if s.store == nil {
+		return
+	}
+	key := s.store.KeyFromURL(url)
+	if key == "" {
+		return
+	}
+	if err := s.store.Delete(ctx, key); err != nil {
+		slog.WarnContext(ctx, "failed to delete orphaned product image from R2", "key", key, "error", err)
 	}
 }
 
@@ -247,6 +268,12 @@ func (s *ProductService) Update(ctx context.Context, companyID, id int64, req dt
 		return nil, err
 	}
 
+	// Capture the current image before overwriting so we can clean up R2 after.
+	var oldImageURL string
+	if product.ImageURL != nil {
+		oldImageURL = *product.ImageURL
+	}
+
 	// Update product
 	product.ProductCategoryID = req.CategoryID
 	product.Name = req.Name
@@ -259,6 +286,15 @@ func (s *ProductService) Update(ctx context.Context, companyID, id int64, req dt
 
 	if err := s.productRepo.Update(ctx, product); err != nil {
 		return nil, apperror.InternalError(err)
+	}
+
+	// Image changed (replaced or cleared) → clean up the old R2 object.
+	newImageURL := ""
+	if product.ImageURL != nil {
+		newImageURL = *product.ImageURL
+	}
+	if oldImageURL != "" && oldImageURL != newImageURL {
+		s.deleteImage(ctx, oldImageURL)
 	}
 
 	// Separate incoming variants: those with a valid existing ID vs brand-new ones
@@ -372,6 +408,10 @@ func (s *ProductService) Delete(ctx context.Context, companyID, id int64) error 
 		return apperror.InternalError(err)
 	}
 
+	if product.ImageURL != nil {
+		s.deleteImage(ctx, *product.ImageURL)
+	}
+
 	return nil
 }
 
@@ -381,11 +421,11 @@ func (s *ProductService) toResponse(ctx context.Context, companyID int64, p *mod
 		Name:        p.Name,
 		CategoryID:  p.ProductCategoryID,
 		Description: p.Description,
-		ImageData:     p.ImageData,
-		ImageURL:      p.ImageURL,
-		IsActive:      p.IsActive,
-		CreatedAt:     p.CreatedAt,
-		UpdatedAt:     p.UpdatedAt,
+		ImageData:   p.ImageData,
+		ImageURL:    p.ImageURL,
+		IsActive:    p.IsActive,
+		CreatedAt:   p.CreatedAt,
+		UpdatedAt:   p.UpdatedAt,
 	}
 
 	// Get category name if category exists

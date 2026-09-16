@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/irvanmhndra/nexpos-api/config"
 	"github.com/irvanmhndra/nexpos-api/internal/service"
+	"github.com/irvanmhndra/nexpos-api/internal/storage"
 )
 
 type Services struct {
@@ -25,7 +26,7 @@ type Services struct {
 	Receipt         *service.ReceiptService
 }
 
-func initServices(repos *Repositories, cfg *config.Config) *Services {
+func initServices(repos *Repositories, cfg *config.Config, store *storage.Client) *Services {
 	return &Services{
 		Auth: service.NewAuthService(
 			repos.User,
@@ -40,7 +41,7 @@ func initServices(repos *Repositories, cfg *config.Config) *Services {
 		Branch:          service.NewBranchService(repos.Branch),
 		Customer:        service.NewCustomerService(repos.Customer),
 		ProductCategory: service.NewProductCategoryService(repos.ProductCategory),
-		Product:         service.NewProductService(repos.Product, repos.ProductVariant, repos.ProductCategory),
+		Product:         service.NewProductService(repos.Product, repos.ProductVariant, repos.ProductCategory, store),
 		Order: service.NewOrderService(
 			repos.Order,
 			repos.OrderItem,

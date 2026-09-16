@@ -84,3 +84,16 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 func (c *Client) PublicURL(key string) string {
 	return c.publicBaseURL + "/" + strings.TrimLeft(key, "/")
 }
+
+// KeyFromURL is the inverse of PublicURL: it extracts the object key from a URL
+// this store owns, or returns "" for an empty/foreign URL (so callers skip it).
+func (c *Client) KeyFromURL(url string) string {
+	if url == "" || c.publicBaseURL == "" {
+		return ""
+	}
+	prefix := c.publicBaseURL + "/"
+	if !strings.HasPrefix(url, prefix) {
+		return ""
+	}
+	return strings.TrimPrefix(url, prefix)
+}

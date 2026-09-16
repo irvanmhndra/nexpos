@@ -20,7 +20,7 @@ func setupProductTest(t *testing.T) (*ProductService, *repoMocks.MockProductRepo
 	productRepo := repoMocks.NewMockProductRepository(t)
 	variantRepo := repoMocks.NewMockProductVariantRepository(t)
 	categoryRepo := repoMocks.NewMockProductCategoryRepository(t)
-	svc := NewProductService(productRepo, variantRepo, categoryRepo)
+	svc := NewProductService(productRepo, variantRepo, categoryRepo, nil)
 	return svc, productRepo, variantRepo, categoryRepo
 }
 
@@ -55,7 +55,7 @@ func TestNewProductService(t *testing.T) {
 	productRepo := repoMocks.NewMockProductRepository(t)
 	variantRepo := repoMocks.NewMockProductVariantRepository(t)
 	categoryRepo := repoMocks.NewMockProductCategoryRepository(t)
-	svc := NewProductService(productRepo, variantRepo, categoryRepo)
+	svc := NewProductService(productRepo, variantRepo, categoryRepo, nil)
 	assert.NotNil(t, svc)
 }
 

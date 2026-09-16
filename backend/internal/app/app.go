@@ -43,16 +43,9 @@ func New(cfg *config.Config) (*App, error) {
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(5 * time.Minute)
 
-	// Initialize layers
-	repos := initRepositories(db)
-
-	services := initServices(repos, cfg)
-	services.Receipt = service.NewReceiptService(repos.Receipt)
-
-	v := validator.New()
-
-	// Object storage (Cloudflare R2). Returns nil when unconfigured — the
-	// upload endpoint guards on that, so the app still boots without R2.
+	// Object storage (Cloudflare R2). Returns nil when unconfigured — the upload
+	// endpoint guards on that and image cleanup is a no-op, so the app still boots
+	// without R2. Shared by services (orphan cleanup) + the upload handler.
 	store := storage.New(storage.Config{
 		AccountID:     cfg.R2.AccountID,
 		AccessKeyID:   cfg.R2.AccessKeyID,
@@ -61,6 +54,14 @@ func New(cfg *config.Config) (*App, error) {
 		Endpoint:      cfg.R2.Endpoint,
 		PublicBaseURL: cfg.R2.PublicBaseURL,
 	})
+
+	// Initialize layers
+	repos := initRepositories(db)
+
+	services := initServices(repos, cfg, store)
+	services.Receipt = service.NewReceiptService(repos.Receipt)
+
+	v := validator.New()
 
 	handlers := initHandlers(db, services, v, store)
 
