@@ -107,5 +107,11 @@ are seeded — create those through the API/UI.
   Rationale: expiry was previously only enforced at order-apply time, so an expired
   promo still displayed "Aktif" in the list.
 
+- **Orphaned R2 images cleaned up** (2026-09-16, backport of the fnb fix) — replacing or
+  clearing a product image, or deleting the product, now best-effort deletes the old R2
+  object via `storage.KeyFromURL` after a successful update/delete (never fails the
+  operation). Company logo has no service update path, so it's not affected. Verified:
+  `KeyFromURL` round-trip unit test; build + product tests green.
+
 ## Still open (feature, not a test gap)
 - Payment gateway (Midtrans) — not built. Same direction as fnb (QRIS, per-tenant keys).
