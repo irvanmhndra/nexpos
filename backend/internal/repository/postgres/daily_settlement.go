@@ -27,7 +27,7 @@ func (r *DailySettlementRepository) Create(ctx context.Context, s *model.DailySe
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		s.CompanyID,
 		s.BranchID,
 		s.SettlementDate,
@@ -43,7 +43,7 @@ func (r *DailySettlementRepository) Create(ctx context.Context, s *model.DailySe
 func (r *DailySettlementRepository) GetByID(ctx context.Context, companyID, id int64) (*model.DailySettlement, error) {
 	var s model.DailySettlement
 	query := `SELECT * FROM daily_settlements WHERE id = $1 AND company_id = $2`
-	err := r.db.GetContext(ctx, &s, query, id, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &s, query, id, companyID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -56,7 +56,7 @@ func (r *DailySettlementRepository) GetByID(ctx context.Context, companyID, id i
 func (r *DailySettlementRepository) GetByBranchAndDate(ctx context.Context, companyID, branchID int64, date string) (*model.DailySettlement, error) {
 	var s model.DailySettlement
 	query := `SELECT * FROM daily_settlements WHERE company_id = $1 AND branch_id = $2 AND settlement_date = $3`
-	err := r.db.GetContext(ctx, &s, query, companyID, branchID, date)
+	err := conn(ctx, r.db).GetContext(ctx, &s, query, companyID, branchID, date)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -96,7 +96,7 @@ func (r *DailySettlementRepository) List(ctx context.Context, companyID int64, p
 	}
 
 	countQuery := "SELECT COUNT(*) FROM daily_settlements " + where
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -107,7 +107,7 @@ func (r *DailySettlementRepository) List(ctx context.Context, companyID int64, p
 	`, where, argIdx, argIdx+1)
 	args = append(args, params.Limit, params.Offset)
 
-	if err := r.db.SelectContext(ctx, &settlements, listQuery, args...); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &settlements, listQuery, args...); err != nil {
 		return nil, 0, err
 	}
 	return settlements, total, nil
@@ -126,7 +126,7 @@ func (r *DailySettlementRepository) Update(ctx context.Context, s *model.DailySe
 		    updated_at = NOW()
 		WHERE id = $8 AND company_id = $9
 	`
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := conn(ctx, r.db).ExecContext(ctx, query,
 		s.Status,
 		s.TotalSales,
 		s.TotalRefunds,
@@ -158,7 +158,7 @@ func (r *DailySettlementRepository) CreateItem(ctx context.Context, item *model.
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		item.DailySettlementID,
 		item.PaymentMethod,
 		item.ExpectedAmount,
@@ -171,7 +171,7 @@ func (r *DailySettlementRepository) CreateItem(ctx context.Context, item *model.
 func (r *DailySettlementRepository) GetItems(ctx context.Context, settlementID int64) ([]*model.DailySettlementItem, error) {
 	var items []*model.DailySettlementItem
 	query := `SELECT * FROM daily_settlement_items WHERE daily_settlement_id = $1 ORDER BY id`
-	if err := r.db.SelectContext(ctx, &items, query, settlementID); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &items, query, settlementID); err != nil {
 		return nil, err
 	}
 	return items, nil
@@ -180,7 +180,7 @@ func (r *DailySettlementRepository) GetItems(ctx context.Context, settlementID i
 func (r *DailySettlementRepository) GetItem(ctx context.Context, settlementID, itemID int64) (*model.DailySettlementItem, error) {
 	var item model.DailySettlementItem
 	query := `SELECT * FROM daily_settlement_items WHERE id = $1 AND daily_settlement_id = $2`
-	err := r.db.GetContext(ctx, &item, query, itemID, settlementID)
+	err := conn(ctx, r.db).GetContext(ctx, &item, query, itemID, settlementID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -199,7 +199,7 @@ func (r *DailySettlementRepository) UpdateItem(ctx context.Context, item *model.
 		    updated_at = NOW()
 		WHERE id = $4
 	`
-	_, err := r.db.ExecContext(ctx, query,
+	_, err := conn(ctx, r.db).ExecContext(ctx, query,
 		item.ActualAmount,
 		item.VarianceAmount,
 		item.Notes,
@@ -247,7 +247,7 @@ func (r *DailySettlementRepository) GetPaymentBreakdown(ctx context.Context, com
 		ORDER BY method
 	`
 	var totals []*repository.PaymentMethodTotals
-	if err := r.db.SelectContext(ctx, &totals, query, companyID, branchID, date); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &totals, query, companyID, branchID, date); err != nil {
 		return nil, err
 	}
 	return totals, nil
@@ -262,7 +262,7 @@ func (r *DailySettlementRepository) GetExpensesTotal(ctx context.Context, compan
 		  AND branch_id = $2
 		  AND expense_date = $3
 	`
-	if err := r.db.GetContext(ctx, &total, query, companyID, branchID, date); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, query, companyID, branchID, date); err != nil {
 		return 0, err
 	}
 	return total, nil

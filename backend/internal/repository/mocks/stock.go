@@ -27,6 +27,15 @@ func (m *MockStockRepository) EXPECT() *MockStockRepositoryExpectation {
 	return &MockStockRepositoryExpectation{mock: m}
 }
 
+func (m *MockStockRepository) LockForUpdate(ctx context.Context, variantID, branchID int64) (*model.Stock, error) {
+	ret := m.Called(ctx, variantID, branchID)
+	var r0 *model.Stock
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*model.Stock)
+	}
+	return r0, ret.Error(1)
+}
+
 func (m *MockStockRepository) GetByVariantAndBranch(ctx context.Context, variantID, branchID int64) (*model.Stock, error) {
 	ret := m.Called(ctx, variantID, branchID)
 	var r0 *model.Stock
@@ -87,4 +96,8 @@ func (e *MockStockRepositoryExpectation) ListInventory(ctx context.Context, comp
 
 func (e *MockStockRepositoryExpectation) GetInventoryStats(ctx context.Context, companyID, branchID int64) *mock.Call {
 	return e.mock.On("GetInventoryStats", ctx, companyID, branchID)
+}
+
+func (e *MockStockRepositoryExpectation) LockForUpdate(ctx context.Context, variantID, branchID int64) *mock.Call {
+	return e.mock.On("LockForUpdate", ctx, variantID, branchID)
 }

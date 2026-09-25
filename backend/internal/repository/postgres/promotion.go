@@ -31,7 +31,7 @@ func (r *promotionRepository) Create(ctx context.Context, promotion *model.Promo
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowxContext(ctx, query,
+	return conn(ctx, r.db).QueryRowxContext(ctx, query,
 		promotion.CompanyID,
 		promotion.Code,
 		promotion.Name,
@@ -51,7 +51,7 @@ func (r *promotionRepository) Create(ctx context.Context, promotion *model.Promo
 func (r *promotionRepository) GetByID(ctx context.Context, companyID, id int64) (*model.Promotion, error) {
 	var promo model.Promotion
 	query := `SELECT * FROM promotions WHERE id = $1 AND company_id = $2`
-	err := r.db.GetContext(ctx, &promo, query, id, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &promo, query, id, companyID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -105,7 +105,7 @@ func (r *promotionRepository) List(ctx context.Context, companyID int64, search 
 
 	var total int
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM promotions WHERE %s", where)
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -116,7 +116,7 @@ func (r *promotionRepository) List(ctx context.Context, companyID int64, search 
 	)
 
 	var promotions []*model.Promotion
-	if err := r.db.SelectContext(ctx, &promotions, listQuery, listArgs...); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &promotions, listQuery, listArgs...); err != nil {
 		return nil, 0, err
 	}
 
@@ -132,7 +132,7 @@ func (r *promotionRepository) Update(ctx context.Context, promotion *model.Promo
 		WHERE id = $13 AND company_id = $14
 		RETURNING updated_at
 	`
-	return r.db.QueryRowxContext(ctx, query,
+	return conn(ctx, r.db).QueryRowxContext(ctx, query,
 		promotion.Code,
 		promotion.Name,
 		promotion.Description,
@@ -151,14 +151,14 @@ func (r *promotionRepository) Update(ctx context.Context, promotion *model.Promo
 }
 
 func (r *promotionRepository) Delete(ctx context.Context, companyID, id int64) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM promotions WHERE id = $1 AND company_id = $2`, id, companyID)
+	_, err := conn(ctx, r.db).ExecContext(ctx, `DELETE FROM promotions WHERE id = $1 AND company_id = $2`, id, companyID)
 	return err
 }
 
 func (r *promotionRepository) CodeExists(ctx context.Context, companyID int64, code string, excludeID int64) (bool, error) {
 	var count int
 	query := `SELECT COUNT(*) FROM promotions WHERE company_id = $1 AND code = $2 AND id != $3`
-	err := r.db.GetContext(ctx, &count, query, companyID, code, excludeID)
+	err := conn(ctx, r.db).GetContext(ctx, &count, query, companyID, code, excludeID)
 	return count > 0, err
 }
 
@@ -172,14 +172,14 @@ func (r *promotionRepository) GetActivePromotions(ctx context.Context, companyID
 		  AND (end_at IS NULL OR end_at >= $2)
 		ORDER BY priority DESC, created_at DESC
 	`
-	err := r.db.SelectContext(ctx, &promotions, query, companyID, now)
+	err := conn(ctx, r.db).SelectContext(ctx, &promotions, query, companyID, now)
 	return promotions, err
 }
 
 func (r *promotionRepository) GetByCode(ctx context.Context, companyID int64, code string) (*model.Promotion, error) {
 	var promo model.Promotion
 	query := `SELECT * FROM promotions WHERE company_id = $1 AND code = $2`
-	err := r.db.GetContext(ctx, &promo, query, companyID, code)
+	err := conn(ctx, r.db).GetContext(ctx, &promo, query, companyID, code)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

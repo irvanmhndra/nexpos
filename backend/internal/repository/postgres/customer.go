@@ -23,7 +23,7 @@ func (r *CustomerRepository) Create(ctx context.Context, customer *model.Custome
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		customer.CompanyID,
 		customer.Code,
 		customer.Name,
@@ -36,7 +36,7 @@ func (r *CustomerRepository) Create(ctx context.Context, customer *model.Custome
 func (r *CustomerRepository) GetByID(ctx context.Context, companyID, id int64) (*model.Customer, error) {
 	var customer model.Customer
 	query := `SELECT * FROM customers WHERE id = $1 AND company_id = $2`
-	err := r.db.GetContext(ctx, &customer, query, id, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &customer, query, id, companyID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -49,7 +49,7 @@ func (r *CustomerRepository) GetByID(ctx context.Context, companyID, id int64) (
 func (r *CustomerRepository) GetByCode(ctx context.Context, companyID int64, code string) (*model.Customer, error) {
 	var customer model.Customer
 	query := `SELECT * FROM customers WHERE company_id = $1 AND code = $2`
-	err := r.db.GetContext(ctx, &customer, query, companyID, code)
+	err := conn(ctx, r.db).GetContext(ctx, &customer, query, companyID, code)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -82,7 +82,7 @@ func (r *CustomerRepository) List(ctx context.Context, companyID int64, search s
 
 	// Count total
 	countQuery := "SELECT COUNT(*) FROM customers " + whereClause
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -94,7 +94,7 @@ func (r *CustomerRepository) List(ctx context.Context, companyID int64, search s
 	`, whereClause, argIndex, argIndex+1)
 	args = append(args, limit, offset)
 
-	if err := r.db.SelectContext(ctx, &customers, listQuery, args...); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &customers, listQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -107,7 +107,7 @@ func (r *CustomerRepository) Update(ctx context.Context, customer *model.Custome
 		SET code = $1, name = $2, phone = $3, email = $4, is_member = $5, updated_at = NOW()
 		WHERE id = $6 AND company_id = $7
 	`
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := conn(ctx, r.db).ExecContext(ctx, query,
 		customer.Code,
 		customer.Name,
 		customer.Phone,
@@ -132,7 +132,7 @@ func (r *CustomerRepository) Update(ctx context.Context, customer *model.Custome
 
 func (r *CustomerRepository) Delete(ctx context.Context, companyID, id int64) error {
 	query := `DELETE FROM customers WHERE id = $1 AND company_id = $2`
-	result, err := r.db.ExecContext(ctx, query, id, companyID)
+	result, err := conn(ctx, r.db).ExecContext(ctx, query, id, companyID)
 	if err != nil {
 		return err
 	}
@@ -150,6 +150,6 @@ func (r *CustomerRepository) Delete(ctx context.Context, companyID, id int64) er
 func (r *CustomerRepository) CodeExists(ctx context.Context, companyID int64, code string, excludeID int64) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM customers WHERE company_id = $1 AND code = $2 AND id != $3)`
-	err := r.db.GetContext(ctx, &exists, query, companyID, code, excludeID)
+	err := conn(ctx, r.db).GetContext(ctx, &exists, query, companyID, code, excludeID)
 	return exists, err
 }

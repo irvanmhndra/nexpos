@@ -24,7 +24,7 @@ func (r *ExpenseCategoryRepository) Create(ctx context.Context, category *model.
 		VALUES ($1, $2, $3)
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		category.CompanyID,
 		category.Name,
 		category.Description,
@@ -34,7 +34,7 @@ func (r *ExpenseCategoryRepository) Create(ctx context.Context, category *model.
 func (r *ExpenseCategoryRepository) GetByID(ctx context.Context, companyID, id int64) (*model.ExpenseCategory, error) {
 	var category model.ExpenseCategory
 	query := `SELECT * FROM expense_categories WHERE id = $1 AND company_id = $2`
-	err := r.db.GetContext(ctx, &category, query, id, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &category, query, id, companyID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -59,7 +59,7 @@ func (r *ExpenseCategoryRepository) List(ctx context.Context, companyID int64, s
 	}
 
 	countQuery := "SELECT COUNT(*) FROM expense_categories " + whereClause
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -70,7 +70,7 @@ func (r *ExpenseCategoryRepository) List(ctx context.Context, companyID int64, s
 	`, whereClause, argIndex, argIndex+1)
 	args = append(args, limit, offset)
 
-	if err := r.db.SelectContext(ctx, &categories, listQuery, args...); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &categories, listQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -83,7 +83,7 @@ func (r *ExpenseCategoryRepository) Update(ctx context.Context, category *model.
 		SET name = $1, description = $2, updated_at = NOW()
 		WHERE id = $3 AND company_id = $4
 	`
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := conn(ctx, r.db).ExecContext(ctx, query,
 		category.Name,
 		category.Description,
 		category.ID,
@@ -105,7 +105,7 @@ func (r *ExpenseCategoryRepository) Update(ctx context.Context, category *model.
 
 func (r *ExpenseCategoryRepository) Delete(ctx context.Context, companyID, id int64) error {
 	query := `DELETE FROM expense_categories WHERE id = $1 AND company_id = $2`
-	result, err := r.db.ExecContext(ctx, query, id, companyID)
+	result, err := conn(ctx, r.db).ExecContext(ctx, query, id, companyID)
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func (r *ExpenseRepository) Create(ctx context.Context, expense *model.Expense) 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		expense.CompanyID,
 		expense.BranchID,
 		expense.CategoryID,
@@ -152,7 +152,7 @@ func (r *ExpenseRepository) Create(ctx context.Context, expense *model.Expense) 
 func (r *ExpenseRepository) GetByID(ctx context.Context, companyID, id int64) (*model.Expense, error) {
 	var expense model.Expense
 	query := `SELECT * FROM expenses WHERE id = $1 AND company_id = $2`
-	err := r.db.GetContext(ctx, &expense, query, id, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &expense, query, id, companyID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -195,7 +195,7 @@ func (r *ExpenseRepository) List(ctx context.Context, companyID int64, params *r
 	}
 
 	countQuery := "SELECT COUNT(*) FROM expenses " + whereClause
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -206,7 +206,7 @@ func (r *ExpenseRepository) List(ctx context.Context, companyID int64, params *r
 	`, whereClause, argIndex, argIndex+1)
 	args = append(args, params.Limit, params.Offset)
 
-	if err := r.db.SelectContext(ctx, &expenses, listQuery, args...); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &expenses, listQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -219,7 +219,7 @@ func (r *ExpenseRepository) Update(ctx context.Context, expense *model.Expense) 
 		SET branch_id = $1, category_id = $2, amount = $3, description = $4, reference_no = $5, expense_date = $6, notes = $7, updated_at = NOW()
 		WHERE id = $8 AND company_id = $9
 	`
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := conn(ctx, r.db).ExecContext(ctx, query,
 		expense.BranchID,
 		expense.CategoryID,
 		expense.Amount,
@@ -246,7 +246,7 @@ func (r *ExpenseRepository) Update(ctx context.Context, expense *model.Expense) 
 
 func (r *ExpenseRepository) Delete(ctx context.Context, companyID, id int64) error {
 	query := `DELETE FROM expenses WHERE id = $1 AND company_id = $2`
-	result, err := r.db.ExecContext(ctx, query, id, companyID)
+	result, err := conn(ctx, r.db).ExecContext(ctx, query, id, companyID)
 	if err != nil {
 		return err
 	}
@@ -286,7 +286,7 @@ func (r *ExpenseRepository) GetTotalByDateRange(ctx context.Context, companyID i
 	}
 
 	query := "SELECT COALESCE(SUM(amount), 0) FROM expenses " + whereClause
-	if err := r.db.GetContext(ctx, &total, query, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, query, args...); err != nil {
 		return 0, err
 	}
 

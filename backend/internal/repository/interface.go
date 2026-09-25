@@ -7,6 +7,12 @@ import (
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 )
 
+// Transactor runs fn atomically. Repository calls made with the ctx that fn
+// receives take part in the transaction; a nested WithinTx joins the outer one.
+type Transactor interface {
+	WithinTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
 type SupplierRepository interface {
 	Create(ctx context.Context, supplier *model.Supplier) error
 	GetByID(ctx context.Context, companyID, id int64) (*model.Supplier, error)
@@ -19,6 +25,8 @@ type SupplierRepository interface {
 type PurchaseOrderRepository interface {
 	Create(ctx context.Context, po *model.PurchaseOrder) error
 	GetByID(ctx context.Context, companyID, id int64) (*model.PurchaseOrder, error)
+	// GetByIDForUpdate is GetByID with a row lock; it must run inside WithinTx.
+	GetByIDForUpdate(ctx context.Context, companyID, id int64) (*model.PurchaseOrder, error)
 	GeneratePONumber(ctx context.Context, companyID int64) (string, error)
 	List(ctx context.Context, companyID int64, params *POListParams) ([]*model.PurchaseOrder, int, error)
 	Update(ctx context.Context, po *model.PurchaseOrder) error
@@ -196,6 +204,8 @@ type ProductVariantRepository interface {
 type OrderRepository interface {
 	Create(ctx context.Context, order *model.Order) error
 	GetByID(ctx context.Context, companyID, id int64) (*model.Order, error)
+	// GetByIDForUpdate is GetByID with a row lock; it must run inside WithinTx.
+	GetByIDForUpdate(ctx context.Context, companyID, id int64) (*model.Order, error)
 	GetByOrderNo(ctx context.Context, companyID int64, orderNo string) (*model.Order, error)
 	GetByOfflineID(ctx context.Context, companyID int64, offlineID string) (*model.Order, error)
 	List(ctx context.Context, companyID int64, params *OrderListParams) ([]*model.Order, int, error)
@@ -227,6 +237,8 @@ type OrderItemRepository interface {
 type PaymentRepository interface {
 	Create(ctx context.Context, payment *model.Payment) error
 	GetByID(ctx context.Context, id int64) (*model.Payment, error)
+	// GetByIDForUpdate is GetByID with a row lock; it must run inside WithinTx.
+	GetByIDForUpdate(ctx context.Context, id int64) (*model.Payment, error)
 	GetByOrderID(ctx context.Context, orderID int64) ([]*model.Payment, error)
 	Update(ctx context.Context, payment *model.Payment) error
 	DeleteByOrderID(ctx context.Context, orderID int64) error
@@ -310,6 +322,11 @@ type PromotionRepository interface {
 
 type StockRepository interface {
 	GetByVariantAndBranch(ctx context.Context, variantID, branchID int64) (*model.Stock, error)
+	// LockForUpdate returns the stock row for (variant, branch), creating it
+	// at zero if missing, locked until the transaction ends. Every stock
+	// change reads through it, so concurrent changes queue instead of
+	// overwriting each other. It must run inside WithinTx.
+	LockForUpdate(ctx context.Context, variantID, branchID int64) (*model.Stock, error)
 	Upsert(ctx context.Context, stock *model.Stock) error
 	UpdateMinQuantity(ctx context.Context, variantID, branchID int64, minQuantity int) error
 	ListInventory(ctx context.Context, companyID, branchID int64, search, category, status string, limit, offset int) ([]*InventoryRow, int, error)
@@ -361,6 +378,8 @@ type PaymentMethodTotals struct {
 type StockOpnameRepository interface {
 	Create(ctx context.Context, opname *model.StockOpname) error
 	GetByID(ctx context.Context, companyID, id int64) (*model.StockOpname, error)
+	// GetByIDForUpdate is GetByID with a row lock; it must run inside WithinTx.
+	GetByIDForUpdate(ctx context.Context, companyID, id int64) (*model.StockOpname, error)
 	List(ctx context.Context, companyID int64, params *StockOpnameListParams) ([]*model.StockOpname, int, error)
 	Update(ctx context.Context, opname *model.StockOpname) error
 	GenerateOpnameNumber(ctx context.Context, companyID int64) (string, error)

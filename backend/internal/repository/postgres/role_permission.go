@@ -44,7 +44,7 @@ func (r *RolePermissionRepository) SetPermissions(ctx context.Context, roleID in
 
 func (r *RolePermissionRepository) GetPermissionIDs(ctx context.Context, roleID int64) ([]int64, error) {
 	var ids []int64
-	err := r.db.SelectContext(ctx, &ids, `
+	err := conn(ctx, r.db).SelectContext(ctx, &ids, `
 		SELECT permission_id FROM role_permissions WHERE role_id = $1
 	`, roleID)
 	if err != nil {

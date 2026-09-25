@@ -18,7 +18,7 @@ func NewRoleRepository(db *sqlx.DB) *RoleRepository {
 
 func (r *RoleRepository) GetByID(ctx context.Context, id int64) (*model.Role, error) {
 	var role model.Role
-	err := r.db.GetContext(ctx, &role, `
+	err := conn(ctx, r.db).GetContext(ctx, &role, `
 		SELECT id, company_id, code, name, description, is_system, is_active, created_at, updated_at
 		FROM roles WHERE id = $1
 	`, id)
@@ -37,7 +37,7 @@ func (r *RoleRepository) GetByCode(ctx context.Context, code string, companyID *
 
 	if companyID != nil {
 		// Check company-specific role first, then fall back to system role
-		err = r.db.GetContext(ctx, &role, `
+		err = conn(ctx, r.db).GetContext(ctx, &role, `
 			SELECT id, company_id, code, name, description, is_system, is_active, created_at, updated_at
 			FROM roles
 			WHERE code = $1 AND (company_id = $2 OR company_id IS NULL)
@@ -46,7 +46,7 @@ func (r *RoleRepository) GetByCode(ctx context.Context, code string, companyID *
 		`, code, *companyID)
 	} else {
 		// Only system roles
-		err = r.db.GetContext(ctx, &role, `
+		err = conn(ctx, r.db).GetContext(ctx, &role, `
 			SELECT id, company_id, code, name, description, is_system, is_active, created_at, updated_at
 			FROM roles WHERE code = $1 AND company_id IS NULL
 		`, code)
@@ -63,7 +63,7 @@ func (r *RoleRepository) GetByCode(ctx context.Context, code string, companyID *
 
 func (r *RoleRepository) ListByCompanyID(ctx context.Context, companyID int64) ([]*model.Role, error) {
 	var roles []*model.Role
-	err := r.db.SelectContext(ctx, &roles, `
+	err := conn(ctx, r.db).SelectContext(ctx, &roles, `
 		SELECT id, company_id, code, name, description, is_system, is_active, created_at, updated_at
 		FROM roles
 		WHERE (company_id = $1 OR company_id IS NULL) AND is_active = true
@@ -77,7 +77,7 @@ func (r *RoleRepository) ListByCompanyID(ctx context.Context, companyID int64) (
 
 func (r *RoleRepository) ListSystemRoles(ctx context.Context) ([]*model.Role, error) {
 	var roles []*model.Role
-	err := r.db.SelectContext(ctx, &roles, `
+	err := conn(ctx, r.db).SelectContext(ctx, &roles, `
 		SELECT id, company_id, code, name, description, is_system, is_active, created_at, updated_at
 		FROM roles WHERE company_id IS NULL AND is_active = true
 		ORDER BY name
@@ -89,7 +89,7 @@ func (r *RoleRepository) ListSystemRoles(ctx context.Context) ([]*model.Role, er
 }
 
 func (r *RoleRepository) Create(ctx context.Context, role *model.Role) error {
-	return r.db.QueryRowContext(ctx, `
+	return conn(ctx, r.db).QueryRowContext(ctx, `
 		INSERT INTO roles (company_id, code, name, description, is_system, is_active)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at, updated_at
@@ -98,7 +98,7 @@ func (r *RoleRepository) Create(ctx context.Context, role *model.Role) error {
 }
 
 func (r *RoleRepository) Update(ctx context.Context, role *model.Role) error {
-	_, err := r.db.ExecContext(ctx, `
+	_, err := conn(ctx, r.db).ExecContext(ctx, `
 		UPDATE roles SET name = $1, description = $2, is_active = $3, updated_at = NOW()
 		WHERE id = $4
 	`, role.Name, role.Description, role.IsActive, role.ID)
@@ -106,7 +106,7 @@ func (r *RoleRepository) Update(ctx context.Context, role *model.Role) error {
 }
 
 func (r *RoleRepository) Delete(ctx context.Context, id int64) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM roles WHERE id = $1 AND is_system = false`, id)
+	_, err := conn(ctx, r.db).ExecContext(ctx, `DELETE FROM roles WHERE id = $1 AND is_system = false`, id)
 	return err
 }
 
@@ -117,7 +117,7 @@ func (r *RoleRepository) GetWithPermissions(ctx context.Context, id int64) (*mod
 	}
 
 	var permissions []model.Permission
-	err = r.db.SelectContext(ctx, &permissions, `
+	err = conn(ctx, r.db).SelectContext(ctx, &permissions, `
 		SELECT p.id, p.code, p.name, p.module, p.description, p.created_at
 		FROM permissions p
 		JOIN role_permissions rp ON rp.permission_id = p.id

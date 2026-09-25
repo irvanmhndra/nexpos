@@ -23,7 +23,7 @@ func (r *ProductRepository) Create(ctx context.Context, product *model.Product) 
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		product.CompanyID,
 		product.ProductCategoryID,
 		product.Name,
@@ -37,7 +37,7 @@ func (r *ProductRepository) Create(ctx context.Context, product *model.Product) 
 func (r *ProductRepository) GetByID(ctx context.Context, companyID, id int64) (*model.Product, error) {
 	var product model.Product
 	query := `SELECT * FROM products WHERE id = $1 AND company_id = $2`
-	err := r.db.GetContext(ctx, &product, query, id, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &product, query, id, companyID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -76,7 +76,7 @@ func (r *ProductRepository) List(ctx context.Context, companyID int64, search st
 
 	// Count total
 	countQuery := "SELECT COUNT(*) FROM products " + whereClause
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -88,7 +88,7 @@ func (r *ProductRepository) List(ctx context.Context, companyID int64, search st
 	`, whereClause, argIndex, argIndex+1)
 	args = append(args, limit, offset)
 
-	if err := r.db.SelectContext(ctx, &products, listQuery, args...); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &products, listQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -101,7 +101,7 @@ func (r *ProductRepository) Update(ctx context.Context, product *model.Product) 
 		SET product_category_id = $1, name = $2, description = $3, image_data = $4, image_url = $5, is_active = $6, updated_at = NOW()
 		WHERE id = $7 AND company_id = $8
 	`
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := conn(ctx, r.db).ExecContext(ctx, query,
 		product.ProductCategoryID,
 		product.Name,
 		product.Description,
@@ -127,7 +127,7 @@ func (r *ProductRepository) Update(ctx context.Context, product *model.Product) 
 
 func (r *ProductRepository) Delete(ctx context.Context, companyID, id int64) error {
 	query := `DELETE FROM products WHERE id = $1 AND company_id = $2`
-	result, err := r.db.ExecContext(ctx, query, id, companyID)
+	result, err := conn(ctx, r.db).ExecContext(ctx, query, id, companyID)
 	if err != nil {
 		return err
 	}

@@ -34,7 +34,7 @@ func (r *OrderRepository) Create(ctx context.Context, order *model.Order) error 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		order.CompanyID,
 		order.BranchID,
 		order.OrderNo,
@@ -58,8 +58,20 @@ func (r *OrderRepository) Create(ctx context.Context, order *model.Order) error 
 func (r *OrderRepository) GetByID(ctx context.Context, companyID, id int64) (*model.Order, error) {
 	var order model.Order
 	query := fmt.Sprintf(`SELECT %s FROM orders WHERE id = $1 AND company_id = $2`, orderColumns)
-	err := r.db.GetContext(ctx, &order, query, id, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &order, query, id, companyID)
 	if err != nil {
+		return nil, err
+	}
+	return &order, nil
+}
+
+func (r *OrderRepository) GetByIDForUpdate(ctx context.Context, companyID, id int64) (*model.Order, error) {
+	if err := requireTx(ctx); err != nil {
+		return nil, err
+	}
+	var order model.Order
+	query := fmt.Sprintf(`SELECT %s FROM orders WHERE id = $1 AND company_id = $2 FOR UPDATE`, orderColumns)
+	if err := conn(ctx, r.db).GetContext(ctx, &order, query, id, companyID); err != nil {
 		return nil, err
 	}
 	return &order, nil
@@ -68,7 +80,7 @@ func (r *OrderRepository) GetByID(ctx context.Context, companyID, id int64) (*mo
 func (r *OrderRepository) GetByOrderNo(ctx context.Context, companyID int64, orderNo string) (*model.Order, error) {
 	var order model.Order
 	query := fmt.Sprintf(`SELECT %s FROM orders WHERE order_no = $1 AND company_id = $2`, orderColumns)
-	err := r.db.GetContext(ctx, &order, query, orderNo, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &order, query, orderNo, companyID)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +90,7 @@ func (r *OrderRepository) GetByOrderNo(ctx context.Context, companyID int64, ord
 func (r *OrderRepository) GetByOfflineID(ctx context.Context, companyID int64, offlineID string) (*model.Order, error) {
 	var order model.Order
 	query := fmt.Sprintf(`SELECT %s FROM orders WHERE offline_id = $1 AND company_id = $2`, orderColumns)
-	err := r.db.GetContext(ctx, &order, query, offlineID, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &order, query, offlineID, companyID)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +155,7 @@ func (r *OrderRepository) List(ctx context.Context, companyID int64, params *rep
 	// Count query
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM orders WHERE %s", whereClause)
 	var total int
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -159,7 +171,7 @@ func (r *OrderRepository) List(ctx context.Context, companyID int64, params *rep
 	args = append(args, params.Limit, params.Offset)
 
 	var orders []*model.Order
-	if err := r.db.SelectContext(ctx, &orders, dataQuery, args...); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &orders, dataQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -176,7 +188,7 @@ func (r *OrderRepository) Update(ctx context.Context, order *model.Order) error 
 			void_reason = $18, synced_at = $19, updated_at = NOW()
 		WHERE id = $20 AND company_id = $21
 	`
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := conn(ctx, r.db).ExecContext(ctx, query,
 		order.CustomerID,
 		order.Status,
 		order.TotalAmount,
@@ -213,7 +225,7 @@ func (r *OrderRepository) Update(ctx context.Context, order *model.Order) error 
 
 func (r *OrderRepository) Delete(ctx context.Context, companyID, id int64) error {
 	query := `DELETE FROM orders WHERE id = $1 AND company_id = $2`
-	result, err := r.db.ExecContext(ctx, query, id, companyID)
+	result, err := conn(ctx, r.db).ExecContext(ctx, query, id, companyID)
 	if err != nil {
 		return err
 	}
@@ -242,7 +254,7 @@ func (r *OrderRepository) GenerateOrderNo(ctx context.Context, companyID, branch
 
 	pattern := fmt.Sprintf("ORD-%s-%%", datePrefix)
 	var nextNum int
-	if err := r.db.GetContext(ctx, &nextNum, query, companyID, branchID, pattern); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &nextNum, query, companyID, branchID, pattern); err != nil {
 		nextNum = 1
 	}
 

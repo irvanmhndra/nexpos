@@ -26,6 +26,15 @@ func (m *MockStockOpnameRepository) EXPECT() *MockStockOpnameRepositoryExpectati
 	return &MockStockOpnameRepositoryExpectation{mock: m}
 }
 
+func (m *MockStockOpnameRepository) GetByIDForUpdate(ctx context.Context, companyID, id int64) (*model.StockOpname, error) {
+	ret := m.Called(ctx, companyID, id)
+	var r0 *model.StockOpname
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*model.StockOpname)
+	}
+	return r0, ret.Error(1)
+}
+
 func (m *MockStockOpnameRepository) Create(ctx context.Context, opname *model.StockOpname) error {
 	return m.Called(ctx, opname).Error(0)
 }
@@ -131,4 +140,8 @@ func (e *MockStockOpnameRepositoryExpectation) UpdateItem(ctx context.Context, i
 
 func (e *MockStockOpnameRepositoryExpectation) GetItemStats(ctx context.Context, opnameID int64) *mock.Call {
 	return e.mock.On("GetItemStats", ctx, opnameID)
+}
+
+func (e *MockStockOpnameRepositoryExpectation) GetByIDForUpdate(ctx context.Context, companyID, id int64) *mock.Call {
+	return e.mock.On("GetByIDForUpdate", ctx, companyID, id)
 }

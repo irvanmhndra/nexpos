@@ -27,6 +27,15 @@ func (m *MockPaymentRepository) EXPECT() *MockPaymentRepositoryExpectation {
 	return &MockPaymentRepositoryExpectation{mock: m}
 }
 
+func (m *MockPaymentRepository) GetByIDForUpdate(ctx context.Context, id int64) (*model.Payment, error) {
+	ret := m.Called(ctx, id)
+	var r0 *model.Payment
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*model.Payment)
+	}
+	return r0, ret.Error(1)
+}
+
 func (m *MockPaymentRepository) Create(ctx context.Context, payment *model.Payment) error {
 	ret := m.Called(ctx, payment)
 	return ret.Error(0)
@@ -110,4 +119,8 @@ func (e *MockPaymentRepositoryExpectation) GetTotalRefundedByOrderID(ctx context
 
 func (e *MockPaymentRepositoryExpectation) GetCashTotalByPeriod(ctx context.Context, branchID int64, from, to time.Time) *mock.Call {
 	return e.mock.On("GetCashTotalByPeriod", ctx, branchID, from, to)
+}
+
+func (e *MockPaymentRepositoryExpectation) GetByIDForUpdate(ctx context.Context, id int64) *mock.Call {
+	return e.mock.On("GetByIDForUpdate", ctx, id)
 }

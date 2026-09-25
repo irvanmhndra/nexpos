@@ -23,7 +23,7 @@ func (r *StockMovementRepository) Create(ctx context.Context, m *model.StockMove
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id, created_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		m.ProductVariantID,
 		m.BranchID,
 		m.Type,
@@ -81,7 +81,7 @@ func (r *StockMovementRepository) List(ctx context.Context, companyID, branchID 
 		WHERE ` + where
 
 	var total int
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -116,7 +116,7 @@ func (r *StockMovementRepository) List(ctx context.Context, companyID, branchID 
 
 	args = append(args, limit, offset)
 
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := conn(ctx, r.db).QueryxContext(ctx, query, args...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -156,7 +156,7 @@ func (r *StockMovementRepository) GetMonthlyStats(ctx context.Context, companyID
 		WHERE ` + where
 
 	var stats repository.MovementStats
-	if err := r.db.GetContext(ctx, &stats, query, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &stats, query, args...); err != nil {
 		return nil, err
 	}
 	return &stats, nil

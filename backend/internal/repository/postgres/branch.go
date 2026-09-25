@@ -26,7 +26,7 @@ func (r *branchRepository) Create(ctx context.Context, branch *model.Branch) err
 		VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowxContext(ctx, query,
+	return conn(ctx, r.db).QueryRowxContext(ctx, query,
 		branch.CompanyID,
 		branch.Code,
 		branch.Name,
@@ -39,7 +39,7 @@ func (r *branchRepository) Create(ctx context.Context, branch *model.Branch) err
 func (r *branchRepository) GetByID(ctx context.Context, id int64) (*model.Branch, error) {
 	var branch model.Branch
 	query := `SELECT * FROM branches WHERE id = $1`
-	err := r.db.GetContext(ctx, &branch, query, id)
+	err := conn(ctx, r.db).GetContext(ctx, &branch, query, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -52,7 +52,7 @@ func (r *branchRepository) GetByID(ctx context.Context, id int64) (*model.Branch
 func (r *branchRepository) ListByCompanyID(ctx context.Context, companyID int64) ([]*model.Branch, error) {
 	var branches []*model.Branch
 	query := `SELECT * FROM branches WHERE company_id = $1 ORDER BY name`
-	err := r.db.SelectContext(ctx, &branches, query, companyID)
+	err := conn(ctx, r.db).SelectContext(ctx, &branches, query, companyID)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (r *branchRepository) List(ctx context.Context, companyID int64, search str
 
 	var total int
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM branches WHERE %s", where)
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -95,7 +95,7 @@ func (r *branchRepository) List(ctx context.Context, companyID int64, search str
 	)
 
 	var branches []*model.Branch
-	if err := r.db.SelectContext(ctx, &branches, listQuery, listArgs...); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &branches, listQuery, listArgs...); err != nil {
 		return nil, 0, err
 	}
 
@@ -109,7 +109,7 @@ func (r *branchRepository) Update(ctx context.Context, branch *model.Branch) err
 		WHERE id = $6
 		RETURNING updated_at
 	`
-	return r.db.QueryRowxContext(ctx, query,
+	return conn(ctx, r.db).QueryRowxContext(ctx, query,
 		branch.Code,
 		branch.Name,
 		branch.Address,
@@ -120,13 +120,13 @@ func (r *branchRepository) Update(ctx context.Context, branch *model.Branch) err
 }
 
 func (r *branchRepository) Delete(ctx context.Context, id int64) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM branches WHERE id = $1`, id)
+	_, err := conn(ctx, r.db).ExecContext(ctx, `DELETE FROM branches WHERE id = $1`, id)
 	return err
 }
 
 func (r *branchRepository) CodeExists(ctx context.Context, companyID int64, code string, excludeID int64) (bool, error) {
 	var count int
 	query := `SELECT COUNT(*) FROM branches WHERE company_id = $1 AND code = $2 AND id != $3`
-	err := r.db.GetContext(ctx, &count, query, companyID, code, excludeID)
+	err := conn(ctx, r.db).GetContext(ctx, &count, query, companyID, code, excludeID)
 	return count > 0, err
 }

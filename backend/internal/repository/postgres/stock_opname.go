@@ -25,7 +25,7 @@ func (r *StockOpnameRepository) Create(ctx context.Context, opname *model.StockO
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		opname.CompanyID,
 		opname.BranchID,
 		opname.OpnameNumber,
@@ -39,7 +39,23 @@ func (r *StockOpnameRepository) Create(ctx context.Context, opname *model.StockO
 func (r *StockOpnameRepository) GetByID(ctx context.Context, companyID, id int64) (*model.StockOpname, error) {
 	var opname model.StockOpname
 	query := `SELECT * FROM stock_opnames WHERE id = $1 AND company_id = $2`
-	err := r.db.GetContext(ctx, &opname, query, id, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &opname, query, id, companyID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &opname, nil
+}
+
+func (r *StockOpnameRepository) GetByIDForUpdate(ctx context.Context, companyID, id int64) (*model.StockOpname, error) {
+	if err := requireTx(ctx); err != nil {
+		return nil, err
+	}
+	var opname model.StockOpname
+	query := `SELECT * FROM stock_opnames WHERE id = $1 AND company_id = $2 FOR UPDATE`
+	err := conn(ctx, r.db).GetContext(ctx, &opname, query, id, companyID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -55,7 +71,7 @@ func (r *StockOpnameRepository) GenerateOpnameNumber(ctx context.Context, compan
 
 	var count int
 	query := `SELECT COUNT(*) FROM stock_opnames WHERE company_id = $1 AND opname_number LIKE $2`
-	if err := r.db.GetContext(ctx, &count, query, companyID, prefix+"%"); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &count, query, companyID, prefix+"%"); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s%04d", prefix, count+1), nil
@@ -82,7 +98,7 @@ func (r *StockOpnameRepository) List(ctx context.Context, companyID int64, param
 	}
 
 	countQuery := "SELECT COUNT(*) FROM stock_opnames " + whereClause
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -93,7 +109,7 @@ func (r *StockOpnameRepository) List(ctx context.Context, companyID int64, param
 	`, whereClause, argIndex, argIndex+1)
 	args = append(args, params.Limit, params.Offset)
 
-	if err := r.db.SelectContext(ctx, &opnames, listQuery, args...); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &opnames, listQuery, args...); err != nil {
 		return nil, 0, err
 	}
 	return opnames, total, nil
@@ -112,7 +128,7 @@ func (r *StockOpnameRepository) Update(ctx context.Context, opname *model.StockO
 		    updated_at = NOW()
 		WHERE id = $8 AND company_id = $9
 	`
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := conn(ctx, r.db).ExecContext(ctx, query,
 		opname.Status,
 		opname.Notes,
 		opname.TotalVarianceQty,
@@ -167,7 +183,7 @@ func (r *StockOpnameRepository) SnapshotItems(ctx context.Context, opnameID, com
 		  AND p.is_active = true
 		  AND pv.is_active = true` + categoryFilter
 
-	result, err := r.db.ExecContext(ctx, query, args...)
+	result, err := conn(ctx, r.db).ExecContext(ctx, query, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -181,7 +197,7 @@ func (r *StockOpnameRepository) SnapshotItems(ctx context.Context, opnameID, com
 func (r *StockOpnameRepository) GetItems(ctx context.Context, opnameID int64) ([]*model.StockOpnameItem, error) {
 	var items []*model.StockOpnameItem
 	query := `SELECT * FROM stock_opname_items WHERE stock_opname_id = $1 ORDER BY product_name, variant_name, id`
-	if err := r.db.SelectContext(ctx, &items, query, opnameID); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &items, query, opnameID); err != nil {
 		return nil, err
 	}
 	return items, nil
@@ -190,7 +206,7 @@ func (r *StockOpnameRepository) GetItems(ctx context.Context, opnameID int64) ([
 func (r *StockOpnameRepository) GetItem(ctx context.Context, opnameID, itemID int64) (*model.StockOpnameItem, error) {
 	var item model.StockOpnameItem
 	query := `SELECT * FROM stock_opname_items WHERE id = $1 AND stock_opname_id = $2`
-	err := r.db.GetContext(ctx, &item, query, itemID, opnameID)
+	err := conn(ctx, r.db).GetContext(ctx, &item, query, itemID, opnameID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -212,7 +228,7 @@ func (r *StockOpnameRepository) UpdateItem(ctx context.Context, item *model.Stoc
 		    updated_at = NOW()
 		WHERE id = $7
 	`
-	_, err := r.db.ExecContext(ctx, query,
+	_, err := conn(ctx, r.db).ExecContext(ctx, query,
 		item.CountedStock,
 		item.VarianceQty,
 		item.VarianceValue,
@@ -236,7 +252,7 @@ func (r *StockOpnameRepository) GetItemStats(ctx context.Context, opnameID int64
 		FROM stock_opname_items
 		WHERE stock_opname_id = $1
 	`
-	if err := r.db.GetContext(ctx, &stats, query, opnameID); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &stats, query, opnameID); err != nil {
 		return 0, 0, err
 	}
 	return stats.Total, stats.Counted, nil

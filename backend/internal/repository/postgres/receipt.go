@@ -28,7 +28,7 @@ func (r *ReceiptRepository) Save(ctx context.Context, rec *model.Receipt) error 
 		ON CONFLICT (company_id, order_id) DO NOTHING
 		RETURNING id, created_at
 	`
-	err := r.db.QueryRowContext(ctx, query,
+	err := conn(ctx, r.db).QueryRowContext(ctx, query,
 		rec.CompanyID,
 		rec.OrderID,
 		rec.OrderNo,
@@ -57,7 +57,7 @@ func (r *ReceiptRepository) Save(ctx context.Context, rec *model.Receipt) error 
 func (r *ReceiptRepository) GetByOrderID(ctx context.Context, companyID, orderID int64) (*model.Receipt, error) {
 	var rec model.Receipt
 	query := `SELECT * FROM receipts WHERE company_id = $1 AND order_id = $2`
-	err := r.db.GetContext(ctx, &rec, query, companyID, orderID)
+	err := conn(ctx, r.db).GetContext(ctx, &rec, query, companyID, orderID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

@@ -23,7 +23,7 @@ func (r *ProductCategoryRepository) Create(ctx context.Context, category *model.
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		category.CompanyID,
 		category.ParentID,
 		category.Code,
@@ -36,7 +36,7 @@ func (r *ProductCategoryRepository) Create(ctx context.Context, category *model.
 func (r *ProductCategoryRepository) GetByID(ctx context.Context, companyID, id int64) (*model.ProductCategory, error) {
 	var category model.ProductCategory
 	query := `SELECT * FROM product_categories WHERE id = $1 AND company_id = $2`
-	err := r.db.GetContext(ctx, &category, query, id, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &category, query, id, companyID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -49,7 +49,7 @@ func (r *ProductCategoryRepository) GetByID(ctx context.Context, companyID, id i
 func (r *ProductCategoryRepository) GetByCode(ctx context.Context, companyID int64, code string) (*model.ProductCategory, error) {
 	var category model.ProductCategory
 	query := `SELECT * FROM product_categories WHERE company_id = $1 AND code = $2`
-	err := r.db.GetContext(ctx, &category, query, companyID, code)
+	err := conn(ctx, r.db).GetContext(ctx, &category, query, companyID, code)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -82,7 +82,7 @@ func (r *ProductCategoryRepository) List(ctx context.Context, companyID int64, s
 
 	// Count total
 	countQuery := "SELECT COUNT(*) FROM product_categories " + whereClause
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -94,7 +94,7 @@ func (r *ProductCategoryRepository) List(ctx context.Context, companyID int64, s
 	`, whereClause, argIndex, argIndex+1)
 	args = append(args, limit, offset)
 
-	if err := r.db.SelectContext(ctx, &categories, listQuery, args...); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &categories, listQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -108,7 +108,7 @@ func (r *ProductCategoryRepository) ListAll(ctx context.Context, companyID int64
 		WHERE company_id = $1 AND is_active = true
 		ORDER BY sort_order ASC, name ASC
 	`
-	if err := r.db.SelectContext(ctx, &categories, query, companyID); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &categories, query, companyID); err != nil {
 		return nil, err
 	}
 	return categories, nil
@@ -120,7 +120,7 @@ func (r *ProductCategoryRepository) Update(ctx context.Context, category *model.
 		SET code = $1, name = $2, parent_id = $3, sort_order = $4, is_active = $5, updated_at = NOW()
 		WHERE id = $6 AND company_id = $7
 	`
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := conn(ctx, r.db).ExecContext(ctx, query,
 		category.Code,
 		category.Name,
 		category.ParentID,
@@ -145,7 +145,7 @@ func (r *ProductCategoryRepository) Update(ctx context.Context, category *model.
 
 func (r *ProductCategoryRepository) Delete(ctx context.Context, companyID, id int64) error {
 	query := `DELETE FROM product_categories WHERE id = $1 AND company_id = $2`
-	result, err := r.db.ExecContext(ctx, query, id, companyID)
+	result, err := conn(ctx, r.db).ExecContext(ctx, query, id, companyID)
 	if err != nil {
 		return err
 	}
@@ -163,20 +163,20 @@ func (r *ProductCategoryRepository) Delete(ctx context.Context, companyID, id in
 func (r *ProductCategoryRepository) CodeExists(ctx context.Context, companyID int64, code string, excludeID int64) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM product_categories WHERE company_id = $1 AND code = $2 AND id != $3)`
-	err := r.db.GetContext(ctx, &exists, query, companyID, code, excludeID)
+	err := conn(ctx, r.db).GetContext(ctx, &exists, query, companyID, code, excludeID)
 	return exists, err
 }
 
 func (r *ProductCategoryRepository) HasChildren(ctx context.Context, companyID, id int64) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM product_categories WHERE company_id = $1 AND parent_id = $2)`
-	err := r.db.GetContext(ctx, &exists, query, companyID, id)
+	err := conn(ctx, r.db).GetContext(ctx, &exists, query, companyID, id)
 	return exists, err
 }
 
 func (r *ProductCategoryRepository) HasProducts(ctx context.Context, companyID, id int64) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM products WHERE company_id = $1 AND product_category_id = $2)`
-	err := r.db.GetContext(ctx, &exists, query, companyID, id)
+	err := conn(ctx, r.db).GetContext(ctx, &exists, query, companyID, id)
 	return exists, err
 }

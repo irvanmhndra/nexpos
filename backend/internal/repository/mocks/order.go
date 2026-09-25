@@ -27,6 +27,15 @@ func (m *MockOrderRepository) EXPECT() *MockOrderRepositoryExpectation {
 	return &MockOrderRepositoryExpectation{mock: m}
 }
 
+func (m *MockOrderRepository) GetByIDForUpdate(ctx context.Context, companyID, id int64) (*model.Order, error) {
+	ret := m.Called(ctx, companyID, id)
+	var r0 *model.Order
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*model.Order)
+	}
+	return r0, ret.Error(1)
+}
+
 func (m *MockOrderRepository) Create(ctx context.Context, order *model.Order) error {
 	ret := m.Called(ctx, order)
 	return ret.Error(0)
@@ -118,4 +127,8 @@ func (e *MockOrderRepositoryExpectation) Delete(ctx context.Context, companyID, 
 
 func (e *MockOrderRepositoryExpectation) GenerateOrderNo(ctx context.Context, companyID, branchID int64) *mock.Call {
 	return e.mock.On("GenerateOrderNo", ctx, companyID, branchID)
+}
+
+func (e *MockOrderRepositoryExpectation) GetByIDForUpdate(ctx context.Context, companyID, id int64) *mock.Call {
+	return e.mock.On("GetByIDForUpdate", ctx, companyID, id)
 }

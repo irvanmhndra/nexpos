@@ -36,7 +36,7 @@ func (r *ReportRepository) GetSummary(ctx context.Context, companyID int64, date
 		  AND created_at >= $2::date
 		  AND created_at < ($3::date + interval '1 day')
 	`
-	err := r.db.QueryRowContext(ctx, orderQuery, companyID, dateFrom, dateTo).Scan(
+	err := conn(ctx, r.db).QueryRowContext(ctx, orderQuery, companyID, dateFrom, dateTo).Scan(
 		&summary.TotalRevenue,
 		&summary.TotalOrders,
 		&summary.TotalDiscount,
@@ -62,7 +62,7 @@ func (r *ReportRepository) GetSummary(ctx context.Context, companyID int64, date
 		  AND o.created_at < ($3::date + interval '1 day')
 		  AND o.status = 'completed'
 	`
-	err = r.db.QueryRowContext(ctx, itemsQuery, companyID, dateFrom, dateTo).Scan(
+	err = conn(ctx, r.db).QueryRowContext(ctx, itemsQuery, companyID, dateFrom, dateTo).Scan(
 		&summary.TotalItemsSold,
 		&summary.TotalCOGS,
 	)
@@ -89,7 +89,7 @@ func (r *ReportRepository) GetSalesTrend(ctx context.Context, companyID int64, d
 		ORDER BY date ASC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, companyID, dateFrom, dateTo)
+	rows, err := conn(ctx, r.db).QueryContext(ctx, query, companyID, dateFrom, dateTo)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func (r *ReportRepository) GetTopProducts(ctx context.Context, companyID int64, 
 		LIMIT $4
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, companyID, dateFrom, dateTo, limit)
+	rows, err := conn(ctx, r.db).QueryContext(ctx, query, companyID, dateFrom, dateTo, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func (r *ReportRepository) GetCategoryRevenue(ctx context.Context, companyID int
 		ORDER BY total_amount DESC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, companyID, dateFrom, dateTo)
+	rows, err := conn(ctx, r.db).QueryContext(ctx, query, companyID, dateFrom, dateTo)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func (r *ReportRepository) GetPaymentMethods(ctx context.Context, companyID int6
 		ORDER BY total_amount DESC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, companyID, dateFrom, dateTo)
+	rows, err := conn(ctx, r.db).QueryContext(ctx, query, companyID, dateFrom, dateTo)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func (r *ReportRepository) GetHourlySales(ctx context.Context, companyID int64, 
 		ORDER BY hour ASC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, companyID, dateFrom, dateTo)
+	rows, err := conn(ctx, r.db).QueryContext(ctx, query, companyID, dateFrom, dateTo)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +257,7 @@ func (r *ReportRepository) GetNewCustomersCount(ctx context.Context, companyID i
 	`
 
 	var count int
-	err := r.db.QueryRowContext(ctx, query, companyID, dateFrom, dateTo).Scan(&count)
+	err := conn(ctx, r.db).QueryRowContext(ctx, query, companyID, dateFrom, dateTo).Scan(&count)
 	if err != nil {
 		return 0, err
 	}

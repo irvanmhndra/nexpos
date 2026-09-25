@@ -28,7 +28,7 @@ func (r *CompanySettingsRepository) GetByCompanyID(ctx context.Context, companyI
 		FROM company_settings
 		WHERE company_id = $1
 	`
-	err := r.db.GetContext(ctx, &settings, query, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &settings, query, companyID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// Return default settings if not found
@@ -75,7 +75,7 @@ func (r *CompanySettingsRepository) Upsert(ctx context.Context, settings *model.
 			updated_at = NOW()
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		settings.CompanyID,
 		settings.TaxEnabled,
 		settings.TaxRate,

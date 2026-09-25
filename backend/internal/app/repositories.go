@@ -35,6 +35,9 @@ type Repositories struct {
 	StockOpname     repository.StockOpnameRepository
 	DailySettlement repository.DailySettlementRepository
 	Receipt         repository.ReceiptRepository
+
+	// Tx runs service operations atomically across the repositories above.
+	Tx repository.Transactor
 }
 
 func initRepositories(db *sqlx.DB) *Repositories {
@@ -67,5 +70,6 @@ func initRepositories(db *sqlx.DB) *Repositories {
 		StockOpname:     postgres.NewStockOpnameRepository(db),
 		DailySettlement: postgres.NewDailySettlementRepository(db),
 		Receipt:         postgres.NewReceiptRepository(db),
+		Tx:              postgres.NewTxManager(db),
 	}
 }

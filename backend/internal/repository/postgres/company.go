@@ -24,7 +24,7 @@ func (r *companyRepository) Create(ctx context.Context, company *model.Company) 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowxContext(ctx, query,
+	return conn(ctx, r.db).QueryRowxContext(ctx, query,
 		company.Code,
 		company.Name,
 		company.Address,
@@ -39,7 +39,7 @@ func (r *companyRepository) Create(ctx context.Context, company *model.Company) 
 func (r *companyRepository) GetByID(ctx context.Context, id int64) (*model.Company, error) {
 	var company model.Company
 	query := `SELECT * FROM companies WHERE id = $1`
-	err := r.db.GetContext(ctx, &company, query, id)
+	err := conn(ctx, r.db).GetContext(ctx, &company, query, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -52,7 +52,7 @@ func (r *companyRepository) GetByID(ctx context.Context, id int64) (*model.Compa
 func (r *companyRepository) GetByCode(ctx context.Context, code string) (*model.Company, error) {
 	var company model.Company
 	query := `SELECT * FROM companies WHERE code = $1`
-	err := r.db.GetContext(ctx, &company, query, code)
+	err := conn(ctx, r.db).GetContext(ctx, &company, query, code)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -68,7 +68,7 @@ func (r *companyRepository) Update(ctx context.Context, company *model.Company) 
 		SET name = $1, address = $2, phone = $3, email = $4, tax_id = $5, logo_url = $6, is_active = $7, updated_at = NOW()
 		WHERE id = $8
 	`
-	_, err := r.db.ExecContext(ctx, query,
+	_, err := conn(ctx, r.db).ExecContext(ctx, query,
 		company.Name,
 		company.Address,
 		company.Phone,

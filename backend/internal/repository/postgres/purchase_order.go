@@ -25,7 +25,7 @@ func (r *PurchaseOrderRepository) Create(ctx context.Context, po *model.Purchase
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		po.CompanyID,
 		po.BranchID,
 		po.SupplierID,
@@ -40,7 +40,23 @@ func (r *PurchaseOrderRepository) Create(ctx context.Context, po *model.Purchase
 func (r *PurchaseOrderRepository) GetByID(ctx context.Context, companyID, id int64) (*model.PurchaseOrder, error) {
 	var po model.PurchaseOrder
 	query := `SELECT * FROM purchase_orders WHERE id = $1 AND company_id = $2`
-	err := r.db.GetContext(ctx, &po, query, id, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &po, query, id, companyID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &po, nil
+}
+
+func (r *PurchaseOrderRepository) GetByIDForUpdate(ctx context.Context, companyID, id int64) (*model.PurchaseOrder, error) {
+	if err := requireTx(ctx); err != nil {
+		return nil, err
+	}
+	var po model.PurchaseOrder
+	query := `SELECT * FROM purchase_orders WHERE id = $1 AND company_id = $2 FOR UPDATE`
+	err := conn(ctx, r.db).GetContext(ctx, &po, query, id, companyID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -56,7 +72,7 @@ func (r *PurchaseOrderRepository) GeneratePONumber(ctx context.Context, companyI
 
 	var count int
 	query := `SELECT COUNT(*) FROM purchase_orders WHERE company_id = $1 AND po_number LIKE $2`
-	if err := r.db.GetContext(ctx, &count, query, companyID, prefix+"%"); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &count, query, companyID, prefix+"%"); err != nil {
 		return "", err
 	}
 
@@ -84,7 +100,7 @@ func (r *PurchaseOrderRepository) List(ctx context.Context, companyID int64, par
 	}
 
 	countQuery := "SELECT COUNT(*) FROM purchase_orders " + whereClause
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -95,7 +111,7 @@ func (r *PurchaseOrderRepository) List(ctx context.Context, companyID int64, par
 	`, whereClause, argIndex, argIndex+1)
 	args = append(args, params.Limit, params.Offset)
 
-	if err := r.db.SelectContext(ctx, &pos, listQuery, args...); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &pos, listQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -108,7 +124,7 @@ func (r *PurchaseOrderRepository) Update(ctx context.Context, po *model.Purchase
 		SET status = $1, notes = $2, total_amount = $3, ordered_at = $4, received_at = $5, cancelled_at = $6, updated_at = NOW()
 		WHERE id = $7 AND company_id = $8
 	`
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := conn(ctx, r.db).ExecContext(ctx, query,
 		po.Status,
 		po.Notes,
 		po.TotalAmount,
@@ -135,7 +151,7 @@ func (r *PurchaseOrderRepository) Update(ctx context.Context, po *model.Purchase
 func (r *PurchaseOrderRepository) GetItems(ctx context.Context, poID int64) ([]*model.PurchaseOrderItem, error) {
 	var items []*model.PurchaseOrderItem
 	query := `SELECT * FROM purchase_order_items WHERE purchase_order_id = $1 ORDER BY id`
-	if err := r.db.SelectContext(ctx, &items, query, poID); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &items, query, poID); err != nil {
 		return nil, err
 	}
 	return items, nil
@@ -147,7 +163,7 @@ func (r *PurchaseOrderRepository) CreateItem(ctx context.Context, item *model.Pu
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		item.PurchaseOrderID,
 		item.ProductVariantID,
 		item.SKU,
@@ -165,6 +181,6 @@ func (r *PurchaseOrderRepository) UpdateItem(ctx context.Context, item *model.Pu
 		SET received_quantity = $1, updated_at = NOW()
 		WHERE id = $2
 	`
-	_, err := r.db.ExecContext(ctx, query, item.ReceivedQuantity, item.ID)
+	_, err := conn(ctx, r.db).ExecContext(ctx, query, item.ReceivedQuantity, item.ID)
 	return err
 }

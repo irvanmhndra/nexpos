@@ -23,7 +23,7 @@ func (r *SupplierRepository) Create(ctx context.Context, supplier *model.Supplie
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		supplier.CompanyID,
 		supplier.Name,
 		supplier.Code,
@@ -39,7 +39,7 @@ func (r *SupplierRepository) Create(ctx context.Context, supplier *model.Supplie
 func (r *SupplierRepository) GetByID(ctx context.Context, companyID, id int64) (*model.Supplier, error) {
 	var supplier model.Supplier
 	query := `SELECT * FROM suppliers WHERE id = $1 AND company_id = $2`
-	err := r.db.GetContext(ctx, &supplier, query, id, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &supplier, query, id, companyID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -52,7 +52,7 @@ func (r *SupplierRepository) GetByID(ctx context.Context, companyID, id int64) (
 func (r *SupplierRepository) GetByCode(ctx context.Context, companyID int64, code string) (*model.Supplier, error) {
 	var supplier model.Supplier
 	query := `SELECT * FROM suppliers WHERE company_id = $1 AND code = $2`
-	err := r.db.GetContext(ctx, &supplier, query, companyID, code)
+	err := conn(ctx, r.db).GetContext(ctx, &supplier, query, companyID, code)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -83,7 +83,7 @@ func (r *SupplierRepository) List(ctx context.Context, companyID int64, search s
 	}
 
 	countQuery := "SELECT COUNT(*) FROM suppliers " + whereClause
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -94,7 +94,7 @@ func (r *SupplierRepository) List(ctx context.Context, companyID int64, search s
 	`, whereClause, argIndex, argIndex+1)
 	args = append(args, limit, offset)
 
-	if err := r.db.SelectContext(ctx, &suppliers, listQuery, args...); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &suppliers, listQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -107,7 +107,7 @@ func (r *SupplierRepository) Update(ctx context.Context, supplier *model.Supplie
 		SET name = $1, code = $2, contact_name = $3, phone = $4, email = $5, address = $6, notes = $7, is_active = $8, updated_at = NOW()
 		WHERE id = $9 AND company_id = $10
 	`
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := conn(ctx, r.db).ExecContext(ctx, query,
 		supplier.Name,
 		supplier.Code,
 		supplier.ContactName,
@@ -135,7 +135,7 @@ func (r *SupplierRepository) Update(ctx context.Context, supplier *model.Supplie
 
 func (r *SupplierRepository) Delete(ctx context.Context, companyID, id int64) error {
 	query := `DELETE FROM suppliers WHERE id = $1 AND company_id = $2`
-	result, err := r.db.ExecContext(ctx, query, id, companyID)
+	result, err := conn(ctx, r.db).ExecContext(ctx, query, id, companyID)
 	if err != nil {
 		return err
 	}

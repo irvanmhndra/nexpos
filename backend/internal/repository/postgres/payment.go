@@ -29,7 +29,7 @@ func (r *PaymentRepository) Create(ctx context.Context, payment *model.Payment) 
 	if payment.Status == "" {
 		payment.Status = model.PaymentStatusCompleted
 	}
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		payment.OrderID,
 		payment.Method,
 		payment.Amount,
@@ -42,7 +42,19 @@ func (r *PaymentRepository) Create(ctx context.Context, payment *model.Payment) 
 func (r *PaymentRepository) GetByID(ctx context.Context, id int64) (*model.Payment, error) {
 	var payment model.Payment
 	query := fmt.Sprintf(`SELECT %s FROM payments WHERE id = $1`, paymentColumns)
-	if err := r.db.GetContext(ctx, &payment, query, id); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &payment, query, id); err != nil {
+		return nil, err
+	}
+	return &payment, nil
+}
+
+func (r *PaymentRepository) GetByIDForUpdate(ctx context.Context, id int64) (*model.Payment, error) {
+	if err := requireTx(ctx); err != nil {
+		return nil, err
+	}
+	var payment model.Payment
+	query := fmt.Sprintf(`SELECT %s FROM payments WHERE id = $1 FOR UPDATE`, paymentColumns)
+	if err := conn(ctx, r.db).GetContext(ctx, &payment, query, id); err != nil {
 		return nil, err
 	}
 	return &payment, nil
@@ -51,7 +63,7 @@ func (r *PaymentRepository) GetByID(ctx context.Context, id int64) (*model.Payme
 func (r *PaymentRepository) GetByOrderID(ctx context.Context, orderID int64) ([]*model.Payment, error) {
 	var payments []*model.Payment
 	query := fmt.Sprintf(`SELECT %s FROM payments WHERE order_id = $1 ORDER BY id`, paymentColumns)
-	if err := r.db.SelectContext(ctx, &payments, query, orderID); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &payments, query, orderID); err != nil {
 		return nil, err
 	}
 	return payments, nil
@@ -63,7 +75,7 @@ func (r *PaymentRepository) Update(ctx context.Context, payment *model.Payment) 
 		SET status = $1, refunded_amount = $2, refunded_at = $3, refund_reason = $4
 		WHERE id = $5
 	`
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := conn(ctx, r.db).ExecContext(ctx, query,
 		payment.Status,
 		payment.RefundedAmount,
 		payment.RefundedAt,
@@ -84,14 +96,14 @@ func (r *PaymentRepository) Update(ctx context.Context, payment *model.Payment) 
 
 func (r *PaymentRepository) DeleteByOrderID(ctx context.Context, orderID int64) error {
 	query := `DELETE FROM payments WHERE order_id = $1`
-	_, err := r.db.ExecContext(ctx, query, orderID)
+	_, err := conn(ctx, r.db).ExecContext(ctx, query, orderID)
 	return err
 }
 
 func (r *PaymentRepository) GetTotalPaidByOrderID(ctx context.Context, orderID int64) (float64, error) {
 	var total float64
 	query := `SELECT COALESCE(SUM(amount - refunded_amount), 0) FROM payments WHERE order_id = $1 AND status != 'failed'`
-	if err := r.db.GetContext(ctx, &total, query, orderID); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, query, orderID); err != nil {
 		return 0, err
 	}
 	return total, nil
@@ -100,7 +112,7 @@ func (r *PaymentRepository) GetTotalPaidByOrderID(ctx context.Context, orderID i
 func (r *PaymentRepository) GetTotalRefundedByOrderID(ctx context.Context, orderID int64) (float64, error) {
 	var total float64
 	query := `SELECT COALESCE(SUM(refunded_amount), 0) FROM payments WHERE order_id = $1`
-	if err := r.db.GetContext(ctx, &total, query, orderID); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, query, orderID); err != nil {
 		return 0, err
 	}
 	return total, nil
@@ -118,7 +130,7 @@ func (r *PaymentRepository) GetCashTotalByPeriod(ctx context.Context, branchID i
 		  AND p.paid_at >= $2
 		  AND p.paid_at < $3
 	`
-	if err := r.db.GetContext(ctx, &total, query, branchID, from, to); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, query, branchID, from, to); err != nil {
 		return 0, err
 	}
 	return total, nil

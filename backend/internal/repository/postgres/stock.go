@@ -21,11 +21,33 @@ func NewStockRepository(db *sqlx.DB) *StockRepository {
 func (r *StockRepository) GetByVariantAndBranch(ctx context.Context, variantID, branchID int64) (*model.Stock, error) {
 	var stock model.Stock
 	query := `SELECT * FROM stocks WHERE product_variant_id = $1 AND branch_id = $2`
-	err := r.db.GetContext(ctx, &stock, query, variantID, branchID)
+	err := conn(ctx, r.db).GetContext(ctx, &stock, query, variantID, branchID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
+		return nil, err
+	}
+	return &stock, nil
+}
+
+func (r *StockRepository) LockForUpdate(ctx context.Context, variantID, branchID int64) (*model.Stock, error) {
+	if err := requireTx(ctx); err != nil {
+		return nil, err
+	}
+	q := conn(ctx, r.db)
+	// Make sure a row exists to lock; a concurrent creator turns this into a no-op.
+	_, err := q.ExecContext(ctx, `
+		INSERT INTO stocks (product_variant_id, branch_id, quantity, min_quantity, updated_at)
+		VALUES ($1, $2, 0, 0, NOW())
+		ON CONFLICT (product_variant_id, branch_id) DO NOTHING`,
+		variantID, branchID)
+	if err != nil {
+		return nil, err
+	}
+	var stock model.Stock
+	query := `SELECT * FROM stocks WHERE product_variant_id = $1 AND branch_id = $2 FOR UPDATE`
+	if err := q.GetContext(ctx, &stock, query, variantID, branchID); err != nil {
 		return nil, err
 	}
 	return &stock, nil
@@ -39,7 +61,7 @@ func (r *StockRepository) Upsert(ctx context.Context, stock *model.Stock) error 
 		DO UPDATE SET quantity = $3, updated_at = NOW()
 		RETURNING id, updated_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		stock.ProductVariantID,
 		stock.BranchID,
 		stock.Quantity,
@@ -54,7 +76,7 @@ func (r *StockRepository) UpdateMinQuantity(ctx context.Context, variantID, bran
 		ON CONFLICT (product_variant_id, branch_id)
 		DO UPDATE SET min_quantity = $3, updated_at = NOW()
 	`
-	_, err := r.db.ExecContext(ctx, query, variantID, branchID, minQuantity)
+	_, err := conn(ctx, r.db).ExecContext(ctx, query, variantID, branchID, minQuantity)
 	return err
 }
 
@@ -109,7 +131,7 @@ func (r *StockRepository) ListInventory(ctx context.Context, companyID, branchID
 		WHERE ` + where + statusFilter
 
 	var total int
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -139,7 +161,7 @@ func (r *StockRepository) ListInventory(ctx context.Context, companyID, branchID
 
 	args = append(args, limit, offset)
 
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := conn(ctx, r.db).QueryxContext(ctx, query, args...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -179,7 +201,7 @@ func (r *StockRepository) GetInventoryStats(ctx context.Context, companyID, bran
 		WHERE ` + where
 
 	var stats repository.InventoryStats
-	if err := r.db.GetContext(ctx, &stats, query, args...); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &stats, query, args...); err != nil {
 		return nil, err
 	}
 	return &stats, nil

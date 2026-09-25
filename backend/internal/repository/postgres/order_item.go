@@ -23,7 +23,7 @@ func (r *OrderItemRepository) Create(ctx context.Context, item *model.OrderItem)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING id, created_at
 	`
-	return r.db.QueryRowContext(ctx, query,
+	return conn(ctx, r.db).QueryRowContext(ctx, query,
 		item.OrderID,
 		item.ProductID,
 		item.ProductVariantID,
@@ -51,7 +51,7 @@ func (r *OrderItemRepository) GetByOrderID(ctx context.Context, orderID int64) (
 		WHERE order_id = $1
 		ORDER BY id
 	`
-	if err := r.db.SelectContext(ctx, &items, query, orderID); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &items, query, orderID); err != nil {
 		return nil, err
 	}
 	return items, nil
@@ -59,6 +59,6 @@ func (r *OrderItemRepository) GetByOrderID(ctx context.Context, orderID int64) (
 
 func (r *OrderItemRepository) DeleteByOrderID(ctx context.Context, orderID int64) error {
 	query := `DELETE FROM order_items WHERE order_id = $1`
-	_, err := r.db.ExecContext(ctx, query, orderID)
+	_, err := conn(ctx, r.db).ExecContext(ctx, query, orderID)
 	return err
 }

@@ -24,7 +24,7 @@ func (r *userRepository) Create(ctx context.Context, user *model.User) error {
 		VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
 		RETURNING id, created_at, updated_at
 	`
-	return r.db.QueryRowxContext(ctx, query,
+	return conn(ctx, r.db).QueryRowxContext(ctx, query,
 		user.CompanyID,
 		user.RoleID,
 		user.Email,
@@ -37,7 +37,7 @@ func (r *userRepository) Create(ctx context.Context, user *model.User) error {
 func (r *userRepository) GetByID(ctx context.Context, companyID, id int64) (*model.User, error) {
 	var user model.User
 	query := `SELECT * FROM users WHERE id = $1 AND company_id = $2`
-	err := r.db.GetContext(ctx, &user, query, id, companyID)
+	err := conn(ctx, r.db).GetContext(ctx, &user, query, id, companyID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -50,7 +50,7 @@ func (r *userRepository) GetByID(ctx context.Context, companyID, id int64) (*mod
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	var user model.User
 	query := `SELECT * FROM users WHERE email = $1`
-	err := r.db.GetContext(ctx, &user, query, email)
+	err := conn(ctx, r.db).GetContext(ctx, &user, query, email)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -65,7 +65,7 @@ func (r *userRepository) List(ctx context.Context, companyID int64, limit, offse
 	var total int
 
 	countQuery := `SELECT COUNT(*) FROM users WHERE company_id = $1`
-	if err := r.db.GetContext(ctx, &total, countQuery, companyID); err != nil {
+	if err := conn(ctx, r.db).GetContext(ctx, &total, countQuery, companyID); err != nil {
 		return nil, 0, err
 	}
 
@@ -75,7 +75,7 @@ func (r *userRepository) List(ctx context.Context, companyID int64, limit, offse
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3
 	`
-	if err := r.db.SelectContext(ctx, &users, query, companyID, limit, offset); err != nil {
+	if err := conn(ctx, r.db).SelectContext(ctx, &users, query, companyID, limit, offset); err != nil {
 		return nil, 0, err
 	}
 
@@ -88,7 +88,7 @@ func (r *userRepository) Update(ctx context.Context, user *model.User) error {
 		SET email = $1, name = $2, role_id = $3, status = $4, updated_at = NOW()
 		WHERE id = $5 AND company_id = $6
 	`
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := conn(ctx, r.db).ExecContext(ctx, query,
 		user.Email,
 		user.Name,
 		user.RoleID,
@@ -112,7 +112,7 @@ func (r *userRepository) Update(ctx context.Context, user *model.User) error {
 
 func (r *userRepository) UpdateStatus(ctx context.Context, companyID, id int64, status model.UserStatus) error {
 	query := `UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2 AND company_id = $3`
-	result, err := r.db.ExecContext(ctx, query, status, id, companyID)
+	result, err := conn(ctx, r.db).ExecContext(ctx, query, status, id, companyID)
 	if err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func (r *userRepository) UpdateStatus(ctx context.Context, companyID, id int64, 
 
 func (r *userRepository) Delete(ctx context.Context, companyID, id int64) error {
 	query := `DELETE FROM users WHERE id = $1 AND company_id = $2`
-	result, err := r.db.ExecContext(ctx, query, id, companyID)
+	result, err := conn(ctx, r.db).ExecContext(ctx, query, id, companyID)
 	if err != nil {
 		return err
 	}
@@ -147,6 +147,6 @@ func (r *userRepository) Delete(ctx context.Context, companyID, id int64) error 
 func (r *userRepository) EmailExists(ctx context.Context, email string, excludeID int64) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 AND id != $2)`
-	err := r.db.GetContext(ctx, &exists, query, email, excludeID)
+	err := conn(ctx, r.db).GetContext(ctx, &exists, query, email, excludeID)
 	return exists, err
 }
