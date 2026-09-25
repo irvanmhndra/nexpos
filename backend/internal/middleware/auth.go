@@ -6,6 +6,7 @@ import (
 
 	"github.com/irvanmhndra/nexpos-api/internal/repository"
 	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
+	"github.com/irvanmhndra/nexpos-api/pkg/sessiontoken"
 	"github.com/labstack/echo/v5"
 )
 
@@ -24,7 +25,7 @@ func Auth(sessionRepo repository.UserSessionRepository) echo.MiddlewareFunc {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
 			ctx := c.Request().Context()
 
-			session, err := sessionRepo.GetByAccessToken(ctx, token)
+			session, err := sessionRepo.GetByAccessTokenHash(ctx, sessiontoken.Hash(token))
 			if err != nil || session == nil {
 				return c.JSON(http.StatusUnauthorized, httputil.Response{
 					Success:   false,

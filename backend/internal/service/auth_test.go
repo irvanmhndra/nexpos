@@ -11,6 +11,7 @@ import (
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	repoMocks "github.com/irvanmhndra/nexpos-api/internal/repository/mocks"
 	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
+	"github.com/irvanmhndra/nexpos-api/pkg/sessiontoken"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -87,7 +88,11 @@ func TestAuthService_Login_Success(t *testing.T) {
 
 	s.userRepo.EXPECT().GetByEmail(ctx, "test@example.com").Return(user, nil).Once()
 	s.userBranchRepo.EXPECT().GetDefaultBranch(ctx, int64(1)).Return(branch, nil).Once()
-	s.sessionRepo.EXPECT().Create(ctx, mock.AnythingOfType("*model.UserSession")).Return(nil).Once()
+	var stored *model.UserSession
+	s.sessionRepo.EXPECT().Create(ctx, mock.MatchedBy(func(sess *model.UserSession) bool {
+		stored = sess
+		return true
+	})).Return(nil).Once()
 	s.companyRepo.EXPECT().GetByID(ctx, int64(1)).Return(company, nil).Once()
 	s.roleRepo.EXPECT().GetByID(ctx, int64(1)).Return(role, nil).Once()
 
@@ -96,6 +101,9 @@ func TestAuthService_Login_Success(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.NotEmpty(t, result.AccessToken)
 	assert.NotEmpty(t, result.RefreshToken)
+	// The database only ever sees digests of the tokens handed to the client
+	assert.Equal(t, sessiontoken.Hash(result.AccessToken), stored.AccessTokenHash)
+	assert.Equal(t, sessiontoken.Hash(result.RefreshToken), stored.RefreshTokenHash)
 	assert.Equal(t, "test@example.com", result.User.Email)
 	assert.Equal(t, "owner", result.User.Role)
 }
@@ -227,25 +235,50 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 		ID:                    1,
 		UserID:                1,
 		CompanyID:             1,
-		RefreshToken:          "valid_refresh",
+		RefreshTokenHash:      sessiontoken.Hash("valid_refresh"),
 		RefreshTokenExpiresAt: time.Now().Add(24 * time.Hour), // not expired
 	}
 
-	s.sessionRepo.EXPECT().GetByRefreshToken(ctx, "valid_refresh").Return(session, nil).Once()
-	s.sessionRepo.EXPECT().Revoke(ctx, int64(1)).Return(nil).Once()
-	s.sessionRepo.EXPECT().Create(ctx, mock.AnythingOfType("*model.UserSession")).Return(nil).Once()
+	var next *model.UserSession
+	s.sessionRepo.EXPECT().GetByRefreshTokenHash(ctx, sessiontoken.Hash("valid_refresh")).Return(session, nil).Once()
+	s.sessionRepo.EXPECT().Rotate(ctx, int64(1), mock.MatchedBy(func(n *model.UserSession) bool {
+		next = n
+		return true
+	})).Return(true, nil).Once()
 
 	result, err := s.svc.RefreshToken(ctx, "valid_refresh")
 	require.NoError(t, err)
 	assert.NotEmpty(t, result.AccessToken)
 	assert.NotEmpty(t, result.RefreshToken)
+	// Only digests of the new tokens are persisted
+	assert.Equal(t, sessiontoken.Hash(result.AccessToken), next.AccessTokenHash)
+	assert.Equal(t, sessiontoken.Hash(result.RefreshToken), next.RefreshTokenHash)
+	assert.NotEqual(t, result.AccessToken, next.AccessTokenHash)
+}
+
+func TestAuthService_RefreshToken_AlreadyRotated(t *testing.T) {
+	s := setupAuthTest(t)
+	ctx := context.Background()
+
+	session := &model.UserSession{
+		ID:                    1,
+		RefreshTokenExpiresAt: time.Now().Add(24 * time.Hour),
+	}
+	s.sessionRepo.EXPECT().GetByRefreshTokenHash(ctx, sessiontoken.Hash("raced")).Return(session, nil).Once()
+	// A concurrent request exchanged the same refresh token first
+	s.sessionRepo.EXPECT().Rotate(ctx, int64(1), mock.AnythingOfType("*model.UserSession")).Return(false, nil).Once()
+
+	result, err := s.svc.RefreshToken(ctx, "raced")
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "invalid refresh token")
 }
 
 func TestAuthService_RefreshToken_InvalidToken(t *testing.T) {
 	s := setupAuthTest(t)
 	ctx := context.Background()
 
-	s.sessionRepo.EXPECT().GetByRefreshToken(ctx, "invalid").Return(nil, nil).Once()
+	s.sessionRepo.EXPECT().GetByRefreshTokenHash(ctx, sessiontoken.Hash("invalid")).Return(nil, nil).Once()
 
 	result, err := s.svc.RefreshToken(ctx, "invalid")
 	require.Error(t, err)
@@ -259,10 +292,10 @@ func TestAuthService_RefreshToken_Expired(t *testing.T) {
 
 	session := &model.UserSession{
 		ID:                    1,
-		RefreshToken:          "expired",
+		RefreshTokenHash:      sessiontoken.Hash("expired"),
 		RefreshTokenExpiresAt: time.Now().Add(-1 * time.Hour), // expired
 	}
-	s.sessionRepo.EXPECT().GetByRefreshToken(ctx, "expired").Return(session, nil).Once()
+	s.sessionRepo.EXPECT().GetByRefreshTokenHash(ctx, sessiontoken.Hash("expired")).Return(session, nil).Once()
 
 	result, err := s.svc.RefreshToken(ctx, "expired")
 	require.Error(t, err)
@@ -275,8 +308,8 @@ func TestAuthService_Logout_Success(t *testing.T) {
 	s := setupAuthTest(t)
 	ctx := context.Background()
 
-	session := &model.UserSession{ID: 1, AccessToken: "valid_token"}
-	s.sessionRepo.EXPECT().GetByAccessToken(ctx, "valid_token").Return(session, nil).Once()
+	session := &model.UserSession{ID: 1, AccessTokenHash: sessiontoken.Hash("valid_token")}
+	s.sessionRepo.EXPECT().GetByAccessTokenHash(ctx, sessiontoken.Hash("valid_token")).Return(session, nil).Once()
 	s.sessionRepo.EXPECT().Revoke(ctx, int64(1)).Return(nil).Once()
 
 	err := s.svc.Logout(ctx, "valid_token")
@@ -287,7 +320,7 @@ func TestAuthService_Logout_AlreadyLoggedOut(t *testing.T) {
 	s := setupAuthTest(t)
 	ctx := context.Background()
 
-	s.sessionRepo.EXPECT().GetByAccessToken(ctx, "invalid_token").Return(nil, nil).Once()
+	s.sessionRepo.EXPECT().GetByAccessTokenHash(ctx, sessiontoken.Hash("invalid_token")).Return(nil, nil).Once()
 
 	err := s.svc.Logout(ctx, "invalid_token")
 	require.NoError(t, err) // should not error
@@ -300,10 +333,10 @@ func TestAuthService_ValidateAccessToken_Success(t *testing.T) {
 
 	session := &model.UserSession{
 		ID:                   1,
-		AccessToken:          "valid",
+		AccessTokenHash:      sessiontoken.Hash("valid"),
 		AccessTokenExpiresAt: time.Now().Add(1 * time.Hour), // not expired
 	}
-	s.sessionRepo.EXPECT().GetByAccessToken(ctx, "valid").Return(session, nil).Once()
+	s.sessionRepo.EXPECT().GetByAccessTokenHash(ctx, sessiontoken.Hash("valid")).Return(session, nil).Once()
 	s.sessionRepo.EXPECT().UpdateLastUsed(ctx, int64(1)).Return(nil).Once()
 
 	result, err := s.svc.ValidateAccessToken(ctx, "valid")
@@ -315,7 +348,7 @@ func TestAuthService_ValidateAccessToken_Invalid(t *testing.T) {
 	s := setupAuthTest(t)
 	ctx := context.Background()
 
-	s.sessionRepo.EXPECT().GetByAccessToken(ctx, "invalid").Return(nil, nil).Once()
+	s.sessionRepo.EXPECT().GetByAccessTokenHash(ctx, sessiontoken.Hash("invalid")).Return(nil, nil).Once()
 
 	result, err := s.svc.ValidateAccessToken(ctx, "invalid")
 	require.Error(t, err)
@@ -329,10 +362,10 @@ func TestAuthService_ValidateAccessToken_Expired(t *testing.T) {
 
 	session := &model.UserSession{
 		ID:                   1,
-		AccessToken:          "expired",
+		AccessTokenHash:      sessiontoken.Hash("expired"),
 		AccessTokenExpiresAt: time.Now().Add(-1 * time.Hour), // expired
 	}
-	s.sessionRepo.EXPECT().GetByAccessToken(ctx, "expired").Return(session, nil).Once()
+	s.sessionRepo.EXPECT().GetByAccessTokenHash(ctx, sessiontoken.Hash("expired")).Return(session, nil).Once()
 
 	result, err := s.svc.ValidateAccessToken(ctx, "expired")
 	require.Error(t, err)

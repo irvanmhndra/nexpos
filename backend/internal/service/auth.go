@@ -13,6 +13,7 @@ import (
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/irvanmhndra/nexpos-api/internal/repository"
 	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
+	"github.com/irvanmhndra/nexpos-api/pkg/sessiontoken"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -77,17 +78,17 @@ func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest, ipAddress
 	}
 
 	// Generate tokens
-	accessToken := generateToken()
-	refreshToken := generateToken()
+	accessToken := sessiontoken.New()
+	refreshToken := sessiontoken.New()
 
 	// Create session
 	session := &model.UserSession{
 		UserID:                user.ID,
 		CompanyID:             user.CompanyID,
 		BranchID:              branchID,
-		AccessToken:           accessToken,
+		AccessTokenHash:       sessiontoken.Hash(accessToken),
 		AccessTokenExpiresAt:  time.Now().Add(s.jwtConfig.AccessTokenExpiry),
-		RefreshToken:          refreshToken,
+		RefreshTokenHash:      sessiontoken.Hash(refreshToken),
 		RefreshTokenExpiresAt: time.Now().Add(s.jwtConfig.RefreshTokenExpiry),
 		IPAddress:             &ipAddress,
 		UserAgent:             &userAgent,
@@ -207,17 +208,17 @@ func (s *AuthService) Register(ctx context.Context, req dto.RegisterRequest, ipA
 	}
 
 	// Generate tokens
-	accessToken := generateToken()
-	refreshToken := generateToken()
+	accessToken := sessiontoken.New()
+	refreshToken := sessiontoken.New()
 
 	// Create session
 	session := &model.UserSession{
 		UserID:                user.ID,
 		CompanyID:             company.ID,
 		BranchID:              &branch.ID,
-		AccessToken:           accessToken,
+		AccessTokenHash:       sessiontoken.Hash(accessToken),
 		AccessTokenExpiresAt:  time.Now().Add(s.jwtConfig.AccessTokenExpiry),
-		RefreshToken:          refreshToken,
+		RefreshTokenHash:      sessiontoken.Hash(refreshToken),
 		RefreshTokenExpiresAt: time.Now().Add(s.jwtConfig.RefreshTokenExpiry),
 		IPAddress:             &ipAddress,
 		UserAgent:             &userAgent,
@@ -253,7 +254,7 @@ func (s *AuthService) Register(ctx context.Context, req dto.RegisterRequest, ipA
 }
 
 func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*dto.RefreshTokenResponse, error) {
-	session, err := s.sessionRepo.GetByRefreshToken(ctx, refreshToken)
+	session, err := s.sessionRepo.GetByRefreshTokenHash(ctx, sessiontoken.Hash(refreshToken))
 	if err != nil {
 		return nil, apperror.InternalError(err)
 	}
@@ -265,30 +266,30 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*d
 		return nil, apperror.Unauthorized("refresh token expired")
 	}
 
-	// Revoke old session
-	if err := s.sessionRepo.Revoke(ctx, session.ID); err != nil {
-		return nil, apperror.InternalError(err)
-	}
-
 	// Generate new tokens
-	newAccessToken := generateToken()
-	newRefreshToken := generateToken()
+	newAccessToken := sessiontoken.New()
+	newRefreshToken := sessiontoken.New()
 
-	// Create new session
+	// Replace the old session with a new one atomically
 	newSession := &model.UserSession{
 		UserID:                session.UserID,
 		CompanyID:             session.CompanyID,
 		BranchID:              session.BranchID,
-		AccessToken:           newAccessToken,
+		AccessTokenHash:       sessiontoken.Hash(newAccessToken),
 		AccessTokenExpiresAt:  time.Now().Add(s.jwtConfig.AccessTokenExpiry),
-		RefreshToken:          newRefreshToken,
+		RefreshTokenHash:      sessiontoken.Hash(newRefreshToken),
 		RefreshTokenExpiresAt: time.Now().Add(s.jwtConfig.RefreshTokenExpiry),
 		IPAddress:             session.IPAddress,
 		UserAgent:             session.UserAgent,
 	}
 
-	if err := s.sessionRepo.Create(ctx, newSession); err != nil {
+	rotated, err := s.sessionRepo.Rotate(ctx, session.ID, newSession)
+	if err != nil {
 		return nil, apperror.InternalError(err)
+	}
+	if !rotated {
+		// Another request exchanged this refresh token first.
+		return nil, apperror.Unauthorized("invalid refresh token")
 	}
 
 	return &dto.RefreshTokenResponse{
@@ -299,7 +300,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*d
 }
 
 func (s *AuthService) Logout(ctx context.Context, accessToken string) error {
-	session, err := s.sessionRepo.GetByAccessToken(ctx, accessToken)
+	session, err := s.sessionRepo.GetByAccessTokenHash(ctx, sessiontoken.Hash(accessToken))
 	if err != nil {
 		return apperror.InternalError(err)
 	}
@@ -311,7 +312,7 @@ func (s *AuthService) Logout(ctx context.Context, accessToken string) error {
 }
 
 func (s *AuthService) ValidateAccessToken(ctx context.Context, accessToken string) (*model.UserSession, error) {
-	session, err := s.sessionRepo.GetByAccessToken(ctx, accessToken)
+	session, err := s.sessionRepo.GetByAccessTokenHash(ctx, sessiontoken.Hash(accessToken))
 	if err != nil {
 		return nil, apperror.InternalError(err)
 	}
@@ -327,12 +328,6 @@ func (s *AuthService) ValidateAccessToken(ctx context.Context, accessToken strin
 	_ = s.sessionRepo.UpdateLastUsed(ctx, session.ID)
 
 	return session, nil
-}
-
-func generateToken() string {
-	bytes := make([]byte, 32)
-	rand.Read(bytes)
-	return hex.EncodeToString(bytes)
 }
 
 func generateCompanyCode(name string) string {

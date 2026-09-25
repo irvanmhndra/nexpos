@@ -111,8 +111,12 @@ type BranchRepository interface {
 
 type UserSessionRepository interface {
 	Create(ctx context.Context, session *model.UserSession) error
-	GetByAccessToken(ctx context.Context, accessToken string) (*model.UserSession, error)
-	GetByRefreshToken(ctx context.Context, refreshToken string) (*model.UserSession, error)
+	GetByAccessTokenHash(ctx context.Context, accessTokenHash string) (*model.UserSession, error)
+	GetByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (*model.UserSession, error)
+	// Rotate revokes the session oldID and creates next in one transaction.
+	// It returns false, creating nothing, when oldID was already revoked, so
+	// a refresh token can be exchanged only once even under concurrent use.
+	Rotate(ctx context.Context, oldID int64, next *model.UserSession) (bool, error)
 	UpdateLastUsed(ctx context.Context, id int64) error
 	Revoke(ctx context.Context, id int64) error
 	RevokeAllByUserID(ctx context.Context, userID int64) error

@@ -22,8 +22,8 @@ func (r *userSessionRepository) Create(ctx context.Context, session *model.UserS
 	query := `
 		INSERT INTO user_sessions (
 			user_id, company_id, branch_id,
-			access_token, access_token_expires_at,
-			refresh_token, refresh_token_expires_at,
+			access_token_hash, access_token_expires_at,
+			refresh_token_hash, refresh_token_expires_at,
 			is_revoked, device_info, ip_address, user_agent, created_at
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
@@ -33,9 +33,9 @@ func (r *userSessionRepository) Create(ctx context.Context, session *model.UserS
 		session.UserID,
 		session.CompanyID,
 		session.BranchID,
-		session.AccessToken,
+		session.AccessTokenHash,
 		session.AccessTokenExpiresAt,
-		session.RefreshToken,
+		session.RefreshTokenHash,
 		session.RefreshTokenExpiresAt,
 		session.IsRevoked,
 		session.DeviceInfo,
@@ -44,10 +44,10 @@ func (r *userSessionRepository) Create(ctx context.Context, session *model.UserS
 	).Scan(&session.ID, &session.CreatedAt)
 }
 
-func (r *userSessionRepository) GetByAccessToken(ctx context.Context, accessToken string) (*model.UserSession, error) {
+func (r *userSessionRepository) GetByAccessTokenHash(ctx context.Context, accessTokenHash string) (*model.UserSession, error) {
 	var session model.UserSession
-	query := `SELECT * FROM user_sessions WHERE access_token = $1 AND NOT is_revoked`
-	err := r.db.GetContext(ctx, &session, query, accessToken)
+	query := `SELECT * FROM user_sessions WHERE access_token_hash = $1 AND NOT is_revoked`
+	err := r.db.GetContext(ctx, &session, query, accessTokenHash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -57,10 +57,10 @@ func (r *userSessionRepository) GetByAccessToken(ctx context.Context, accessToke
 	return &session, nil
 }
 
-func (r *userSessionRepository) GetByRefreshToken(ctx context.Context, refreshToken string) (*model.UserSession, error) {
+func (r *userSessionRepository) GetByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (*model.UserSession, error) {
 	var session model.UserSession
-	query := `SELECT * FROM user_sessions WHERE refresh_token = $1 AND NOT is_revoked`
-	err := r.db.GetContext(ctx, &session, query, refreshToken)
+	query := `SELECT * FROM user_sessions WHERE refresh_token_hash = $1 AND NOT is_revoked`
+	err := r.db.GetContext(ctx, &session, query, refreshTokenHash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -68,6 +68,43 @@ func (r *userSessionRepository) GetByRefreshToken(ctx context.Context, refreshTo
 		return nil, err
 	}
 	return &session, nil
+}
+
+func (r *userSessionRepository) Rotate(ctx context.Context, oldID int64, next *model.UserSession) (bool, error) {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// The conditional update is the claim: of two concurrent refreshes with
+	// the same token, only one sees a row affected.
+	res, err := tx.ExecContext(ctx, `UPDATE user_sessions SET is_revoked = true WHERE id = $1 AND NOT is_revoked`, oldID)
+	if err != nil {
+		return false, err
+	}
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		return false, err
+	}
+
+	err = tx.QueryRowxContext(ctx, `
+		INSERT INTO user_sessions (
+			user_id, company_id, branch_id,
+			access_token_hash, access_token_expires_at,
+			refresh_token_hash, refresh_token_expires_at,
+			is_revoked, device_info, ip_address, user_agent, created_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, $10, NOW())
+		RETURNING id, created_at`,
+		next.UserID, next.CompanyID, next.BranchID,
+		next.AccessTokenHash, next.AccessTokenExpiresAt,
+		next.RefreshTokenHash, next.RefreshTokenExpiresAt,
+		next.DeviceInfo, next.IPAddress, next.UserAgent,
+	).Scan(&next.ID, &next.CreatedAt)
+	if err != nil {
+		return false, err
+	}
+	return true, tx.Commit()
 }
 
 func (r *userSessionRepository) UpdateLastUsed(ctx context.Context, id int64) error {
