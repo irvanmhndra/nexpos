@@ -51,6 +51,7 @@ func setupOrderTest(t *testing.T) *orderTestSetup {
 		s.orderRepo, s.itemRepo, s.paymentRepo, s.variantRepo,
 		s.customerRepo, s.userRepo, s.settingsRepo,
 		s.stockRepo, s.movementRepo, s.promoRepo,
+		repoMocks.Transactor{},
 	)
 	return s
 }
@@ -386,7 +387,7 @@ func TestOrderService_ConfirmOrder_Success(t *testing.T) {
 	companyID, orderID := int64(1), int64(10)
 
 	order := testOrder(orderID, companyID, 2, model.OrderStatusDraft)
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 	s.orderRepo.EXPECT().Update(ctx, mock.MatchedBy(func(o *model.Order) bool {
 		return o.Status == model.OrderStatusConfirmed && o.ConfirmedAt != nil
 	})).Return(nil).Once()
@@ -402,7 +403,7 @@ func TestOrderService_ConfirmOrder_NotFound(t *testing.T) {
 	s := setupOrderTest(t)
 	ctx := context.Background()
 
-	s.orderRepo.EXPECT().GetByID(ctx, int64(1), int64(99)).Return(nil, sql.ErrNoRows).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, int64(1), int64(99)).Return(nil, sql.ErrNoRows).Once()
 
 	_, err := s.svc.ConfirmOrder(ctx, 1, 99)
 
@@ -416,7 +417,7 @@ func TestOrderService_ConfirmOrder_WrongStatus(t *testing.T) {
 	companyID, orderID := int64(1), int64(10)
 
 	order := testOrder(orderID, companyID, 2, model.OrderStatusConfirmed) // already confirmed
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 
 	_, err := s.svc.ConfirmOrder(ctx, companyID, orderID)
 
@@ -440,7 +441,7 @@ func TestOrderService_AddPayment_Success(t *testing.T) {
 		Payments: []dto.PaymentInput{{Method: "cash", Amount: 100_000}},
 	}
 
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(defaultSettings(), nil).Once()
 	s.paymentRepo.EXPECT().Create(ctx, mock.AnythingOfType("*model.Payment")).Return(nil).Once()
 	s.paymentRepo.EXPECT().GetTotalPaidByOrderID(ctx, orderID).Return(100_000.0, nil).Once()
@@ -467,7 +468,7 @@ func TestOrderService_AddPayment_PartialPayment(t *testing.T) {
 		Payments: []dto.PaymentInput{{Method: "cash", Amount: 50_000}},
 	}
 
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(defaultSettings(), nil).Once()
 	s.paymentRepo.EXPECT().Create(ctx, mock.AnythingOfType("*model.Payment")).Return(nil).Once()
 	s.paymentRepo.EXPECT().GetTotalPaidByOrderID(ctx, orderID).Return(50_000.0, nil).Once()
@@ -488,7 +489,7 @@ func TestOrderService_AddPayment_WrongStatus(t *testing.T) {
 	companyID, orderID := int64(1), int64(10)
 
 	order := testOrder(orderID, companyID, 2, model.OrderStatusCompleted)
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 
 	_, err := s.svc.AddPayment(ctx, companyID, orderID, dto.AddPaymentRequest{
 		Payments: []dto.PaymentInput{{Method: "cash", Amount: 100_000}},
@@ -511,7 +512,7 @@ func TestOrderService_CompleteOrder_Success(t *testing.T) {
 	order.PaymentStatus = model.PaymentStatusPaid
 	order.Items = []*model.OrderItem{}
 
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 	s.orderRepo.EXPECT().Update(ctx, mock.MatchedBy(func(o *model.Order) bool {
 		return o.Status == model.OrderStatusCompleted && o.CompletedAt != nil
 	})).Return(nil).Once()
@@ -525,6 +526,76 @@ func TestOrderService_CompleteOrder_Success(t *testing.T) {
 	assert.Equal(t, model.OrderStatusCompleted, resp.Status)
 }
 
+func TestOrderService_CompleteOrder_DeductsStockInVariantOrder(t *testing.T) {
+	s := setupOrderTest(t)
+	ctx := context.Background()
+	companyID, orderID := int64(1), int64(10)
+	low, high := int64(3), int64(9)
+
+	order := testOrder(orderID, companyID, 2, model.OrderStatusConfirmed)
+	order.PaymentStatus = model.PaymentStatusPaid
+
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().Update(ctx, mock.AnythingOfType("*model.Order")).Return(nil).Once()
+	// Items arrive with the higher variant first
+	s.itemRepo.EXPECT().GetByOrderID(ctx, orderID).Return([]*model.OrderItem{
+		{ProductVariantID: &high, Quantity: 1},
+		{ProductVariantID: &low, Quantity: 5},
+	}, nil).Once()
+	s.stockRepo.EXPECT().LockForUpdate(ctx, low, int64(2)).Return(&model.Stock{Quantity: 2, MinQuantity: 1}, nil).Once()
+	s.stockRepo.EXPECT().LockForUpdate(ctx, high, int64(2)).Return(&model.Stock{Quantity: 10}, nil).Once()
+	// Selling 5 of a variant with 2 recorded floors the stock at zero
+	s.movementRepo.EXPECT().Create(ctx, mock.MatchedBy(func(m *model.StockMovement) bool {
+		return m.ProductVariantID == low && m.Type == model.StockMovementOut && m.StockBefore == 2 && m.StockAfter == 0
+	})).Return(nil).Once()
+	s.stockRepo.EXPECT().Upsert(ctx, mock.MatchedBy(func(st *model.Stock) bool {
+		return st.ProductVariantID == low && st.Quantity == 0 && st.MinQuantity == 1
+	})).Return(nil).Once()
+	s.movementRepo.EXPECT().Create(ctx, mock.MatchedBy(func(m *model.StockMovement) bool {
+		return m.ProductVariantID == high && m.StockBefore == 10 && m.StockAfter == 9
+	})).Return(nil).Once()
+	s.stockRepo.EXPECT().Upsert(ctx, mock.MatchedBy(func(st *model.Stock) bool {
+		return st.ProductVariantID == high && st.Quantity == 9
+	})).Return(nil).Once()
+	s.expectReload(ctx, companyID, orderID, testOrder(orderID, companyID, 2, model.OrderStatusCompleted))
+
+	_, err := s.svc.CompleteOrder(ctx, companyID, orderID, dto.CompleteOrderRequest{})
+	require.NoError(t, err)
+
+	// Rows are locked in ascending variant order, whatever the item order,
+	// so two orders sharing variants cannot deadlock
+	var locked []int64
+	for _, c := range s.stockRepo.Calls {
+		if c.Method == "LockForUpdate" {
+			locked = append(locked, c.Arguments.Get(1).(int64))
+		}
+	}
+	assert.Equal(t, []int64{low, high}, locked)
+}
+
+func TestOrderService_CompleteOrder_StockFailureFailsCompletion(t *testing.T) {
+	s := setupOrderTest(t)
+	ctx := context.Background()
+	companyID, orderID, variantID := int64(1), int64(10), int64(5)
+
+	order := testOrder(orderID, companyID, 2, model.OrderStatusConfirmed)
+	order.PaymentStatus = model.PaymentStatusPaid
+
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().Update(ctx, mock.AnythingOfType("*model.Order")).Return(nil).Once()
+	s.itemRepo.EXPECT().GetByOrderID(ctx, orderID).Return([]*model.OrderItem{
+		{ProductVariantID: &variantID, Quantity: 1},
+	}, nil).Once()
+	s.stockRepo.EXPECT().LockForUpdate(ctx, variantID, int64(2)).Return(nil, sql.ErrConnDone).Once()
+
+	// Previously logged and ignored, leaving a completed order with stock
+	// untouched; now the error aborts the transaction, completion included
+	resp, err := s.svc.CompleteOrder(ctx, companyID, orderID, dto.CompleteOrderRequest{})
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.True(t, apperror.IsInternalError(err))
+}
+
 func TestOrderService_CompleteOrder_NotPaid(t *testing.T) {
 	s := setupOrderTest(t)
 	ctx := context.Background()
@@ -533,7 +604,7 @@ func TestOrderService_CompleteOrder_NotPaid(t *testing.T) {
 	order := testOrder(orderID, companyID, 2, model.OrderStatusConfirmed)
 	order.PaymentStatus = model.PaymentStatusUnpaid
 
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 
 	_, err := s.svc.CompleteOrder(ctx, companyID, orderID, dto.CompleteOrderRequest{})
 
@@ -548,7 +619,7 @@ func TestOrderService_CompleteOrder_WrongStatus(t *testing.T) {
 	companyID, orderID := int64(1), int64(10)
 
 	order := testOrder(orderID, companyID, 2, model.OrderStatusDraft)
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 
 	_, err := s.svc.CompleteOrder(ctx, companyID, orderID, dto.CompleteOrderRequest{})
 
@@ -567,7 +638,7 @@ func TestOrderService_CancelOrder_Success(t *testing.T) {
 
 	order := testOrder(orderID, companyID, 2, model.OrderStatusDraft)
 
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 	s.orderRepo.EXPECT().Update(ctx, mock.MatchedBy(func(o *model.Order) bool {
 		return o.Status == model.OrderStatusCancelled && o.CancelReason != nil
 	})).Return(nil).Once()
@@ -587,7 +658,7 @@ func TestOrderService_CancelOrder_FullyPaid(t *testing.T) {
 	order := testOrder(orderID, companyID, 2, model.OrderStatusConfirmed)
 	order.PaymentStatus = model.PaymentStatusPaid
 
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 
 	_, err := s.svc.CancelOrder(ctx, companyID, orderID, dto.CancelOrderRequest{Reason: "mistake"})
 
@@ -602,7 +673,7 @@ func TestOrderService_CancelOrder_CompletedOrder(t *testing.T) {
 	companyID, orderID := int64(1), int64(10)
 
 	order := testOrder(orderID, companyID, 2, model.OrderStatusCompleted)
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 
 	_, err := s.svc.CancelOrder(ctx, companyID, orderID, dto.CancelOrderRequest{Reason: "mistake"})
 
@@ -622,7 +693,7 @@ func TestOrderService_VoidOrder_FromConfirmed(t *testing.T) {
 	order := testOrder(orderID, companyID, 2, model.OrderStatusConfirmed)
 	order.PaymentStatus = model.PaymentStatusUnpaid
 
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 	s.orderRepo.EXPECT().Update(ctx, mock.MatchedBy(func(o *model.Order) bool {
 		return o.Status == model.OrderStatusVoided && o.VoidReason != nil
 	})).Return(nil).Once()
@@ -648,7 +719,7 @@ func TestOrderService_VoidOrder_FromCompleted_RestoresStock(t *testing.T) {
 		{ProductVariantID: &variantID, Quantity: 2, SKU: "SKU-001"},
 	}
 
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 	s.orderRepo.EXPECT().Update(ctx, mock.MatchedBy(func(o *model.Order) bool {
 		return o.Status == model.OrderStatusVoided && o.PaymentStatus == model.PaymentStatusRefunded
 	})).Return(nil).Once()
@@ -658,9 +729,11 @@ func TestOrderService_VoidOrder_FromCompleted_RestoresStock(t *testing.T) {
 		{ProductVariantID: &variantID, Quantity: 2, SKU: "SKU-001"},
 	}, nil).Once()
 	s.stockRepo.EXPECT().
-		GetByVariantAndBranch(ctx, variantID, int64(2)).
+		LockForUpdate(ctx, variantID, int64(2)).
 		Return(&model.Stock{Quantity: 0}, nil).Once()
-	s.movementRepo.EXPECT().Create(ctx, mock.AnythingOfType("*model.StockMovement")).Return(nil).Once()
+	s.movementRepo.EXPECT().Create(ctx, mock.MatchedBy(func(m *model.StockMovement) bool {
+		return m.Type == model.StockMovementIn && m.StockBefore == 0 && m.StockAfter == 2
+	})).Return(nil).Once()
 	s.stockRepo.EXPECT().Upsert(ctx, mock.AnythingOfType("*model.Stock")).Return(nil).Once()
 
 	s.expectReload(ctx, companyID, orderID, testOrder(orderID, companyID, 2, model.OrderStatusVoided))
@@ -677,7 +750,7 @@ func TestOrderService_VoidOrder_WrongStatus(t *testing.T) {
 	companyID, orderID := int64(1), int64(10)
 
 	order := testOrder(orderID, companyID, 2, model.OrderStatusDraft)
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 
 	_, err := s.svc.VoidOrder(ctx, companyID, orderID, dto.VoidOrderRequest{Reason: "test"})
 
@@ -713,7 +786,7 @@ func TestOrderService_RefundPayment_Success(t *testing.T) {
 	}
 
 	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
-	s.paymentRepo.EXPECT().GetByID(ctx, paymentID).Return(payment, nil).Once()
+	s.paymentRepo.EXPECT().GetByIDForUpdate(ctx, paymentID).Return(payment, nil).Once()
 	s.paymentRepo.EXPECT().Update(ctx, mock.MatchedBy(func(p *model.Payment) bool {
 		return p.RefundedAmount == 50_000 && p.Status == model.PaymentStatusPartiallyRefunded
 	})).Return(nil).Once()
@@ -739,7 +812,7 @@ func TestOrderService_RefundPayment_FullRefund(t *testing.T) {
 	}
 
 	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
-	s.paymentRepo.EXPECT().GetByID(ctx, paymentID).Return(payment, nil).Once()
+	s.paymentRepo.EXPECT().GetByIDForUpdate(ctx, paymentID).Return(payment, nil).Once()
 	s.paymentRepo.EXPECT().Update(ctx, mock.MatchedBy(func(p *model.Payment) bool {
 		return p.RefundedAmount == 100_000 && p.Status == model.PaymentStatusRefunded
 	})).Return(nil).Once()
@@ -767,7 +840,7 @@ func TestOrderService_RefundPayment_ExceedsAvailable(t *testing.T) {
 	}
 
 	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
-	s.paymentRepo.EXPECT().GetByID(ctx, paymentID).Return(payment, nil).Once()
+	s.paymentRepo.EXPECT().GetByIDForUpdate(ctx, paymentID).Return(payment, nil).Once()
 
 	_, err := s.svc.RefundPayment(ctx, companyID, orderID, dto.RefundPaymentRequest{
 		PaymentID: paymentID, Amount: 50_000, RefundReason: "too much",
@@ -790,7 +863,7 @@ func TestOrderService_RefundPayment_WrongOrder(t *testing.T) {
 	}
 
 	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
-	s.paymentRepo.EXPECT().GetByID(ctx, paymentID).Return(payment, nil).Once()
+	s.paymentRepo.EXPECT().GetByIDForUpdate(ctx, paymentID).Return(payment, nil).Once()
 
 	_, err := s.svc.RefundPayment(ctx, companyID, orderID, dto.RefundPaymentRequest{
 		PaymentID: paymentID, Amount: 50_000, RefundReason: "test",
@@ -819,7 +892,7 @@ func TestOrderService_AddPayment_AutoCompleteCounterOrder(t *testing.T) {
 		Payments: []dto.PaymentInput{{Method: "cash", Amount: 100_000}},
 	}
 
-	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
+	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(settings, nil).Once()
 	s.paymentRepo.EXPECT().Create(ctx, mock.AnythingOfType("*model.Payment")).Return(nil).Once()
 	s.paymentRepo.EXPECT().GetTotalPaidByOrderID(ctx, orderID).Return(100_000.0, nil).Once()

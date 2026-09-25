@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"time"
 
 	"github.com/irvanmhndra/nexpos-api/internal/dto"
@@ -25,6 +26,7 @@ type OrderService struct {
 	stockRepo        repository.StockRepository
 	movementRepo     repository.StockMovementRepository
 	promotionRepo    repository.PromotionRepository
+	tx               repository.Transactor
 }
 
 func NewOrderService(
@@ -38,6 +40,7 @@ func NewOrderService(
 	stockRepo repository.StockRepository,
 	movementRepo repository.StockMovementRepository,
 	promotionRepo repository.PromotionRepository,
+	tx repository.Transactor,
 ) *OrderService {
 	return &OrderService{
 		orderRepo:     orderRepo,
@@ -50,7 +53,21 @@ func NewOrderService(
 		stockRepo:     stockRepo,
 		movementRepo:  movementRepo,
 		promotionRepo: promotionRepo,
+		tx:            tx,
 	}
+}
+
+// lockOrder loads an order and locks its row for the rest of the transaction,
+// so concurrent state transitions on the same order run one after another.
+func (s *OrderService) lockOrder(ctx context.Context, companyID, id int64) (*model.Order, error) {
+	order, err := s.orderRepo.GetByIDForUpdate(ctx, companyID, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, apperror.NotFound("Order not found")
+		}
+		return nil, apperror.InternalError(err)
+	}
+	return order, nil
 }
 
 // Create creates a new order as draft
@@ -221,26 +238,32 @@ func (s *OrderService) Create(ctx context.Context, companyID, branchID, cashierI
 		}
 	}
 
-	if err := s.orderRepo.Create(ctx, order); err != nil {
-		return nil, apperror.InternalError(err)
-	}
-
-	// Create order items
-	for _, item := range orderItems {
-		item.OrderID = order.ID
-		if err := s.orderItemRepo.Create(ctx, item); err != nil {
-			return nil, apperror.InternalError(err)
+	// Order, items, payments, and any auto-complete stock deduction commit together
+	err = s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		if err := s.orderRepo.Create(ctx, order); err != nil {
+			return apperror.InternalError(err)
 		}
-	}
 
-	order.Items = orderItems
-
-	// Process payments if provided
-	if len(req.Payments) > 0 {
-		_, err := s.processPayments(ctx, order, req.Payments, settings)
-		if err != nil {
-			return nil, err
+		// Create order items
+		for _, item := range orderItems {
+			item.OrderID = order.ID
+			if err := s.orderItemRepo.Create(ctx, item); err != nil {
+				return apperror.InternalError(err)
+			}
 		}
+
+		order.Items = orderItems
+
+		// Process payments if provided
+		if len(req.Payments) > 0 {
+			if _, err := s.processPayments(ctx, order, req.Payments, settings); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// Reload order
@@ -322,26 +345,29 @@ func (s *OrderService) Preview(ctx context.Context, companyID, branchID int64, r
 
 // ConfirmOrder moves order from draft to confirmed
 func (s *OrderService) ConfirmOrder(ctx context.Context, companyID, id int64) (*dto.OrderResponse, error) {
-	order, err := s.orderRepo.GetByID(ctx, companyID, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, apperror.NotFound("Order not found")
+	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		order, err := s.lockOrder(ctx, companyID, id)
+		if err != nil {
+			return err
 		}
-		return nil, apperror.InternalError(err)
-	}
 
-	// Validate state transition
-	if order.Status != model.OrderStatusDraft {
-		return nil, apperror.BadRequest("Only draft orders can be confirmed")
-	}
+		// Validate state transition
+		if order.Status != model.OrderStatusDraft {
+			return apperror.BadRequest("Only draft orders can be confirmed")
+		}
 
-	// Update order
-	now := time.Now()
-	order.Status = model.OrderStatusConfirmed
-	order.ConfirmedAt = &now
+		// Update order
+		now := time.Now()
+		order.Status = model.OrderStatusConfirmed
+		order.ConfirmedAt = &now
 
-	if err := s.orderRepo.Update(ctx, order); err != nil {
-		return nil, apperror.InternalError(err)
+		if err := s.orderRepo.Update(ctx, order); err != nil {
+			return apperror.InternalError(err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return s.GetByID(ctx, companyID, id)
@@ -349,25 +375,25 @@ func (s *OrderService) ConfirmOrder(ctx context.Context, companyID, id int64) (*
 
 // AddPayment adds a payment to an order (supports split payments)
 func (s *OrderService) AddPayment(ctx context.Context, companyID, id int64, req dto.AddPaymentRequest) (*dto.OrderResponse, error) {
-	order, err := s.orderRepo.GetByID(ctx, companyID, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, apperror.NotFound("Order not found")
+	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		order, err := s.lockOrder(ctx, companyID, id)
+		if err != nil {
+			return err
 		}
-		return nil, apperror.InternalError(err)
-	}
 
-	// Only allow payments on draft or confirmed orders
-	if order.Status != model.OrderStatusDraft && order.Status != model.OrderStatusConfirmed {
-		return nil, apperror.BadRequest("Cannot add payment to this order")
-	}
+		// Only allow payments on draft or confirmed orders
+		if order.Status != model.OrderStatusDraft && order.Status != model.OrderStatusConfirmed {
+			return apperror.BadRequest("Cannot add payment to this order")
+		}
 
-	settings, err := s.settingsRepo.GetByCompanyID(ctx, companyID)
-	if err != nil {
-		return nil, apperror.InternalError(err)
-	}
+		settings, err := s.settingsRepo.GetByCompanyID(ctx, companyID)
+		if err != nil {
+			return apperror.InternalError(err)
+		}
 
-	_, err = s.processPayments(ctx, order, req.Payments, settings)
+		_, err = s.processPayments(ctx, order, req.Payments, settings)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -377,43 +403,46 @@ func (s *OrderService) AddPayment(ctx context.Context, companyID, id int64, req 
 
 // CompleteOrder completes an order
 func (s *OrderService) CompleteOrder(ctx context.Context, companyID, id int64, req dto.CompleteOrderRequest) (*dto.OrderResponse, error) {
-	order, err := s.orderRepo.GetByID(ctx, companyID, id)
+	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		order, err := s.lockOrder(ctx, companyID, id)
+		if err != nil {
+			return err
+		}
+
+		// Validate state transition
+		if order.Status != model.OrderStatusConfirmed {
+			return apperror.BadRequest("Only confirmed orders can be completed")
+		}
+
+		// Check payment status
+		if order.PaymentStatus != model.PaymentStatusPaid {
+			return apperror.BadRequest("Order must be fully paid before completion")
+		}
+
+		// For delivery orders, validate fulfillment
+		if order.FulfillmentType == model.FulfillmentTypeDelivery {
+			if req.FulfillmentStatus != nil {
+				order.FulfillmentStatus = req.FulfillmentStatus
+			}
+		}
+
+		// Update order
+		now := time.Now()
+		order.Status = model.OrderStatusCompleted
+		order.CompletedAt = &now
+
+		if err := s.orderRepo.Update(ctx, order); err != nil {
+			return apperror.InternalError(err)
+		}
+
+		// Stock is deducted in the same transaction: either both happen or neither
+		if err := s.deductStockForOrder(ctx, order); err != nil {
+			return apperror.InternalError(err)
+		}
+		return nil
+	})
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, apperror.NotFound("Order not found")
-		}
-		return nil, apperror.InternalError(err)
-	}
-
-	// Validate state transition
-	if order.Status != model.OrderStatusConfirmed {
-		return nil, apperror.BadRequest("Only confirmed orders can be completed")
-	}
-
-	// Check payment status
-	if order.PaymentStatus != model.PaymentStatusPaid {
-		return nil, apperror.BadRequest("Order must be fully paid before completion")
-	}
-
-	// For delivery orders, validate fulfillment
-	if order.FulfillmentType == model.FulfillmentTypeDelivery {
-		if req.FulfillmentStatus != nil {
-			order.FulfillmentStatus = req.FulfillmentStatus
-		}
-	}
-
-	// Update order
-	now := time.Now()
-	order.Status = model.OrderStatusCompleted
-	order.CompletedAt = &now
-
-	if err := s.orderRepo.Update(ctx, order); err != nil {
-		return nil, apperror.InternalError(err)
-	}
-
-	// Deduct stock (best-effort — order is already completed)
-	if err := s.deductStockForOrder(ctx, order); err != nil {
-		slog.Error("failed to deduct stock on order completion", "order_id", order.ID, "error", err)
+		return nil, err
 	}
 
 	return s.GetByID(ctx, companyID, id)
@@ -421,31 +450,34 @@ func (s *OrderService) CompleteOrder(ctx context.Context, companyID, id int64, r
 
 // CancelOrder cancels an order (for unpaid or partially paid orders)
 func (s *OrderService) CancelOrder(ctx context.Context, companyID, id int64, req dto.CancelOrderRequest) (*dto.OrderResponse, error) {
-	order, err := s.orderRepo.GetByID(ctx, companyID, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, apperror.NotFound("Order not found")
+	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		order, err := s.lockOrder(ctx, companyID, id)
+		if err != nil {
+			return err
 		}
-		return nil, apperror.InternalError(err)
-	}
 
-	// Can only cancel draft or confirmed orders
-	if order.Status != model.OrderStatusDraft && order.Status != model.OrderStatusConfirmed {
-		return nil, apperror.BadRequest("Cannot cancel this order")
-	}
+		// Can only cancel draft or confirmed orders
+		if order.Status != model.OrderStatusDraft && order.Status != model.OrderStatusConfirmed {
+			return apperror.BadRequest("Cannot cancel this order")
+		}
 
-	// If order has payments, use void instead
-	if order.PaymentStatus == model.PaymentStatusPaid {
-		return nil, apperror.BadRequest("Cannot cancel a fully paid order. Use void with refund instead.")
-	}
+		// If order has payments, use void instead
+		if order.PaymentStatus == model.PaymentStatusPaid {
+			return apperror.BadRequest("Cannot cancel a fully paid order. Use void with refund instead.")
+		}
 
-	now := time.Now()
-	order.Status = model.OrderStatusCancelled
-	order.CancelledAt = &now
-	order.CancelReason = &req.Reason
+		now := time.Now()
+		order.Status = model.OrderStatusCancelled
+		order.CancelledAt = &now
+		order.CancelReason = &req.Reason
 
-	if err := s.orderRepo.Update(ctx, order); err != nil {
-		return nil, apperror.InternalError(err)
+		if err := s.orderRepo.Update(ctx, order); err != nil {
+			return apperror.InternalError(err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return s.GetByID(ctx, companyID, id)
@@ -453,40 +485,44 @@ func (s *OrderService) CancelOrder(ctx context.Context, companyID, id int64, req
 
 // VoidOrder voids a completed order (requires refund processing)
 func (s *OrderService) VoidOrder(ctx context.Context, companyID, id int64, req dto.VoidOrderRequest) (*dto.OrderResponse, error) {
-	order, err := s.orderRepo.GetByID(ctx, companyID, id)
+	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		order, err := s.lockOrder(ctx, companyID, id)
+		if err != nil {
+			return err
+		}
+
+		// Can void confirmed or completed orders
+		if order.Status != model.OrderStatusConfirmed && order.Status != model.OrderStatusCompleted {
+			return apperror.BadRequest("Cannot void this order")
+		}
+
+		wasCompleted := order.Status == model.OrderStatusCompleted
+
+		now := time.Now()
+		order.Status = model.OrderStatusVoided
+		order.VoidedAt = &now
+		order.VoidReason = &req.Reason
+
+		// Mark order payment status as refunded if there were payments
+		if order.PaymentStatus == model.PaymentStatusPaid || order.PaymentStatus == model.PaymentStatusPartial {
+			order.PaymentStatus = model.PaymentStatusRefunded
+		}
+
+		if err := s.orderRepo.Update(ctx, order); err != nil {
+			return apperror.InternalError(err)
+		}
+
+		// Restore stock only if order was completed (stock was deducted),
+		// in the same transaction as the void
+		if wasCompleted {
+			if err := s.restoreStockForOrder(ctx, order); err != nil {
+				return apperror.InternalError(err)
+			}
+		}
+		return nil
+	})
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, apperror.NotFound("Order not found")
-		}
-		return nil, apperror.InternalError(err)
-	}
-
-	// Can void confirmed or completed orders
-	if order.Status != model.OrderStatusConfirmed && order.Status != model.OrderStatusCompleted {
-		return nil, apperror.BadRequest("Cannot void this order")
-	}
-
-	wasCompleted := order.Status == model.OrderStatusCompleted
-
-	now := time.Now()
-	order.Status = model.OrderStatusVoided
-	order.VoidedAt = &now
-	order.VoidReason = &req.Reason
-
-	// Mark order payment status as refunded if there were payments
-	if order.PaymentStatus == model.PaymentStatusPaid || order.PaymentStatus == model.PaymentStatusPartial {
-		order.PaymentStatus = model.PaymentStatusRefunded
-	}
-
-	if err := s.orderRepo.Update(ctx, order); err != nil {
-		return nil, apperror.InternalError(err)
-	}
-
-	// Restore stock only if order was completed (stock was deducted)
-	if wasCompleted {
-		if err := s.restoreStockForOrder(ctx, order); err != nil {
-			slog.Error("failed to restore stock on order void", "order_id", order.ID, "error", err)
-		}
+		return nil, err
 	}
 
 	return s.GetByID(ctx, companyID, id)
@@ -494,164 +530,179 @@ func (s *OrderService) VoidOrder(ctx context.Context, companyID, id int64, req d
 
 // RefundPayment processes a refund for a specific payment
 func (s *OrderService) RefundPayment(ctx context.Context, companyID, orderID int64, req dto.RefundPaymentRequest) (*dto.OrderResponse, error) {
-	order, err := s.orderRepo.GetByID(ctx, companyID, orderID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, apperror.NotFound("Order not found")
+	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		order, err := s.orderRepo.GetByID(ctx, companyID, orderID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return apperror.NotFound("Order not found")
+			}
+			return apperror.InternalError(err)
 		}
-		return nil, apperror.InternalError(err)
-	}
 
-	// Get payment
-	payment, err := s.paymentRepo.GetByID(ctx, req.PaymentID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, apperror.NotFound("Payment not found")
+		// Get and lock the payment: the refundable amount is checked and
+		// updated under the lock, so concurrent refunds cannot exceed it
+		payment, err := s.paymentRepo.GetByIDForUpdate(ctx, req.PaymentID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return apperror.NotFound("Payment not found")
+			}
+			return apperror.InternalError(err)
 		}
-		return nil, apperror.InternalError(err)
+
+		// Verify payment belongs to order
+		if payment.OrderID != orderID {
+			return apperror.BadRequest("Payment does not belong to this order")
+		}
+
+		// Validate refund amount
+		availableForRefund := payment.Amount - payment.RefundedAmount
+		if req.Amount > availableForRefund {
+			return apperror.BadRequest("Refund amount exceeds available amount")
+		}
+
+		// Update payment
+		now := time.Now()
+		payment.RefundedAmount += req.Amount
+		payment.RefundedAt = &now
+		payment.RefundReason = &req.RefundReason
+
+		if payment.RefundedAmount >= payment.Amount {
+			payment.Status = model.PaymentStatusRefunded
+		} else {
+			payment.Status = model.PaymentStatusPartiallyRefunded
+		}
+
+		if err := s.paymentRepo.Update(ctx, payment); err != nil {
+			return apperror.InternalError(err)
+		}
+
+		// Update order payment status
+		totalPaid, _ := s.paymentRepo.GetTotalPaidByOrderID(ctx, orderID)
+		s.updateOrderPaymentStatus(ctx, order, totalPaid)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	// Verify payment belongs to order
-	if payment.OrderID != orderID {
-		return nil, apperror.BadRequest("Payment does not belong to this order")
-	}
-
-	// Validate refund amount
-	availableForRefund := payment.Amount - payment.RefundedAmount
-	if req.Amount > availableForRefund {
-		return nil, apperror.BadRequest("Refund amount exceeds available amount")
-	}
-
-	// Update payment
-	now := time.Now()
-	payment.RefundedAmount += req.Amount
-	payment.RefundedAt = &now
-	payment.RefundReason = &req.RefundReason
-
-	if payment.RefundedAmount >= payment.Amount {
-		payment.Status = model.PaymentStatusRefunded
-	} else {
-		payment.Status = model.PaymentStatusPartiallyRefunded
-	}
-
-	if err := s.paymentRepo.Update(ctx, payment); err != nil {
-		return nil, apperror.InternalError(err)
-	}
-
-	// Update order payment status
-	totalPaid, _ := s.paymentRepo.GetTotalPaidByOrderID(ctx, orderID)
-	s.updateOrderPaymentStatus(ctx, order, totalPaid)
 
 	return s.GetByID(ctx, companyID, orderID)
 }
 
 // UpdateOrder updates a draft order
 func (s *OrderService) UpdateOrder(ctx context.Context, companyID, id int64, req dto.UpdateOrderRequest) (*dto.OrderResponse, error) {
-	order, err := s.orderRepo.GetByID(ctx, companyID, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, apperror.NotFound("Order not found")
-		}
-		return nil, apperror.InternalError(err)
-	}
-
-	// Only draft orders can be updated
-	if order.Status != model.OrderStatusDraft {
-		return nil, apperror.BadRequest("Only draft orders can be updated")
-	}
-
-	// Update fields
-	if req.CustomerID != nil {
-		order.CustomerID = req.CustomerID
-	}
-	if req.FulfillmentType != nil {
-		order.FulfillmentType = *req.FulfillmentType
-	}
-	if req.ShippingAddress != nil {
-		order.ShippingAddress = req.ShippingAddress
-	}
-	if req.Notes != nil {
-		order.Notes = req.Notes
-	}
-
-	// Handle items update if provided
-	if len(req.Items) > 0 {
-		// Delete existing items
-		if err := s.orderItemRepo.DeleteByOrderID(ctx, order.ID); err != nil {
-			return nil, apperror.InternalError(err)
+	// Lock the order, then replace items and totals in one transaction, so a
+	// failure midway cannot leave the draft without its items
+	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		order, err := s.lockOrder(ctx, companyID, id)
+		if err != nil {
+			return err
 		}
 
-		settings, _ := s.settingsRepo.GetByCompanyID(ctx, companyID)
+		// Only draft orders can be updated
+		if order.Status != model.OrderStatusDraft {
+			return apperror.BadRequest("Only draft orders can be updated")
+		}
 
-		// Recalculate and create new items
-		var totalAmount, totalDiscount, totalTax float64
-		for _, itemInput := range req.Items {
-			if itemInput.ProductVariantID == nil {
-				return nil, apperror.BadRequest("Product variant is required")
+		// Update fields
+		if req.CustomerID != nil {
+			order.CustomerID = req.CustomerID
+		}
+		if req.FulfillmentType != nil {
+			order.FulfillmentType = *req.FulfillmentType
+		}
+		if req.ShippingAddress != nil {
+			order.ShippingAddress = req.ShippingAddress
+		}
+		if req.Notes != nil {
+			order.Notes = req.Notes
+		}
+
+		// Handle items update if provided
+		if len(req.Items) > 0 {
+			// Delete existing items
+			if err := s.orderItemRepo.DeleteByOrderID(ctx, order.ID); err != nil {
+				return apperror.InternalError(err)
 			}
 
-			variant, err := s.variantRepo.GetByID(ctx, *itemInput.ProductVariantID)
+			settings, err := s.settingsRepo.GetByCompanyID(ctx, companyID)
 			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return nil, apperror.NotFound("Product variant not found")
+				return apperror.InternalError(err)
+			}
+
+			// Recalculate and create new items
+			var totalAmount, totalDiscount, totalTax float64
+			for _, itemInput := range req.Items {
+				if itemInput.ProductVariantID == nil {
+					return apperror.BadRequest("Product variant is required")
 				}
-				return nil, apperror.InternalError(err)
-			}
 
-			unitPrice := effectivePrice(variant)
-			quantity := float64(itemInput.Quantity)
-			discountAmount := itemInput.DiscountAmount
-			subtotal := (unitPrice * quantity) - discountAmount
+				variant, err := s.variantRepo.GetByID(ctx, *itemInput.ProductVariantID)
+				if err != nil {
+					if errors.Is(err, sql.ErrNoRows) {
+						return apperror.NotFound("Product variant not found")
+					}
+					return apperror.InternalError(err)
+				}
 
-			var taxAmount float64
-			if settings.TaxEnabled {
-				if settings.TaxInclusive {
-					taxAmount = subtotal * settings.TaxRate / (100 + settings.TaxRate)
-				} else {
-					taxAmount = subtotal * settings.TaxRate / 100
+				unitPrice := effectivePrice(variant)
+				quantity := float64(itemInput.Quantity)
+				discountAmount := itemInput.DiscountAmount
+				subtotal := (unitPrice * quantity) - discountAmount
+
+				var taxAmount float64
+				if settings.TaxEnabled {
+					if settings.TaxInclusive {
+						taxAmount = subtotal * settings.TaxRate / (100 + settings.TaxRate)
+					} else {
+						taxAmount = subtotal * settings.TaxRate / 100
+					}
+				}
+
+				cogsAmount := variant.StandardCost * quantity
+
+				totalAmount += unitPrice * quantity
+				totalDiscount += discountAmount
+				totalTax += taxAmount
+
+				item := &model.OrderItem{
+					OrderID:           order.ID,
+					ProductID:         &variant.ProductID,
+					ProductVariantID:  itemInput.ProductVariantID,
+					SKU:               variant.SKU,
+					ProductName:       variant.ProductName,
+					VariantName:       &variant.Name,
+					VariantAttributes: variant.Attributes,
+					UnitPrice:         unitPrice,
+					UnitCost:          variant.StandardCost,
+					Quantity:          itemInput.Quantity,
+					DiscountAmount:    discountAmount,
+					TaxAmount:         taxAmount,
+					Subtotal:          subtotal,
+					CogsAmount:        cogsAmount,
+				}
+
+				if err := s.orderItemRepo.Create(ctx, item); err != nil {
+					return apperror.InternalError(err)
 				}
 			}
 
-			cogsAmount := variant.StandardCost * quantity
+			order.TotalAmount = totalAmount
+			order.TotalDiscount = totalDiscount
+			order.TotalTax = totalTax
+			order.GrandTotal = totalAmount - totalDiscount + totalTax
 
-			totalAmount += unitPrice * quantity
-			totalDiscount += discountAmount
-			totalTax += taxAmount
-
-			item := &model.OrderItem{
-				OrderID:           order.ID,
-				ProductID:         &variant.ProductID,
-				ProductVariantID:  itemInput.ProductVariantID,
-				SKU:               variant.SKU,
-				ProductName:       variant.ProductName,
-				VariantName:       &variant.Name,
-				VariantAttributes: variant.Attributes,
-				UnitPrice:         unitPrice,
-				UnitCost:          variant.StandardCost,
-				Quantity:          itemInput.Quantity,
-				DiscountAmount:    discountAmount,
-				TaxAmount:         taxAmount,
-				Subtotal:          subtotal,
-				CogsAmount:        cogsAmount,
-			}
-
-			if err := s.orderItemRepo.Create(ctx, item); err != nil {
-				return nil, apperror.InternalError(err)
+			if settings.RoundingEnabled && settings.RoundingAmount > 0 {
+				order.GrandTotal = roundToNearest(order.GrandTotal, settings.RoundingAmount)
 			}
 		}
 
-		order.TotalAmount = totalAmount
-		order.TotalDiscount = totalDiscount
-		order.TotalTax = totalTax
-		order.GrandTotal = totalAmount - totalDiscount + totalTax
-
-		if settings.RoundingEnabled && settings.RoundingAmount > 0 {
-			order.GrandTotal = roundToNearest(order.GrandTotal, settings.RoundingAmount)
+		if err := s.orderRepo.Update(ctx, order); err != nil {
+			return apperror.InternalError(err)
 		}
-	}
-
-	if err := s.orderRepo.Update(ctx, order); err != nil {
-		return nil, apperror.InternalError(err)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return s.GetByID(ctx, companyID, id)
@@ -863,10 +914,10 @@ func (s *OrderService) processPayments(ctx context.Context, order *model.Order, 
 		return nil, apperror.InternalError(err)
 	}
 
-	// Deduct stock on auto-complete (best-effort)
+	// Deduct stock on auto-complete, in the caller's transaction
 	if autoCompleted {
 		if err := s.deductStockForOrder(ctx, order); err != nil {
-			slog.Error("failed to deduct stock on auto-complete", "order_id", order.ID, "error", err)
+			return nil, apperror.InternalError(err)
 		}
 	}
 
@@ -1036,121 +1087,87 @@ func roundToNearest(value, nearest float64) float64 {
 	return float64(int64((value+nearest/2)/nearest)) * nearest
 }
 
-// deductStockForOrder creates OUT movements for each order item (best-effort).
+// deductStockForOrder creates OUT movements for each order item. It runs inside
+// the transaction that completes the order: stock rows are locked, so
+// concurrent sales of the same variant queue instead of overwriting each
+// other, and any failure rolls the completion back.
 func (s *OrderService) deductStockForOrder(ctx context.Context, order *model.Order) error {
+	return s.moveStockForOrder(ctx, order, model.StockMovementOut, "order")
+}
+
+// restoreStockForOrder creates IN movements to reverse a completed order's
+// stock deductions, inside the transaction that voids the order.
+func (s *OrderService) restoreStockForOrder(ctx context.Context, order *model.Order) error {
+	return s.moveStockForOrder(ctx, order, model.StockMovementIn, "order_void")
+}
+
+func (s *OrderService) moveStockForOrder(ctx context.Context, order *model.Order, movementType model.StockMovementType, refType string) error {
 	items, err := s.orderItemRepo.GetByOrderID(ctx, order.ID)
 	if err != nil {
 		return err
 	}
 
-	refType := "order"
+	// Lock stock rows in variant order so two orders sharing variants cannot
+	// deadlock by locking them in opposite orders.
+	sort.SliceStable(items, func(i, j int) bool {
+		return variantKey(items[i]) < variantKey(items[j])
+	})
+
 	for _, item := range items {
 		if item.ProductVariantID == nil {
 			continue // skip custom/untracked items
 		}
 		variantID := *item.ProductVariantID
 
-		current, err := s.stockRepo.GetByVariantAndBranch(ctx, variantID, order.BranchID)
+		current, err := s.stockRepo.LockForUpdate(ctx, variantID, order.BranchID)
 		if err != nil {
-			slog.Error("deductStock: get stock failed", "variant_id", variantID, "error", err)
-			continue
+			return fmt.Errorf("lock stock for variant %d: %w", variantID, err)
 		}
 
-		currentQty := 0
-		minQty := 0
-		if current != nil {
-			currentQty = current.Quantity
-			minQty = current.MinQuantity
-		}
-
-		newQty := currentQty - item.Quantity
-		if newQty < 0 {
-			slog.Warn("deductStock: stock went negative (race condition), clamping to 0", "variant_id", variantID, "order_id", order.ID)
-			newQty = 0
+		newQty := current.Quantity + item.Quantity
+		if movementType == model.StockMovementOut {
+			newQty = current.Quantity - item.Quantity
+			if newQty < 0 {
+				// Sold more than recorded: keep the sale, floor the stock at zero
+				// and leave a trail for the next stock opname.
+				slog.Warn("stock below zero on sale, clamping to 0",
+					"variant_id", variantID, "branch_id", order.BranchID, "order_id", order.ID,
+					"stock", current.Quantity, "sold", item.Quantity)
+				newQty = 0
+			}
 		}
 
 		refID := order.ID
 		movement := &model.StockMovement{
 			ProductVariantID: variantID,
 			BranchID:         order.BranchID,
-			Type:             model.StockMovementOut,
+			Type:             movementType,
 			Quantity:         item.Quantity,
-			StockBefore:      currentQty,
+			StockBefore:      current.Quantity,
 			StockAfter:       newQty,
 			ReferenceType:    &refType,
 			ReferenceID:      &refID,
 		}
 		if err := s.movementRepo.Create(ctx, movement); err != nil {
-			slog.Error("deductStock: create movement failed", "variant_id", variantID, "error", err)
-			continue
+			return fmt.Errorf("record stock movement for variant %d: %w", variantID, err)
 		}
 
 		stock := &model.Stock{
 			ProductVariantID: variantID,
 			BranchID:         order.BranchID,
 			Quantity:         newQty,
-			MinQuantity:      minQty,
+			MinQuantity:      current.MinQuantity,
 		}
 		if err := s.stockRepo.Upsert(ctx, stock); err != nil {
-			slog.Error("deductStock: upsert stock failed", "variant_id", variantID, "error", err)
+			return fmt.Errorf("update stock for variant %d: %w", variantID, err)
 		}
 	}
 	return nil
 }
 
-// restoreStockForOrder creates IN movements to reverse a completed order's stock deductions.
-func (s *OrderService) restoreStockForOrder(ctx context.Context, order *model.Order) error {
-	items, err := s.orderItemRepo.GetByOrderID(ctx, order.ID)
-	if err != nil {
-		return err
+func variantKey(item *model.OrderItem) int64 {
+	if item.ProductVariantID == nil {
+		return 0
 	}
-
-	refType := "order_void"
-	for _, item := range items {
-		if item.ProductVariantID == nil {
-			continue
-		}
-		variantID := *item.ProductVariantID
-
-		current, err := s.stockRepo.GetByVariantAndBranch(ctx, variantID, order.BranchID)
-		if err != nil {
-			slog.Error("restoreStock: get stock failed", "variant_id", variantID, "error", err)
-			continue
-		}
-
-		currentQty := 0
-		minQty := 0
-		if current != nil {
-			currentQty = current.Quantity
-			minQty = current.MinQuantity
-		}
-
-		newQty := currentQty + item.Quantity
-		refID := order.ID
-		movement := &model.StockMovement{
-			ProductVariantID: variantID,
-			BranchID:         order.BranchID,
-			Type:             model.StockMovementIn,
-			Quantity:         item.Quantity,
-			StockBefore:      currentQty,
-			StockAfter:       newQty,
-			ReferenceType:    &refType,
-			ReferenceID:      &refID,
-		}
-		if err := s.movementRepo.Create(ctx, movement); err != nil {
-			slog.Error("restoreStock: create movement failed", "variant_id", variantID, "error", err)
-			continue
-		}
-
-		stock := &model.Stock{
-			ProductVariantID: variantID,
-			BranchID:         order.BranchID,
-			Quantity:         newQty,
-			MinQuantity:      minQty,
-		}
-		if err := s.stockRepo.Upsert(ctx, stock); err != nil {
-			slog.Error("restoreStock: upsert stock failed", "variant_id", variantID, "error", err)
-		}
-	}
-	return nil
+	return *item.ProductVariantID
 }

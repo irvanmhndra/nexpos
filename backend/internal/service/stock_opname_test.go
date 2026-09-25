@@ -28,7 +28,7 @@ func setupOpnameTest(t *testing.T) *opnameTestSetup {
 		movementRepo: repoMocks.NewMockStockMovementRepository(t),
 		branchRepo:   repoMocks.NewMockBranchRepository(t),
 	}
-	s.svc = NewStockOpnameService(s.opnameRepo, s.stockRepo, s.movementRepo, s.branchRepo)
+	s.svc = NewStockOpnameService(s.opnameRepo, s.stockRepo, s.movementRepo, s.branchRepo, repoMocks.Transactor{})
 	return s
 }
 
@@ -151,7 +151,7 @@ func TestStockOpnameService_Complete_Success(t *testing.T) {
 	ctx := context.Background()
 	companyID, userID, branchID := int64(1), int64(7), int64(2)
 
-	s.opnameRepo.EXPECT().GetByID(ctx, companyID, int64(10)).
+	s.opnameRepo.EXPECT().GetByIDForUpdate(ctx, companyID, int64(10)).
 		Return(&model.StockOpname{
 			ID: 10, CompanyID: companyID, BranchID: branchID,
 			Status: model.StockOpnameStatusInProgress,
@@ -169,7 +169,7 @@ func TestStockOpnameService_Complete_Success(t *testing.T) {
 	s.opnameRepo.EXPECT().GetItems(ctx, int64(10)).Return(items, nil).Once()
 
 	// Item 1: counted (8) != current system (10), adjustment expected
-	s.stockRepo.EXPECT().GetByVariantAndBranch(ctx, int64(100), branchID).
+	s.stockRepo.EXPECT().LockForUpdate(ctx, int64(100), branchID).
 		Return(&model.Stock{ProductVariantID: 100, BranchID: branchID, Quantity: 10}, nil).Once()
 	s.movementRepo.EXPECT().Create(ctx, mock.MatchedBy(func(mv *model.StockMovement) bool {
 		return mv.ProductVariantID == 100 && mv.Type == model.StockMovementAdjust &&
@@ -180,7 +180,7 @@ func TestStockOpnameService_Complete_Success(t *testing.T) {
 	})).Return(nil).Once()
 
 	// Item 2: counted == current, no adjustment
-	s.stockRepo.EXPECT().GetByVariantAndBranch(ctx, int64(101), branchID).
+	s.stockRepo.EXPECT().LockForUpdate(ctx, int64(101), branchID).
 		Return(&model.Stock{ProductVariantID: 101, BranchID: branchID, Quantity: 5}, nil).Once()
 
 	// Final status update
@@ -207,7 +207,7 @@ func TestStockOpnameService_Complete_NotInProgress(t *testing.T) {
 	s := setupOpnameTest(t)
 	ctx := context.Background()
 
-	s.opnameRepo.EXPECT().GetByID(ctx, int64(1), int64(10)).
+	s.opnameRepo.EXPECT().GetByIDForUpdate(ctx, int64(1), int64(10)).
 		Return(&model.StockOpname{ID: 10, CompanyID: 1, Status: model.StockOpnameStatusCancelled}, nil).Once()
 
 	_, err := s.svc.Complete(ctx, 1, 10, 1, dto.CompleteStockOpnameRequest{})

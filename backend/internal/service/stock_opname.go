@@ -15,6 +15,7 @@ type StockOpnameService struct {
 	stockRepo    repository.StockRepository
 	movementRepo repository.StockMovementRepository
 	branchRepo   repository.BranchRepository
+	tx           repository.Transactor
 }
 
 func NewStockOpnameService(
@@ -22,12 +23,14 @@ func NewStockOpnameService(
 	stockRepo repository.StockRepository,
 	movementRepo repository.StockMovementRepository,
 	branchRepo repository.BranchRepository,
+	tx repository.Transactor,
 ) *StockOpnameService {
 	return &StockOpnameService{
 		opnameRepo:   opnameRepo,
 		stockRepo:    stockRepo,
 		movementRepo: movementRepo,
 		branchRepo:   branchRepo,
+		tx:           tx,
 	}
 }
 
@@ -209,92 +212,100 @@ func (s *StockOpnameService) BulkUpdateItems(ctx context.Context, companyID, opn
 }
 
 func (s *StockOpnameService) Complete(ctx context.Context, companyID, opnameID, userID int64, req dto.CompleteStockOpnameRequest) (*dto.StockOpnameResponse, error) {
-	opname, err := s.opnameRepo.GetByID(ctx, companyID, opnameID)
-	if err != nil {
-		return nil, apperror.InternalError(err)
-	}
-	if opname == nil {
-		return nil, apperror.NotFound("Stock opname not found")
-	}
-	if opname.Status != model.StockOpnameStatusInProgress {
-		return nil, apperror.BadRequest("Stock opname is not in progress")
-	}
-
-	items, err := s.opnameRepo.GetItems(ctx, opname.ID)
-	if err != nil {
-		return nil, apperror.InternalError(err)
-	}
-
-	var totalVarianceQty int
-	var totalVarianceValue float64
-	refType := "stock_opname"
-
-	for _, item := range items {
-		if item.CountedStock == nil {
-			continue
-		}
-		counted := *item.CountedStock
-
-		current, err := s.stockRepo.GetByVariantAndBranch(ctx, item.ProductVariantID, opname.BranchID)
+	// Lock the opname and each stock row: completing twice concurrently must
+	// not apply the count twice, and a sale during completion must not be lost
+	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		opname, err := s.opnameRepo.GetByIDForUpdate(ctx, companyID, opnameID)
 		if err != nil {
-			return nil, apperror.InternalError(err)
+			return apperror.InternalError(err)
 		}
-		currentQty := 0
-		minQty := 0
-		if current != nil {
-			currentQty = current.Quantity
-			minQty = current.MinQuantity
+		if opname == nil {
+			return apperror.NotFound("Stock opname not found")
 		}
-
-		if counted != currentQty {
-			delta := counted - currentQty
-			unitCost := item.UnitCost
-			movement := &model.StockMovement{
-				ProductVariantID: item.ProductVariantID,
-				BranchID:         opname.BranchID,
-				Type:             model.StockMovementAdjust,
-				Quantity:         absInt(delta),
-				StockBefore:      currentQty,
-				StockAfter:       counted,
-				UnitCost:         &unitCost,
-				ReferenceType:    &refType,
-				ReferenceID:      &opname.ID,
-				CreatedBy:        &userID,
-			}
-			if err := s.movementRepo.Create(ctx, movement); err != nil {
-				return nil, apperror.InternalError(err)
-			}
-
-			stock := &model.Stock{
-				ProductVariantID: item.ProductVariantID,
-				BranchID:         opname.BranchID,
-				Quantity:         counted,
-				MinQuantity:      minQty,
-			}
-			if err := s.stockRepo.Upsert(ctx, stock); err != nil {
-				return nil, apperror.InternalError(err)
-			}
+		if opname.Status != model.StockOpnameStatusInProgress {
+			return apperror.BadRequest("Stock opname is not in progress")
 		}
 
-		totalVarianceQty += item.VarianceQty
-		totalVarianceValue += item.VarianceValue
+		items, err := s.opnameRepo.GetItems(ctx, opname.ID)
+		if err != nil {
+			return apperror.InternalError(err)
+		}
+
+		var totalVarianceQty int
+		var totalVarianceValue float64
+		refType := "stock_opname"
+
+		for _, item := range items {
+			if item.CountedStock == nil {
+				continue
+			}
+			counted := *item.CountedStock
+
+			current, err := s.stockRepo.LockForUpdate(ctx, item.ProductVariantID, opname.BranchID)
+			if err != nil {
+				return apperror.InternalError(err)
+			}
+			currentQty := 0
+			minQty := 0
+			if current != nil {
+				currentQty = current.Quantity
+				minQty = current.MinQuantity
+			}
+
+			if counted != currentQty {
+				delta := counted - currentQty
+				unitCost := item.UnitCost
+				movement := &model.StockMovement{
+					ProductVariantID: item.ProductVariantID,
+					BranchID:         opname.BranchID,
+					Type:             model.StockMovementAdjust,
+					Quantity:         absInt(delta),
+					StockBefore:      currentQty,
+					StockAfter:       counted,
+					UnitCost:         &unitCost,
+					ReferenceType:    &refType,
+					ReferenceID:      &opname.ID,
+					CreatedBy:        &userID,
+				}
+				if err := s.movementRepo.Create(ctx, movement); err != nil {
+					return apperror.InternalError(err)
+				}
+
+				stock := &model.Stock{
+					ProductVariantID: item.ProductVariantID,
+					BranchID:         opname.BranchID,
+					Quantity:         counted,
+					MinQuantity:      minQty,
+				}
+				if err := s.stockRepo.Upsert(ctx, stock); err != nil {
+					return apperror.InternalError(err)
+				}
+			}
+
+			totalVarianceQty += item.VarianceQty
+			totalVarianceValue += item.VarianceValue
+		}
+
+		now := time.Now()
+		opname.Status = model.StockOpnameStatusCompleted
+		opname.CompletedBy = &userID
+		opname.CompletedAt = &now
+		opname.TotalVarianceQty = totalVarianceQty
+		opname.TotalVarianceValue = totalVarianceValue
+		if req.Notes != nil {
+			opname.Notes = req.Notes
+		}
+
+		if err := s.opnameRepo.Update(ctx, opname); err != nil {
+			return apperror.InternalError(err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	now := time.Now()
-	opname.Status = model.StockOpnameStatusCompleted
-	opname.CompletedBy = &userID
-	opname.CompletedAt = &now
-	opname.TotalVarianceQty = totalVarianceQty
-	opname.TotalVarianceValue = totalVarianceValue
-	if req.Notes != nil {
-		opname.Notes = req.Notes
-	}
-
-	if err := s.opnameRepo.Update(ctx, opname); err != nil {
-		return nil, apperror.InternalError(err)
-	}
-
-	return s.GetByID(ctx, companyID, opname.ID)
+	return s.GetByID(ctx, companyID, opnameID)
 }
 
 func (s *StockOpnameService) Cancel(ctx context.Context, companyID, opnameID int64) (*dto.StockOpnameResponse, error) {

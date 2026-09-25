@@ -34,7 +34,7 @@ func setupInventoryTest(t *testing.T) *inventoryTestSetup {
 		variantRepo:  repoMocks.NewMockProductVariantRepository(t),
 		branchRepo:   repoMocks.NewMockBranchRepository(t),
 	}
-	s.svc = NewInventoryService(s.stockRepo, s.movementRepo, s.variantRepo, s.branchRepo)
+	s.svc = NewInventoryService(s.stockRepo, s.movementRepo, s.variantRepo, s.branchRepo, repoMocks.Transactor{})
 	return s
 }
 
@@ -64,7 +64,7 @@ func TestInventoryService_AdjustStock_In_Success(t *testing.T) {
 
 	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, companyID), nil).Once()
-	s.stockRepo.EXPECT().GetByVariantAndBranch(ctx, variantID, branchID).
+	s.stockRepo.EXPECT().LockForUpdate(ctx, variantID, branchID).
 		Return(&model.Stock{Quantity: 5, MinQuantity: 2}, nil).Once()
 	s.movementRepo.EXPECT().Create(ctx, mock.MatchedBy(func(mv *model.StockMovement) bool {
 		return mv.Type == model.StockMovementIn &&
@@ -95,7 +95,7 @@ func TestInventoryService_AdjustStock_Out_Success(t *testing.T) {
 
 	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, companyID), nil).Once()
-	s.stockRepo.EXPECT().GetByVariantAndBranch(ctx, variantID, branchID).
+	s.stockRepo.EXPECT().LockForUpdate(ctx, variantID, branchID).
 		Return(&model.Stock{Quantity: 10}, nil).Once()
 	s.movementRepo.EXPECT().Create(ctx, mock.MatchedBy(func(mv *model.StockMovement) bool {
 		return mv.StockBefore == 10 && mv.StockAfter == 7
@@ -123,7 +123,7 @@ func TestInventoryService_AdjustStock_Adjust_Success(t *testing.T) {
 
 	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, companyID), nil).Once()
-	s.stockRepo.EXPECT().GetByVariantAndBranch(ctx, variantID, branchID).
+	s.stockRepo.EXPECT().LockForUpdate(ctx, variantID, branchID).
 		Return(&model.Stock{Quantity: 10}, nil).Once()
 	s.movementRepo.EXPECT().Create(ctx, mock.MatchedBy(func(mv *model.StockMovement) bool {
 		return mv.StockAfter == 25
@@ -152,7 +152,7 @@ func TestInventoryService_AdjustStock_NoExistingStock(t *testing.T) {
 
 	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, companyID), nil).Once()
-	s.stockRepo.EXPECT().GetByVariantAndBranch(ctx, variantID, branchID).
+	s.stockRepo.EXPECT().LockForUpdate(ctx, variantID, branchID).
 		Return(nil, nil).Once() // no stock record yet
 	s.movementRepo.EXPECT().Create(ctx, mock.MatchedBy(func(mv *model.StockMovement) bool {
 		return mv.StockBefore == 0 && mv.StockAfter == 5
@@ -180,7 +180,7 @@ func TestInventoryService_AdjustStock_InsufficientStock(t *testing.T) {
 
 	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, companyID), nil).Once()
-	s.stockRepo.EXPECT().GetByVariantAndBranch(ctx, variantID, branchID).
+	s.stockRepo.EXPECT().LockForUpdate(ctx, variantID, branchID).
 		Return(&model.Stock{Quantity: 5}, nil).Once()
 
 	err := s.svc.AdjustStock(ctx, companyID, nil, req)
@@ -247,7 +247,7 @@ func TestInventoryService_AdjustStock_InvalidType(t *testing.T) {
 
 	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, 1), nil).Once()
-	s.stockRepo.EXPECT().GetByVariantAndBranch(ctx, variantID, branchID).Return(nil, nil).Once()
+	s.stockRepo.EXPECT().LockForUpdate(ctx, variantID, branchID).Return(nil, nil).Once()
 
 	err := s.svc.AdjustStock(ctx, 1, nil, req)
 

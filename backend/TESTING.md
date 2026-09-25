@@ -236,7 +236,7 @@ Most integration tests only need to verify via HTTP responses (POST then GET bac
 
 | Scenario | Why DB assertion is needed |
 |----------|--------------------------|
-| **Stock deduction on order complete** | Stock changes are best-effort side effects, not returned in the order response |
+| **Stock deduction on order complete** | Stock changes commit in the same transaction as the completion but are not returned in the order response |
 | **Stock restoration on order void** | Need to verify IN movements were created and stock quantity restored |
 | **Payment refund status** | Payment status transitions happen in a separate table, verify the actual DB state |
 | **No stock change on non-completed void** | Verify that voiding a confirmed (not completed) order does NOT create stock movements |

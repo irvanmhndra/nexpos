@@ -15,6 +15,7 @@ type InventoryService struct {
 	movementRepo repository.StockMovementRepository
 	variantRepo  repository.ProductVariantRepository
 	branchRepo   repository.BranchRepository
+	tx           repository.Transactor
 }
 
 func NewInventoryService(
@@ -22,12 +23,14 @@ func NewInventoryService(
 	movementRepo repository.StockMovementRepository,
 	variantRepo repository.ProductVariantRepository,
 	branchRepo repository.BranchRepository,
+	tx repository.Transactor,
 ) *InventoryService {
 	return &InventoryService{
 		stockRepo:    stockRepo,
 		movementRepo: movementRepo,
 		variantRepo:  variantRepo,
 		branchRepo:   branchRepo,
+		tx:           tx,
 	}
 }
 
@@ -53,63 +56,65 @@ func (s *InventoryService) AdjustStock(ctx context.Context, companyID int64, cre
 		return apperror.Forbidden("Branch does not belong to your company")
 	}
 
-	// Get current stock
-	current, err := s.stockRepo.GetByVariantAndBranch(ctx, req.VariantID, req.BranchID)
-	if err != nil {
-		return apperror.InternalError(err)
-	}
-
-	currentQty := 0
-	minQty := 0
-	if current != nil {
-		currentQty = current.Quantity
-		minQty = current.MinQuantity
-	}
-
-	// Compute new quantity
-	var newQty int
-	switch req.Type {
-	case model.StockMovementIn:
-		newQty = currentQty + req.Quantity
-	case model.StockMovementOut:
-		newQty = currentQty - req.Quantity
-		if newQty < 0 {
-			return apperror.BadRequest("Insufficient stock")
+	return s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		// Lock the current stock: the new quantity is computed from it, so a
+		// concurrent change must wait rather than be overwritten
+		current, err := s.stockRepo.LockForUpdate(ctx, req.VariantID, req.BranchID)
+		if err != nil {
+			return apperror.InternalError(err)
 		}
-	case model.StockMovementAdjust:
-		newQty = req.Quantity
-	default:
-		return apperror.BadRequest("Invalid movement type")
-	}
 
-	// Create movement record
-	movement := &model.StockMovement{
-		ProductVariantID: req.VariantID,
-		BranchID:         req.BranchID,
-		Type:             req.Type,
-		Quantity:         req.Quantity,
-		StockBefore:      currentQty,
-		StockAfter:       newQty,
-		UnitCost:         req.UnitCost,
-		Note:             req.Note,
-		CreatedBy:        createdBy,
-	}
-	if err := s.movementRepo.Create(ctx, movement); err != nil {
-		return apperror.InternalError(err)
-	}
+		currentQty := 0
+		minQty := 0
+		if current != nil {
+			currentQty = current.Quantity
+			minQty = current.MinQuantity
+		}
 
-	// Upsert stock
-	stock := &model.Stock{
-		ProductVariantID: req.VariantID,
-		BranchID:         req.BranchID,
-		Quantity:         newQty,
-		MinQuantity:      minQty,
-	}
-	if err := s.stockRepo.Upsert(ctx, stock); err != nil {
-		return apperror.InternalError(err)
-	}
+		// Compute new quantity
+		var newQty int
+		switch req.Type {
+		case model.StockMovementIn:
+			newQty = currentQty + req.Quantity
+		case model.StockMovementOut:
+			newQty = currentQty - req.Quantity
+			if newQty < 0 {
+				return apperror.BadRequest("Insufficient stock")
+			}
+		case model.StockMovementAdjust:
+			newQty = req.Quantity
+		default:
+			return apperror.BadRequest("Invalid movement type")
+		}
 
-	return nil
+		// Create movement record
+		movement := &model.StockMovement{
+			ProductVariantID: req.VariantID,
+			BranchID:         req.BranchID,
+			Type:             req.Type,
+			Quantity:         req.Quantity,
+			StockBefore:      currentQty,
+			StockAfter:       newQty,
+			UnitCost:         req.UnitCost,
+			Note:             req.Note,
+			CreatedBy:        createdBy,
+		}
+		if err := s.movementRepo.Create(ctx, movement); err != nil {
+			return apperror.InternalError(err)
+		}
+
+		// Upsert stock
+		stock := &model.Stock{
+			ProductVariantID: req.VariantID,
+			BranchID:         req.BranchID,
+			Quantity:         newQty,
+			MinQuantity:      minQty,
+		}
+		if err := s.stockRepo.Upsert(ctx, stock); err != nil {
+			return apperror.InternalError(err)
+		}
+		return nil
+	})
 }
 
 func (s *InventoryService) UpdateMinStock(ctx context.Context, companyID, variantID, branchID int64, req dto.UpdateMinStockRequest) error {

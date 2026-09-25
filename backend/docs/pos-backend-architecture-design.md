@@ -864,6 +864,45 @@ func (r *orderRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status
 }
 ```
 
+### Transactions across repositories
+
+A service operation that writes through several repositories (order + items +
+payments + stock) must commit or roll back as one unit. The transaction travels
+in the `context`, so services never touch `*sqlx.Tx` and repository signatures
+stay the same:
+
+```go
+// internal/repository/interface.go
+type Transactor interface {
+    WithinTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+// internal/service/order.go
+err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
+    order, err := s.lockOrder(ctx, companyID, id) // SELECT ... FOR UPDATE
+    if err != nil {
+        return err
+    }
+    // ...update the order, deduct stock; any error rolls everything back
+    return nil
+})
+```
+
+- `postgres.TxManager` implements `Transactor`; a nested `WithinTx` joins the
+  outer transaction.
+- Every repository query goes through `conn(ctx, r.db)`, which returns the
+  transaction carried by `ctx` or the pool. A repository method therefore joins
+  the caller's transaction automatically, and reads inside a transaction do not
+  borrow a second pool connection.
+- Read-modify-write goes through a locking read: `GetByIDForUpdate` (orders,
+  payments, purchase orders, stock opnames) and `StockRepository.LockForUpdate`
+  (creates the stock row at zero if missing, then locks it). These refuse to run
+  outside a transaction, where the lock would be released immediately.
+- Stock rows are locked in ascending variant order so two orders sharing
+  variants cannot deadlock.
+- Unit tests use `mocks.Transactor{}`, which calls `fn` with the same `ctx`;
+  atomicity and locking are covered by `tests/integration/concurrency_test.go`.
+
 ---
 
 ## Model & DTO

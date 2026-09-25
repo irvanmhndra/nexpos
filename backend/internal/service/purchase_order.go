@@ -16,6 +16,7 @@ type PurchaseOrderService struct {
 	stockRepo    repository.StockRepository
 	movementRepo repository.StockMovementRepository
 	variantRepo  repository.ProductVariantRepository
+	tx           repository.Transactor
 }
 
 func NewPurchaseOrderService(
@@ -24,6 +25,7 @@ func NewPurchaseOrderService(
 	stockRepo repository.StockRepository,
 	movementRepo repository.StockMovementRepository,
 	variantRepo repository.ProductVariantRepository,
+	tx repository.Transactor,
 ) *PurchaseOrderService {
 	return &PurchaseOrderService{
 		supplierRepo: supplierRepo,
@@ -31,6 +33,7 @@ func NewPurchaseOrderService(
 		stockRepo:    stockRepo,
 		movementRepo: movementRepo,
 		variantRepo:  variantRepo,
+		tx:           tx,
 	}
 }
 
@@ -266,132 +269,142 @@ func (s *PurchaseOrderService) ListPOs(ctx context.Context, companyID int64, req
 }
 
 func (s *PurchaseOrderService) ReceivePO(ctx context.Context, companyID, poID int64, req dto.ReceivePurchaseOrderRequest) (*dto.PurchaseOrderResponse, error) {
-	po, err := s.poRepo.GetByID(ctx, companyID, poID)
-	if err != nil {
-		return nil, apperror.InternalError(err)
-	}
-	if po == nil {
-		return nil, apperror.NotFound("Purchase order not found")
-	}
-	if po.Status == model.POStatusCancelled || po.Status == model.POStatusReceived {
-		return nil, apperror.BadRequest("Purchase order cannot be received in its current status")
-	}
-
-	items, err := s.poRepo.GetItems(ctx, po.ID)
-	if err != nil {
-		return nil, apperror.InternalError(err)
-	}
-
-	itemMap := make(map[int64]*model.PurchaseOrderItem)
-	for _, item := range items {
-		itemMap[item.ID] = item
-	}
-
-	allReceived := true
-	anyReceived := false
-
-	for _, receiveReq := range req.Items {
-		item, ok := itemMap[receiveReq.ItemID]
-		if !ok {
-			return nil, apperror.BadRequest("Purchase order item not found")
+	// Lock the PO and each stock row: a PO received twice concurrently, or a
+	// receipt racing a sale, must not double-count or lose stock
+	var po *model.PurchaseOrder
+	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		var err error
+		po, err = s.poRepo.GetByIDForUpdate(ctx, companyID, poID)
+		if err != nil {
+			return apperror.InternalError(err)
+		}
+		if po == nil {
+			return apperror.NotFound("Purchase order not found")
+		}
+		if po.Status == model.POStatusCancelled || po.Status == model.POStatusReceived {
+			return apperror.BadRequest("Purchase order cannot be received in its current status")
 		}
 
-		if receiveReq.ReceivedQuantity < 0 {
-			return nil, apperror.BadRequest("Received quantity cannot be negative")
+		items, err := s.poRepo.GetItems(ctx, po.ID)
+		if err != nil {
+			return apperror.InternalError(err)
 		}
 
-		totalReceived := item.ReceivedQuantity + receiveReq.ReceivedQuantity
-		if totalReceived > item.Quantity {
-			totalReceived = item.Quantity
+		itemMap := make(map[int64]*model.PurchaseOrderItem)
+		for _, item := range items {
+			itemMap[item.ID] = item
 		}
 
-		if receiveReq.ReceivedQuantity > 0 && item.ProductVariantID != nil {
-			current, err := s.stockRepo.GetByVariantAndBranch(ctx, *item.ProductVariantID, po.BranchID)
-			if err != nil {
-				return nil, apperror.InternalError(err)
+		allReceived := true
+		anyReceived := false
+
+		for _, receiveReq := range req.Items {
+			item, ok := itemMap[receiveReq.ItemID]
+			if !ok {
+				return apperror.BadRequest("Purchase order item not found")
 			}
 
-			currentQty := 0
-			minQty := 0
-			if current != nil {
-				currentQty = current.Quantity
-				minQty = current.MinQuantity
+			if receiveReq.ReceivedQuantity < 0 {
+				return apperror.BadRequest("Received quantity cannot be negative")
 			}
 
-			newQty := currentQty + receiveReq.ReceivedQuantity
-			refType := "purchase_order"
-			movement := &model.StockMovement{
-				ProductVariantID: *item.ProductVariantID,
-				BranchID:         po.BranchID,
-				Type:             model.StockMovementIn,
-				Quantity:         receiveReq.ReceivedQuantity,
-				StockBefore:      currentQty,
-				StockAfter:       newQty,
-				UnitCost:         &item.UnitCost,
-				ReferenceType:    &refType,
-				ReferenceID:      &po.ID,
-			}
-			if err := s.movementRepo.Create(ctx, movement); err != nil {
-				return nil, apperror.InternalError(err)
+			totalReceived := item.ReceivedQuantity + receiveReq.ReceivedQuantity
+			if totalReceived > item.Quantity {
+				totalReceived = item.Quantity
 			}
 
-			stock := &model.Stock{
-				ProductVariantID: *item.ProductVariantID,
-				BranchID:         po.BranchID,
-				Quantity:         newQty,
-				MinQuantity:      minQty,
-			}
-			if err := s.stockRepo.Upsert(ctx, stock); err != nil {
-				return nil, apperror.InternalError(err)
-			}
+			if receiveReq.ReceivedQuantity > 0 && item.ProductVariantID != nil {
+				current, err := s.stockRepo.LockForUpdate(ctx, *item.ProductVariantID, po.BranchID)
+				if err != nil {
+					return apperror.InternalError(err)
+				}
 
-			variant, err := s.variantRepo.GetByID(ctx, *item.ProductVariantID)
-			if err != nil {
-				return nil, apperror.InternalError(err)
-			}
-			if variant != nil && item.UnitCost > 0 {
-				variant.LastPurchaseCost = item.UnitCost
-				if err := s.variantRepo.Update(ctx, variant); err != nil {
-					return nil, apperror.InternalError(err)
+				currentQty := 0
+				minQty := 0
+				if current != nil {
+					currentQty = current.Quantity
+					minQty = current.MinQuantity
+				}
+
+				newQty := currentQty + receiveReq.ReceivedQuantity
+				refType := "purchase_order"
+				movement := &model.StockMovement{
+					ProductVariantID: *item.ProductVariantID,
+					BranchID:         po.BranchID,
+					Type:             model.StockMovementIn,
+					Quantity:         receiveReq.ReceivedQuantity,
+					StockBefore:      currentQty,
+					StockAfter:       newQty,
+					UnitCost:         &item.UnitCost,
+					ReferenceType:    &refType,
+					ReferenceID:      &po.ID,
+				}
+				if err := s.movementRepo.Create(ctx, movement); err != nil {
+					return apperror.InternalError(err)
+				}
+
+				stock := &model.Stock{
+					ProductVariantID: *item.ProductVariantID,
+					BranchID:         po.BranchID,
+					Quantity:         newQty,
+					MinQuantity:      minQty,
+				}
+				if err := s.stockRepo.Upsert(ctx, stock); err != nil {
+					return apperror.InternalError(err)
+				}
+
+				variant, err := s.variantRepo.GetByID(ctx, *item.ProductVariantID)
+				if err != nil {
+					return apperror.InternalError(err)
+				}
+				if variant != nil && item.UnitCost > 0 {
+					variant.LastPurchaseCost = item.UnitCost
+					if err := s.variantRepo.Update(ctx, variant); err != nil {
+						return apperror.InternalError(err)
+					}
 				}
 			}
+
+			item.ReceivedQuantity = totalReceived
+			if err := s.poRepo.UpdateItem(ctx, item); err != nil {
+				return apperror.InternalError(err)
+			}
+
+			if totalReceived < item.Quantity {
+				allReceived = false
+			}
+			if totalReceived > 0 {
+				anyReceived = true
+			}
 		}
 
-		item.ReceivedQuantity = totalReceived
-		if err := s.poRepo.UpdateItem(ctx, item); err != nil {
-			return nil, apperror.InternalError(err)
+		for _, item := range items {
+			if item.ReceivedQuantity < item.Quantity {
+				allReceived = false
+			}
+			if item.ReceivedQuantity > 0 {
+				anyReceived = true
+			}
 		}
 
-		if totalReceived < item.Quantity {
-			allReceived = false
+		now := time.Now()
+		if allReceived {
+			po.Status = model.POStatusReceived
+			po.ReceivedAt = &now
+		} else if anyReceived {
+			po.Status = model.POStatusPartial
 		}
-		if totalReceived > 0 {
-			anyReceived = true
+
+		if err := s.poRepo.Update(ctx, po); err != nil {
+			return apperror.InternalError(err)
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	for _, item := range items {
-		if item.ReceivedQuantity < item.Quantity {
-			allReceived = false
-		}
-		if item.ReceivedQuantity > 0 {
-			anyReceived = true
-		}
-	}
-
-	now := time.Now()
-	if allReceived {
-		po.Status = model.POStatusReceived
-		po.ReceivedAt = &now
-	} else if anyReceived {
-		po.Status = model.POStatusPartial
-	}
-
-	if err := s.poRepo.Update(ctx, po); err != nil {
-		return nil, apperror.InternalError(err)
-	}
-
-	items, _ = s.poRepo.GetItems(ctx, po.ID)
+	items, _ := s.poRepo.GetItems(ctx, po.ID)
 	po.Items = items
 
 	return toPOResponse(po), nil

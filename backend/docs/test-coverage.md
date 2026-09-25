@@ -84,7 +84,10 @@ are seeded — create those through the API/UI.
 ## Accepted behaviors (NOT bugs)
 - `auto_complete_counter_orders` gates whether a paid counter order auto-completes
   (and thus deducts stock / counts as revenue). Seeder sets it **true**.
-- Stock deducts at order **completion**, not at payment/confirm.
+- Stock deducts at order **completion**, not at payment/confirm, in the same
+  transaction as the completion.
+- Selling more than the recorded stock completes the sale and floors the stock at 0
+  (logged as a warning); the next stock opname reconciles it.
 - Read endpoints need `?branch_id=`; without it they scope to branch 0 → empty.
 
 ## Bugs found & fixed (2026-09-14 audit)
@@ -112,6 +115,18 @@ are seeded — create those through the API/UI.
   object via `storage.KeyFromURL` after a successful update/delete (never fails the
   operation). Company logo has no service update path, so it's not affected. Verified:
   `KeyFromURL` round-trip unit test; build + product tests green.
+
+- **Order and stock flows are transactional** (2026-09-26) — order create/update/
+  confirm/pay/complete/cancel/void/refund, inventory adjust, PO receive, and stock-opname
+  complete now run in one DB transaction each, locking the order/payment/PO/opname row
+  and every stock row they change (`FOR UPDATE`, stock locked in variant order).
+  Stock deduction on completion is no longer best-effort: if it fails the completion
+  rolls back. Before this, `tests/integration/concurrency_test.go` showed on `main`:
+  8 parallel sales of one variant deducted 2 units instead of 8, 8 parallel +5
+  adjustments added 15 instead of 40, and a create whose payment insert failed left
+  the order behind. All five concurrency tests pass on the fix; the double-complete
+  and double-refund cases did not reproduce on `main` in that run (narrower race) and
+  stay as regression guards.
 
 ## Still open (feature, not a test gap)
 - Payment gateway (Midtrans) — not built. Same direction as fnb (QRIS, per-tenant keys).
