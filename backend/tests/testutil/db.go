@@ -27,7 +27,19 @@ type TestDB struct {
 }
 
 // NewTestDB starts a PostgreSQL testcontainer and returns a connected TestDB.
+//
+// With TEST_DATABASE_URL set it uses that database instead, e.g. when Docker is
+// unavailable. RunMigrations drops and recreates its public schema, so point it
+// only at a throwaway database.
 func NewTestDB(ctx context.Context) (*TestDB, error) {
+	if dsn := os.Getenv("TEST_DATABASE_URL"); dsn != "" {
+		db, err := sqlx.Connect("postgres", dsn)
+		if err != nil {
+			return nil, fmt.Errorf("connect to TEST_DATABASE_URL: %w", err)
+		}
+		return &TestDB{DB: db, DSN: dsn, ctx: ctx}, nil
+	}
+
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:18-alpine",
 		postgres.WithDatabase("pos_test_db"),
@@ -203,6 +215,9 @@ func (t *TestDB) TruncateAllTables() error {
 func (t *TestDB) Close() error {
 	if err := t.DB.Close(); err != nil {
 		return err
+	}
+	if t.container == nil { // TEST_DATABASE_URL
+		return nil
 	}
 	return t.container.Terminate(t.ctx)
 }
