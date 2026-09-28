@@ -3,7 +3,7 @@ name: Benchmark Schema Migration
 on:
   workflow_dispatch:
   push:
-    branches: [master]
+    branches: [main]
     paths:
       - 'sqldump/**'
       - '.github/workflows/benchmark-migration.yml'

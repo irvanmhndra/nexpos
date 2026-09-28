@@ -114,21 +114,17 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          # Migrate with the NEW image before switching to it. Previously the new
+          # container started first and migrations ran ~5s later, so requests in
+          # between hit code that expected a schema the database didn't have yet.
+          # set -e: if the migration fails, the old container keeps serving.
           script: |
+            set -e
             cd ~/nexpos
             cp docker-compose.prod.yml docker-compose.yml
             docker compose pull nexpos-api
+            docker compose run --rm nexpos-api sh -c '/app/migrate -path /app/migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB?sslmode=$POSTGRES_SSLMODE" up'
+            echo "✅ Migrations applied: $(date)"
             docker compose up -d --remove-orphans
             docker image prune -af
             echo "✅ Stack deployed: $(date)"
-
-      - name: Run Migrations
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            sleep 5
-            docker exec nexpos_api sh -c '/app/migrate -path /app/migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB?sslmode=$POSTGRES_SSLMODE" up'
-            echo "✅ Migrations applied: $(date)"
