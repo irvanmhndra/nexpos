@@ -280,7 +280,8 @@ export const handlers = [
       }
     }
 
-    const grandTotal = subtotal - promoDiscount + totalTax;
+    // Inclusive tax is already inside the prices: report it, don't add it again
+    const grandTotal = subtotal - promoDiscount + (settings.tax_inclusive ? 0 : totalTax);
 
     return HttpResponse.json({
       success: true,
