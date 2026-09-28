@@ -20,12 +20,12 @@ const (
 // ============== Requests ==============
 
 type AdjustStockRequest struct {
-	VariantID int64                    `json:"variant_id" validate:"required"`
-	BranchID  int64                    `json:"branch_id"  validate:"required"`
-	Type      model.StockMovementType  `json:"type"       validate:"required,oneof=IN OUT ADJUST"`
-	Quantity  int                      `json:"quantity"   validate:"required,min=1"`
-	UnitCost  *float64                 `json:"unit_cost"`
-	Note      *string                  `json:"note"`
+	VariantID int64                   `json:"variant_id" validate:"required"`
+	BranchID  int64                   `json:"branch_id"  validate:"required"`
+	Type      model.StockMovementType `json:"type"       validate:"required,oneof=IN OUT ADJUST"`
+	Quantity  int                     `json:"quantity"   validate:"required,min=1"`
+	UnitCost  *float64                `json:"unit_cost"`
+	Note      *string                 `json:"note"`
 }
 
 type UpdateMinStockRequest struct {

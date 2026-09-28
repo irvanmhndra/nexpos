@@ -53,19 +53,19 @@ type POItemResponse struct {
 }
 
 type PurchaseOrderResponse struct {
-	ID          int64           `json:"id"`
-	BranchID    int64           `json:"branch_id"`
-	SupplierID  int64           `json:"supplier_id"`
-	PONumber    string          `json:"po_number"`
-	Status      string          `json:"status"`
-	Notes       *string         `json:"notes"`
-	TotalAmount float64         `json:"total_amount"`
-	OrderedAt   *time.Time      `json:"ordered_at"`
-	ReceivedAt  *time.Time      `json:"received_at"`
-	CancelledAt *time.Time      `json:"cancelled_at"`
+	ID          int64             `json:"id"`
+	BranchID    int64             `json:"branch_id"`
+	SupplierID  int64             `json:"supplier_id"`
+	PONumber    string            `json:"po_number"`
+	Status      string            `json:"status"`
+	Notes       *string           `json:"notes"`
+	TotalAmount float64           `json:"total_amount"`
+	OrderedAt   *time.Time        `json:"ordered_at"`
+	ReceivedAt  *time.Time        `json:"received_at"`
+	CancelledAt *time.Time        `json:"cancelled_at"`
 	Items       []*POItemResponse `json:"items,omitempty"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	CreatedAt   time.Time         `json:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
 }
 
 type PurchaseOrderListResponse struct {

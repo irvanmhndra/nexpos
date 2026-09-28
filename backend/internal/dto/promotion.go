@@ -35,12 +35,12 @@ type UpdatePromotionRequest struct {
 }
 
 type ListPromotionRequest struct {
-	Page     int     `query:"page"`
-	PerPage  int     `query:"per_page"`
-	Search   string  `query:"search"`
-	IsActive *bool   `query:"is_active"`
-	Type     string  `query:"type"`
-	Status   string  `query:"status"` // inactive | scheduled | active | expired
+	Page     int    `query:"page"`
+	PerPage  int    `query:"per_page"`
+	Search   string `query:"search"`
+	IsActive *bool  `query:"is_active"`
+	Type     string `query:"type"`
+	Status   string `query:"status"` // inactive | scheduled | active | expired
 }
 
 // ============== Responses ==============
@@ -60,9 +60,9 @@ type PromotionResponse struct {
 	Priority      int        `json:"priority"`
 	IsActive      bool       `json:"is_active"`
 	// Derived lifecycle status: inactive | scheduled | active | expired.
-	Status        string     `json:"status"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type PromotionListResponse struct {

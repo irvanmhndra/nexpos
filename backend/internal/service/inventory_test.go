@@ -348,8 +348,8 @@ func TestInventoryService_ListInventory_LowStockStatus(t *testing.T) {
 	ctx := context.Background()
 
 	rows := []*repository.InventoryRow{
-		{ProductVariantID: 1, CurrentStock: 2, MinStock: 5}, // current <= min → low
-		{ProductVariantID: 2, CurrentStock: 0, MinStock: 5}, // out of stock
+		{ProductVariantID: 1, CurrentStock: 2, MinStock: 5},  // current <= min → low
+		{ProductVariantID: 2, CurrentStock: 0, MinStock: 5},  // out of stock
 		{ProductVariantID: 3, CurrentStock: 10, MinStock: 5}, // normal
 	}
 

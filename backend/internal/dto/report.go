@@ -82,13 +82,13 @@ type HourlySalesResponse struct {
 
 // Comparison with previous period
 type ReportComparisonResponse struct {
-	Current          *ReportSummaryResponse `json:"current"`
-	Previous         *ReportSummaryResponse `json:"previous"`
-	RevenueChange    float64                `json:"revenue_change"`
-	OrdersChange     float64                `json:"orders_change"`
-	AvgOrderChange   float64                `json:"avg_order_change"`
-	ItemsSoldChange  float64                `json:"items_sold_change"`
-	CustomerChange   float64                `json:"customer_change"`
+	Current         *ReportSummaryResponse `json:"current"`
+	Previous        *ReportSummaryResponse `json:"previous"`
+	RevenueChange   float64                `json:"revenue_change"`
+	OrdersChange    float64                `json:"orders_change"`
+	AvgOrderChange  float64                `json:"avg_order_change"`
+	ItemsSoldChange float64                `json:"items_sold_change"`
+	CustomerChange  float64                `json:"customer_change"`
 }
 
 // Date range helper

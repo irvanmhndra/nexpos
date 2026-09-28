@@ -274,11 +274,11 @@ func (s *DailySettlementService) validateBranch(ctx context.Context, companyID, 
 }
 
 type breakdownResult struct {
-	byMethod       []*dto.SettlementMethodBreakdown
-	totalSales     float64
-	totalRefunds   float64
-	totalExpenses  float64
-	totalExpected  float64
+	byMethod      []*dto.SettlementMethodBreakdown
+	totalSales    float64
+	totalRefunds  float64
+	totalExpenses float64
+	totalExpected float64
 }
 
 func (s *DailySettlementService) computeBreakdown(ctx context.Context, companyID, branchID int64, date string) (*breakdownResult, error) {

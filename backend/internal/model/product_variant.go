@@ -7,17 +7,17 @@ import (
 )
 
 type ProductVariant struct {
-	ID               int64     `db:"id" json:"id"`
-	ProductID        int64     `db:"product_id" json:"product_id"`
-	SKU              string    `db:"sku" json:"sku"`
-	Barcode          *string   `db:"barcode" json:"barcode"`
-	Name             string    `db:"name" json:"name"`
-	ProductName      string    `db:"product_name" json:"-"`
-	Attributes       JSONMap   `db:"attributes" json:"attributes"`
-	Price            float64   `db:"price" json:"price"`
-	StandardCost     float64   `db:"standard_cost" json:"standard_cost"`
-	LastPurchaseCost float64   `db:"last_purchase_cost" json:"last_purchase_cost"`
-	IsDefault        bool      `db:"is_default" json:"is_default"`
+	ID               int64      `db:"id" json:"id"`
+	ProductID        int64      `db:"product_id" json:"product_id"`
+	SKU              string     `db:"sku" json:"sku"`
+	Barcode          *string    `db:"barcode" json:"barcode"`
+	Name             string     `db:"name" json:"name"`
+	ProductName      string     `db:"product_name" json:"-"`
+	Attributes       JSONMap    `db:"attributes" json:"attributes"`
+	Price            float64    `db:"price" json:"price"`
+	StandardCost     float64    `db:"standard_cost" json:"standard_cost"`
+	LastPurchaseCost float64    `db:"last_purchase_cost" json:"last_purchase_cost"`
+	IsDefault        bool       `db:"is_default" json:"is_default"`
 	IsActive         bool       `db:"is_active" json:"is_active"`
 	SalePrice        *float64   `db:"sale_price" json:"sale_price,omitempty"`
 	SaleStart        *time.Time `db:"sale_start" json:"sale_start,omitempty"`

@@ -51,7 +51,7 @@ func TestDailySettlementService_Report_Success(t *testing.T) {
 	resp, err := s.svc.Report(ctx, companyID, dto.DailySettlementReportRequest{BranchID: branchID, Date: date})
 
 	require.NoError(t, err)
-	assert.Equal(t, 2_300_000.0, resp.TotalSales)         // 1.5M + 0.8M
+	assert.Equal(t, 2_300_000.0, resp.TotalSales) // 1.5M + 0.8M
 	assert.Equal(t, 50_000.0, resp.TotalRefunds)
 	assert.Equal(t, 100_000.0, resp.TotalExpenses)
 	// expected_cash = 1.5M - 50k - 100k = 1.35M, qris = 800k, others = 0

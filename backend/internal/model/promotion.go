@@ -8,7 +8,7 @@ type Promotion struct {
 	Code          string     `db:"code" json:"code"`
 	Name          string     `db:"name" json:"name"`
 	Description   *string    `db:"description" json:"description,omitempty"`
-	Type          string     `db:"type" json:"type"` // discount | bundle | conditional
+	Type          string     `db:"type" json:"type"`                             // discount | bundle | conditional
 	DiscountType  *string    `db:"discount_type" json:"discount_type,omitempty"` // percentage | fixed
 	DiscountValue *float64   `db:"discount_value" json:"discount_value,omitempty"`
 	MinPurchase   *float64   `db:"min_purchase" json:"min_purchase,omitempty"`

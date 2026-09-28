@@ -392,81 +392,81 @@ func TestBranchService_List_WithFilters(t *testing.T) {
 
 func TestBranchService_List_Pagination(t *testing.T) {
 	tests := []struct {
-		name           string
-		page           int
-		perPage        int
-		totalRecords   int
-		expectedPage   int
+		name            string
+		page            int
+		perPage         int
+		totalRecords    int
+		expectedPage    int
 		expectedPerPage int
-		expectedOffset int
-		hasNext        bool
-		hasPrev        bool
+		expectedOffset  int
+		hasNext         bool
+		hasPrev         bool
 	}{
 		{
-			name:           "First page with results",
-			page:           1,
-			perPage:        10,
-			totalRecords:   25,
-			expectedPage:   1,
+			name:            "First page with results",
+			page:            1,
+			perPage:         10,
+			totalRecords:    25,
+			expectedPage:    1,
 			expectedPerPage: 10,
-			expectedOffset: 0,
-			hasNext:        true,
-			hasPrev:        false,
+			expectedOffset:  0,
+			hasNext:         true,
+			hasPrev:         false,
 		},
 		{
-			name:           "Second page",
-			page:           2,
-			perPage:        10,
-			totalRecords:   25,
-			expectedPage:   2,
+			name:            "Second page",
+			page:            2,
+			perPage:         10,
+			totalRecords:    25,
+			expectedPage:    2,
 			expectedPerPage: 10,
-			expectedOffset: 10,
-			hasNext:        true,
-			hasPrev:        true,
+			expectedOffset:  10,
+			hasNext:         true,
+			hasPrev:         true,
 		},
 		{
-			name:           "Last page",
-			page:           3,
-			perPage:        10,
-			totalRecords:   25,
-			expectedPage:   3,
+			name:            "Last page",
+			page:            3,
+			perPage:         10,
+			totalRecords:    25,
+			expectedPage:    3,
 			expectedPerPage: 10,
-			expectedOffset: 20,
-			hasNext:        false,
-			hasPrev:        true,
+			expectedOffset:  20,
+			hasNext:         false,
+			hasPrev:         true,
 		},
 		{
-			name:           "Default page (invalid 0)",
-			page:           0,
-			perPage:        20,
-			totalRecords:   10,
-			expectedPage:   1,
+			name:            "Default page (invalid 0)",
+			page:            0,
+			perPage:         20,
+			totalRecords:    10,
+			expectedPage:    1,
 			expectedPerPage: 20,
-			expectedOffset: 0,
-			hasNext:        false,
-			hasPrev:        false,
+			expectedOffset:  0,
+			hasNext:         false,
+			hasPrev:         false,
 		},
 		{
-			name:           "Default perPage (invalid 0)",
-			page:           1,
-			perPage:        0,
-			totalRecords:   10,
-			expectedPage:   1,
+			name:            "Default perPage (invalid 0)",
+			page:            1,
+			perPage:         0,
+			totalRecords:    10,
+			expectedPage:    1,
 			expectedPerPage: 20,
-			expectedOffset: 0,
-			hasNext:        false,
-			hasPrev:        false,
+			expectedOffset:  0,
+			hasNext:         false,
+			hasPrev:         false,
 		},
 		{
-			name:           "Max perPage (over 100)",
-			page:           1,
-			perPage:        150,
-			totalRecords:   200,
-			expectedPage:   1,
+			name:            "Max perPage (over 100)",
+			page:            1,
+			perPage:         150,
+			totalRecords:    200,
+			expectedPage:    1,
 			expectedPerPage: 100,
-			expectedOffset: 0,
-			hasNext:        true,
-			hasPrev:        false,
+			expectedOffset:  0,
+			hasNext:         true,
+			hasPrev:         false,
 		},
 	}
 

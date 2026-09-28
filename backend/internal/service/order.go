@@ -16,17 +16,17 @@ import (
 )
 
 type OrderService struct {
-	orderRepo        repository.OrderRepository
-	orderItemRepo    repository.OrderItemRepository
-	paymentRepo      repository.PaymentRepository
-	variantRepo      repository.ProductVariantRepository
-	customerRepo     repository.CustomerRepository
-	userRepo         repository.UserRepository
-	settingsRepo     repository.CompanySettingsRepository
-	stockRepo        repository.StockRepository
-	movementRepo     repository.StockMovementRepository
-	promotionRepo    repository.PromotionRepository
-	tx               repository.Transactor
+	orderRepo     repository.OrderRepository
+	orderItemRepo repository.OrderItemRepository
+	paymentRepo   repository.PaymentRepository
+	variantRepo   repository.ProductVariantRepository
+	customerRepo  repository.CustomerRepository
+	userRepo      repository.UserRepository
+	settingsRepo  repository.CompanySettingsRepository
+	stockRepo     repository.StockRepository
+	movementRepo  repository.StockMovementRepository
+	promotionRepo repository.PromotionRepository
+	tx            repository.Transactor
 }
 
 func NewOrderService(

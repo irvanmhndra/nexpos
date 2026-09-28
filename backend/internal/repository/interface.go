@@ -53,13 +53,13 @@ type ShiftRepository interface {
 
 // ShiftListParams for filtering shifts
 type ShiftListParams struct {
-	BranchID   *int64
-	CashierID  *int64
-	Status     string
-	DateFrom   string
-	DateTo     string
-	Limit      int
-	Offset     int
+	BranchID  *int64
+	CashierID *int64
+	Status    string
+	DateFrom  string
+	DateTo    string
+	Limit     int
+	Offset    int
 }
 
 type ExpenseCategoryRepository interface {

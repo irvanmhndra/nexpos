@@ -125,18 +125,18 @@ type AppliedPromotionDTO struct {
 }
 
 type OrderResponse struct {
-	ID            int64   `json:"id"`
-	OrderNo       string  `json:"order_no"`
-	CustomerID    *int64  `json:"customer_id"`
-	CustomerName  *string `json:"customer_name,omitempty"`
-	CashierID     int64   `json:"cashier_id"`
-	CashierName   string  `json:"cashier_name,omitempty"`
-	Status        string  `json:"status"`
-	TotalAmount   float64 `json:"total_amount"`
-	TotalDiscount float64 `json:"total_discount"`
-	TotalTax      float64 `json:"total_tax"`
-	GrandTotal    float64 `json:"grand_total"`
-	Notes         *string `json:"notes"`
+	ID               int64                `json:"id"`
+	OrderNo          string               `json:"order_no"`
+	CustomerID       *int64               `json:"customer_id"`
+	CustomerName     *string              `json:"customer_name,omitempty"`
+	CashierID        int64                `json:"cashier_id"`
+	CashierName      string               `json:"cashier_name,omitempty"`
+	Status           string               `json:"status"`
+	TotalAmount      float64              `json:"total_amount"`
+	TotalDiscount    float64              `json:"total_discount"`
+	TotalTax         float64              `json:"total_tax"`
+	GrandTotal       float64              `json:"grand_total"`
+	Notes            *string              `json:"notes"`
 	AppliedPromotion *AppliedPromotionDTO `json:"applied_promotion,omitempty"`
 
 	// Lifecycle fields

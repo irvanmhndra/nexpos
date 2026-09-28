@@ -20,17 +20,17 @@ import (
 // =======================
 
 type orderTestSetup struct {
-	svc         *OrderService
-	orderRepo   *repoMocks.MockOrderRepository
-	itemRepo    *repoMocks.MockOrderItemRepository
-	paymentRepo *repoMocks.MockPaymentRepository
-	variantRepo *repoMocks.MockProductVariantRepository
+	svc          *OrderService
+	orderRepo    *repoMocks.MockOrderRepository
+	itemRepo     *repoMocks.MockOrderItemRepository
+	paymentRepo  *repoMocks.MockPaymentRepository
+	variantRepo  *repoMocks.MockProductVariantRepository
 	customerRepo *repoMocks.MockCustomerRepository
-	userRepo    *repoMocks.MockUserRepository
+	userRepo     *repoMocks.MockUserRepository
 	settingsRepo *repoMocks.MockCompanySettingsRepository
-	stockRepo   *repoMocks.MockStockRepository
+	stockRepo    *repoMocks.MockStockRepository
 	movementRepo *repoMocks.MockStockMovementRepository
-	promoRepo   *repoMocks.MockPromotionRepository
+	promoRepo    *repoMocks.MockPromotionRepository
 }
 
 func setupOrderTest(t *testing.T) *orderTestSetup {
@@ -80,15 +80,15 @@ func testVariant(id int64, price float64) *model.ProductVariant {
 
 func testOrder(id, companyID, branchID int64, status string) *model.Order {
 	return &model.Order{
-		ID:            id,
-		CompanyID:     companyID,
-		BranchID:      branchID,
-		OrderNo:       "ORD-001",
-		CashierID:     99,
-		Status:        status,
-		PaymentStatus: model.PaymentStatusUnpaid,
+		ID:              id,
+		CompanyID:       companyID,
+		BranchID:        branchID,
+		OrderNo:         "ORD-001",
+		CashierID:       99,
+		Status:          status,
+		PaymentStatus:   model.PaymentStatusUnpaid,
 		FulfillmentType: model.FulfillmentTypeCounter,
-		GrandTotal:    100_000,
+		GrandTotal:      100_000,
 	}
 }
 
