@@ -124,12 +124,12 @@ func (s *OrderService) Create(ctx context.Context, companyID, branchID, cashierI
 			return nil, apperror.BadRequest("Product variant is required")
 		}
 
-		variant, err := s.variantRepo.GetByID(ctx, *itemInput.ProductVariantID)
+		variant, err := s.variantRepo.GetByIDForCompany(ctx, companyID, *itemInput.ProductVariantID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, apperror.NotFound("Product variant not found")
-			}
 			return nil, apperror.InternalError(err)
+		}
+		if variant == nil {
+			return nil, apperror.NotFound("Product variant not found")
 		}
 
 		// Check stock availability
@@ -272,12 +272,12 @@ func (s *OrderService) Preview(ctx context.Context, companyID, branchID int64, r
 			return nil, apperror.BadRequest("Product variant is required")
 		}
 
-		variant, err := s.variantRepo.GetByID(ctx, *itemInput.ProductVariantID)
+		variant, err := s.variantRepo.GetByIDForCompany(ctx, companyID, *itemInput.ProductVariantID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, apperror.NotFound("Product variant not found")
-			}
 			return nil, apperror.InternalError(err)
+		}
+		if variant == nil {
+			return nil, apperror.NotFound("Product variant not found")
 		}
 
 		unitPrice := effectivePrice(variant)
@@ -606,12 +606,12 @@ func (s *OrderService) UpdateOrder(ctx context.Context, companyID, id int64, req
 					return apperror.BadRequest("Product variant is required")
 				}
 
-				variant, err := s.variantRepo.GetByID(ctx, *itemInput.ProductVariantID)
+				variant, err := s.variantRepo.GetByIDForCompany(ctx, companyID, *itemInput.ProductVariantID)
 				if err != nil {
-					if errors.Is(err, sql.ErrNoRows) {
-						return apperror.NotFound("Product variant not found")
-					}
 					return apperror.InternalError(err)
+				}
+				if variant == nil {
+					return apperror.NotFound("Product variant not found")
 				}
 
 				unitPrice := effectivePrice(variant)

@@ -52,6 +52,20 @@ func (r *ProductVariantRepository) GetByID(ctx context.Context, id int64) (*mode
 	return &variant, nil
 }
 
+func (r *ProductVariantRepository) GetByIDForCompany(ctx context.Context, companyID, id int64) (*model.ProductVariant, error) {
+	var variant model.ProductVariant
+	query := `SELECT pv.*, p.name AS product_name FROM product_variants pv JOIN products p ON p.id = pv.product_id
+		WHERE pv.id = $1 AND p.company_id = $2`
+	err := conn(ctx, r.db).GetContext(ctx, &variant, query, id, companyID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &variant, nil
+}
+
 func (r *ProductVariantRepository) GetByProductID(ctx context.Context, productID int64) ([]*model.ProductVariant, error) {
 	var variants []*model.ProductVariant
 	query := `SELECT * FROM product_variants WHERE product_id = $1 ORDER BY is_default DESC, name ASC`

@@ -39,6 +39,15 @@ func (m *MockProductVariantRepository) GetByID(ctx context.Context, id int64) (*
 	return r0, ret.Error(1)
 }
 
+func (m *MockProductVariantRepository) GetByIDForCompany(ctx context.Context, companyID, id int64) (*model.ProductVariant, error) {
+	ret := m.Called(ctx, companyID, id)
+	var r0 *model.ProductVariant
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*model.ProductVariant)
+	}
+	return r0, ret.Error(1)
+}
+
 func (m *MockProductVariantRepository) GetByProductID(ctx context.Context, productID int64) ([]*model.ProductVariant, error) {
 	ret := m.Called(ctx, productID)
 	var r0 []*model.ProductVariant
@@ -105,6 +114,10 @@ func (e *MockProductVariantRepositoryExpectation) Create(ctx context.Context, va
 
 func (e *MockProductVariantRepositoryExpectation) GetByID(ctx context.Context, id int64) *mock.Call {
 	return e.mock.On("GetByID", ctx, id)
+}
+
+func (e *MockProductVariantRepositoryExpectation) GetByIDForCompany(ctx context.Context, companyID, id int64) *mock.Call {
+	return e.mock.On("GetByIDForCompany", ctx, companyID, id)
 }
 
 func (e *MockProductVariantRepositoryExpectation) GetByProductID(ctx context.Context, productID int64) *mock.Call {

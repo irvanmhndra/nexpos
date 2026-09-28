@@ -133,7 +133,7 @@ func TestOrderService_Create_Success(t *testing.T) {
 
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(defaultSettings(), nil).Once()
 	s.orderRepo.EXPECT().GenerateOrderNo(ctx, companyID, branchID).Return("ORD-001", nil).Once()
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(variant, nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, companyID, variantID).Return(variant, nil).Once()
 	s.stockRepo.EXPECT().GetByVariantAndBranch(ctx, variantID, branchID).
 		Return(&model.Stock{Quantity: 10}, nil).Once()
 	s.promoRepo.On("GetActivePromotions", ctx, companyID, mock.AnythingOfType("time.Time")).
@@ -181,7 +181,7 @@ func TestOrderService_Create_InsufficientStock(t *testing.T) {
 
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(defaultSettings(), nil).Once()
 	s.orderRepo.EXPECT().GenerateOrderNo(ctx, companyID, branchID).Return("ORD-001", nil).Once()
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariant(variantID, 50_000), nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, companyID, variantID).Return(testVariant(variantID, 50_000), nil).Once()
 	s.stockRepo.EXPECT().GetByVariantAndBranch(ctx, variantID, branchID).
 		Return(&model.Stock{Quantity: 3}, nil).Once()
 
@@ -207,7 +207,7 @@ func TestOrderService_Create_VariantNotFound(t *testing.T) {
 
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(defaultSettings(), nil).Once()
 	s.orderRepo.EXPECT().GenerateOrderNo(ctx, companyID, branchID).Return("ORD-001", nil).Once()
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(nil, sql.ErrNoRows).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, companyID, variantID).Return(nil, nil).Once()
 
 	_, err := s.svc.Create(ctx, companyID, branchID, 99, req)
 
@@ -254,7 +254,7 @@ func TestOrderService_Create_WithTax_Exclusive(t *testing.T) {
 	variant := testVariant(variantID, 100_000)
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(settings, nil).Once()
 	s.orderRepo.EXPECT().GenerateOrderNo(ctx, companyID, branchID).Return("ORD-001", nil).Once()
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(variant, nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, companyID, variantID).Return(variant, nil).Once()
 	s.stockRepo.EXPECT().GetByVariantAndBranch(ctx, variantID, branchID).
 		Return(&model.Stock{Quantity: 5}, nil).Once()
 	s.promoRepo.On("GetActivePromotions", ctx, companyID, mock.AnythingOfType("time.Time")).
@@ -294,7 +294,7 @@ func TestOrderService_Create_WithTax_Inclusive(t *testing.T) {
 	variant := testVariant(variantID, 110_000)
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(settings, nil).Once()
 	s.orderRepo.EXPECT().GenerateOrderNo(ctx, companyID, branchID).Return("ORD-001", nil).Once()
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(variant, nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, companyID, variantID).Return(variant, nil).Once()
 	s.stockRepo.EXPECT().GetByVariantAndBranch(ctx, variantID, branchID).
 		Return(&model.Stock{Quantity: 5}, nil).Once()
 	s.promoRepo.On("GetActivePromotions", ctx, companyID, mock.AnythingOfType("time.Time")).
@@ -323,7 +323,7 @@ func TestOrderService_Preview_WithTax_Inclusive(t *testing.T) {
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(&model.CompanySettings{
 		TaxEnabled: true, TaxInclusive: true, TaxRate: money(10),
 	}, nil).Once()
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariant(variantID, 110_000), nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, companyID, variantID).Return(testVariant(variantID, 110_000), nil).Once()
 	s.promoRepo.On("GetActivePromotions", ctx, companyID, mock.AnythingOfType("time.Time")).
 		Return(([]*model.Promotion)(nil), nil).Once()
 
@@ -382,7 +382,7 @@ func TestOrderService_Create_WithPromoCode(t *testing.T) {
 	variant := testVariant(variantID, 100_000)
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(defaultSettings(), nil).Once()
 	s.orderRepo.EXPECT().GenerateOrderNo(ctx, companyID, branchID).Return("ORD-001", nil).Once()
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(variant, nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, companyID, variantID).Return(variant, nil).Once()
 	s.stockRepo.EXPECT().GetByVariantAndBranch(ctx, variantID, branchID).
 		Return(&model.Stock{Quantity: 5}, nil).Once()
 	s.promoRepo.EXPECT().GetByCode(ctx, companyID, code).Return(promo, nil).Once()
@@ -417,7 +417,7 @@ func TestOrderService_Preview_Success(t *testing.T) {
 	}
 
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(defaultSettings(), nil).Once()
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariant(variantID, 50_000), nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, companyID, variantID).Return(testVariant(variantID, 50_000), nil).Once()
 	s.promoRepo.On("GetActivePromotions", ctx, companyID, mock.AnythingOfType("time.Time")).
 		Return(([]*model.Promotion)(nil), nil).Once()
 

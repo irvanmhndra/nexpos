@@ -187,6 +187,17 @@ func (s *PurchaseOrderService) CreatePO(ctx context.Context, companyID, branchID
 	var totalAmount decimal.Decimal
 	items := make([]*model.PurchaseOrderItem, len(req.Items))
 	for i, itemReq := range req.Items {
+		// Receiving stocks the variant and updates its purchase cost, so it
+		// must belong to this company
+		if itemReq.ProductVariantID != nil {
+			variant, err := s.variantRepo.GetByIDForCompany(ctx, companyID, *itemReq.ProductVariantID)
+			if err != nil {
+				return nil, apperror.InternalError(err)
+			}
+			if variant == nil {
+				return nil, apperror.NotFound("Product variant not found")
+			}
+		}
 		subtotal := itemReq.UnitCost.Mul(decimal.NewFromInt(int64(itemReq.Quantity)))
 		totalAmount = totalAmount.Add(subtotal)
 		items[i] = &model.PurchaseOrderItem{
@@ -354,7 +365,7 @@ func (s *PurchaseOrderService) ReceivePO(ctx context.Context, companyID, poID in
 					return apperror.InternalError(err)
 				}
 
-				variant, err := s.variantRepo.GetByID(ctx, *item.ProductVariantID)
+				variant, err := s.variantRepo.GetByIDForCompany(ctx, companyID, *item.ProductVariantID)
 				if err != nil {
 					return apperror.InternalError(err)
 				}

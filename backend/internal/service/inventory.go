@@ -36,7 +36,7 @@ func NewInventoryService(
 
 func (s *InventoryService) AdjustStock(ctx context.Context, companyID int64, createdBy *int64, req dto.AdjustStockRequest) error {
 	// Validate variant exists
-	variant, err := s.variantRepo.GetByID(ctx, req.VariantID)
+	variant, err := s.variantRepo.GetByIDForCompany(ctx, companyID, req.VariantID)
 	if err != nil {
 		return apperror.InternalError(err)
 	}
@@ -118,7 +118,7 @@ func (s *InventoryService) AdjustStock(ctx context.Context, companyID int64, cre
 }
 
 func (s *InventoryService) UpdateMinStock(ctx context.Context, companyID, variantID, branchID int64, req dto.UpdateMinStockRequest) error {
-	variant, err := s.variantRepo.GetByID(ctx, variantID)
+	variant, err := s.variantRepo.GetByIDForCompany(ctx, companyID, variantID)
 	if err != nil {
 		return apperror.InternalError(err)
 	}

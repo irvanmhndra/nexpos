@@ -191,6 +191,10 @@ type ProductRepository interface {
 type ProductVariantRepository interface {
 	Create(ctx context.Context, variant *model.ProductVariant) error
 	GetByID(ctx context.Context, id int64) (*model.ProductVariant, error)
+	// GetByIDForCompany is GetByID limited to variants of companyID's products;
+	// use it for any variant ID that comes from a request. Returns nil, nil
+	// when there is no such variant in that company.
+	GetByIDForCompany(ctx context.Context, companyID, id int64) (*model.ProductVariant, error)
 	GetByProductID(ctx context.Context, productID int64) ([]*model.ProductVariant, error)
 	GetBySKU(ctx context.Context, sku string) (*model.ProductVariant, error)
 	Update(ctx context.Context, variant *model.ProductVariant) error

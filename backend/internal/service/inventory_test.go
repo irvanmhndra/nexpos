@@ -62,7 +62,7 @@ func TestInventoryService_AdjustStock_In_Success(t *testing.T) {
 		Quantity:  10,
 	}
 
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, companyID, variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, companyID), nil).Once()
 	s.stockRepo.EXPECT().LockForUpdate(ctx, variantID, branchID).
 		Return(&model.Stock{Quantity: 5, MinQuantity: 2}, nil).Once()
@@ -93,7 +93,7 @@ func TestInventoryService_AdjustStock_Out_Success(t *testing.T) {
 		Quantity:  3,
 	}
 
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, companyID, variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, companyID), nil).Once()
 	s.stockRepo.EXPECT().LockForUpdate(ctx, variantID, branchID).
 		Return(&model.Stock{Quantity: 10}, nil).Once()
@@ -121,7 +121,7 @@ func TestInventoryService_AdjustStock_Adjust_Success(t *testing.T) {
 		Quantity:  25,
 	}
 
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, companyID, variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, companyID), nil).Once()
 	s.stockRepo.EXPECT().LockForUpdate(ctx, variantID, branchID).
 		Return(&model.Stock{Quantity: 10}, nil).Once()
@@ -150,7 +150,7 @@ func TestInventoryService_AdjustStock_NoExistingStock(t *testing.T) {
 		Quantity:  5,
 	}
 
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, companyID, variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, companyID), nil).Once()
 	s.stockRepo.EXPECT().LockForUpdate(ctx, variantID, branchID).
 		Return(nil, nil).Once() // no stock record yet
@@ -178,7 +178,7 @@ func TestInventoryService_AdjustStock_InsufficientStock(t *testing.T) {
 		Quantity:  20,
 	}
 
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, companyID, variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, companyID), nil).Once()
 	s.stockRepo.EXPECT().LockForUpdate(ctx, variantID, branchID).
 		Return(&model.Stock{Quantity: 5}, nil).Once()
@@ -196,7 +196,7 @@ func TestInventoryService_AdjustStock_VariantNotFound(t *testing.T) {
 
 	req := dto.AdjustStockRequest{VariantID: 99, BranchID: 2, Type: model.StockMovementIn, Quantity: 1}
 
-	s.variantRepo.EXPECT().GetByID(ctx, int64(99)).Return(nil, nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, int64(1), int64(99)).Return(nil, nil).Once()
 
 	err := s.svc.AdjustStock(ctx, 1, nil, req)
 
@@ -211,7 +211,7 @@ func TestInventoryService_AdjustStock_BranchNotFound(t *testing.T) {
 
 	req := dto.AdjustStockRequest{VariantID: variantID, BranchID: branchID, Type: model.StockMovementIn, Quantity: 1}
 
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, int64(1), variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(nil, nil).Once()
 
 	err := s.svc.AdjustStock(ctx, 1, nil, req)
@@ -227,7 +227,7 @@ func TestInventoryService_AdjustStock_BranchWrongCompany(t *testing.T) {
 
 	req := dto.AdjustStockRequest{VariantID: variantID, BranchID: branchID, Type: model.StockMovementIn, Quantity: 1}
 
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, int64(1), variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, 999), nil).Once() // different company
 
 	err := s.svc.AdjustStock(ctx, 1, nil, req)
@@ -245,7 +245,7 @@ func TestInventoryService_AdjustStock_InvalidType(t *testing.T) {
 
 	req := dto.AdjustStockRequest{VariantID: variantID, BranchID: branchID, Type: "INVALID", Quantity: 1}
 
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, int64(1), variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, 1), nil).Once()
 	s.stockRepo.EXPECT().LockForUpdate(ctx, variantID, branchID).Return(nil, nil).Once()
 
@@ -266,7 +266,7 @@ func TestInventoryService_UpdateMinStock_Success(t *testing.T) {
 
 	req := dto.UpdateMinStockRequest{MinQuantity: 10}
 
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, companyID, variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, companyID), nil).Once()
 	s.stockRepo.EXPECT().UpdateMinQuantity(ctx, variantID, branchID, 10).Return(nil).Once()
 
@@ -279,7 +279,7 @@ func TestInventoryService_UpdateMinStock_VariantNotFound(t *testing.T) {
 	s := setupInventoryTest(t)
 	ctx := context.Background()
 
-	s.variantRepo.EXPECT().GetByID(ctx, int64(99)).Return(nil, nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, int64(1), int64(99)).Return(nil, nil).Once()
 
 	err := s.svc.UpdateMinStock(ctx, 1, 99, 2, dto.UpdateMinStockRequest{MinQuantity: 5})
 
@@ -292,7 +292,7 @@ func TestInventoryService_UpdateMinStock_BranchWrongCompany(t *testing.T) {
 	ctx := context.Background()
 	variantID, branchID := int64(5), int64(2)
 
-	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariantBasic(variantID), nil).Once()
+	s.variantRepo.EXPECT().GetByIDForCompany(ctx, int64(1), variantID).Return(testVariantBasic(variantID), nil).Once()
 	s.branchRepo.EXPECT().GetByID(ctx, branchID).Return(testBranch(branchID, 999), nil).Once()
 
 	err := s.svc.UpdateMinStock(ctx, 1, variantID, branchID, dto.UpdateMinStockRequest{MinQuantity: 5})
