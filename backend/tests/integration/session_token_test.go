@@ -56,7 +56,7 @@ func TestMigration036_KeepsExistingSessionsValid(t *testing.T) {
 	m, err := migrate.New("file://../../migrations", testEnv.TestDB.DSN)
 	require.NoError(t, err)
 	defer func() { _, _ = m.Close() }()
-	require.NoError(t, m.Steps(-1)) // back to raw-token columns
+	require.NoError(t, m.Migrate(35)) // back to raw-token columns, before 000036
 
 	const access, refresh = "pre-upgrade-access-token", "pre-upgrade-refresh-token"
 	_, err = testEnv.DB.Exec(`
@@ -66,7 +66,7 @@ func TestMigration036_KeepsExistingSessionsValid(t *testing.T) {
 		auth.UserID, auth.CompanyID, auth.BranchID, access, refresh)
 	require.NoError(t, err)
 
-	require.NoError(t, m.Steps(1)) // apply 000036
+	require.NoError(t, m.Up()) // apply 000036 and every later migration
 
 	var stored string
 	require.NoError(t, testEnv.DB.Get(&stored,
