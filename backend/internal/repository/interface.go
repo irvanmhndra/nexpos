@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/irvanmhndra/nexpos-api/internal/model"
+	"github.com/shopspring/decimal"
 )
 
 // Transactor runs fn atomically. Repository calls made with the ctx that fn
@@ -76,7 +77,7 @@ type ExpenseRepository interface {
 	List(ctx context.Context, companyID int64, params *ExpenseListParams) ([]*model.Expense, int, error)
 	Update(ctx context.Context, expense *model.Expense) error
 	Delete(ctx context.Context, companyID, id int64) error
-	GetTotalByDateRange(ctx context.Context, companyID int64, branchID *int64, from, to string) (float64, error)
+	GetTotalByDateRange(ctx context.Context, companyID int64, branchID *int64, from, to string) (decimal.Decimal, error)
 }
 
 // ExpenseListParams for filtering expenses
@@ -242,9 +243,9 @@ type PaymentRepository interface {
 	GetByOrderID(ctx context.Context, orderID int64) ([]*model.Payment, error)
 	Update(ctx context.Context, payment *model.Payment) error
 	DeleteByOrderID(ctx context.Context, orderID int64) error
-	GetTotalPaidByOrderID(ctx context.Context, orderID int64) (float64, error)
-	GetTotalRefundedByOrderID(ctx context.Context, orderID int64) (float64, error)
-	GetCashTotalByPeriod(ctx context.Context, branchID int64, from, to time.Time) (float64, error)
+	GetTotalPaidByOrderID(ctx context.Context, orderID int64) (decimal.Decimal, error)
+	GetTotalRefundedByOrderID(ctx context.Context, orderID int64) (decimal.Decimal, error)
+	GetCashTotalByPeriod(ctx context.Context, branchID int64, from, to time.Time) (decimal.Decimal, error)
 }
 
 type CompanySettingsRepository interface {
@@ -264,21 +265,21 @@ type ReportRepository interface {
 
 // Report data structures
 type ReportSummary struct {
-	TotalRevenue    float64
+	TotalRevenue    decimal.Decimal
 	TotalOrders     int
 	TotalItemsSold  int
 	TotalCustomers  int
 	CompletedOrders int
 	CancelledOrders int
 	PendingOrders   int
-	TotalDiscount   float64
-	TotalTax        float64
-	TotalCOGS       float64
+	TotalDiscount   decimal.Decimal
+	TotalTax        decimal.Decimal
+	TotalCOGS       decimal.Decimal
 }
 
 type SalesTrendItem struct {
 	Date   string
-	Sales  float64
+	Sales  decimal.Decimal
 	Orders int
 	Items  int
 }
@@ -287,25 +288,25 @@ type TopProductItem struct {
 	ProductID   int64
 	ProductName string
 	TotalSold   int
-	TotalAmount float64
+	TotalAmount decimal.Decimal
 }
 
 type CategoryRevenueItem struct {
 	CategoryID   int64
 	CategoryName string
-	TotalAmount  float64
+	TotalAmount  decimal.Decimal
 	OrderCount   int
 }
 
 type PaymentMethodItem struct {
 	Method      string
-	TotalAmount float64
+	TotalAmount decimal.Decimal
 	Count       int
 }
 
 type HourlySalesItem struct {
 	Hour        int
-	TotalAmount float64
+	TotalAmount decimal.Decimal
 	OrderCount  int
 }
 
@@ -355,7 +356,7 @@ type DailySettlementRepository interface {
 	GetItem(ctx context.Context, settlementID, itemID int64) (*model.DailySettlementItem, error)
 	UpdateItem(ctx context.Context, item *model.DailySettlementItem) error
 	GetPaymentBreakdown(ctx context.Context, companyID, branchID int64, date string) ([]*PaymentMethodTotals, error)
-	GetExpensesTotal(ctx context.Context, companyID, branchID int64, date string) (float64, error)
+	GetExpensesTotal(ctx context.Context, companyID, branchID int64, date string) (decimal.Decimal, error)
 }
 
 // DailySettlementListParams for filtering settlements
@@ -370,9 +371,9 @@ type DailySettlementListParams struct {
 
 // PaymentMethodTotals is the aggregation result of payments by method for a given branch+date
 type PaymentMethodTotals struct {
-	Method     string  `db:"method"`
-	GrossSales float64 `db:"gross_sales"`
-	Refunds    float64 `db:"refunds"`
+	Method     string          `db:"method"`
+	GrossSales decimal.Decimal `db:"gross_sales"`
+	Refunds    decimal.Decimal `db:"refunds"`
 }
 
 type StockOpnameRepository interface {

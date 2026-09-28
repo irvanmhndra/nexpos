@@ -8,6 +8,7 @@ import (
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/irvanmhndra/nexpos-api/internal/repository"
 	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
+	"github.com/shopspring/decimal"
 )
 
 type StockOpnameService struct {
@@ -161,7 +162,7 @@ func (s *StockOpnameService) UpdateItem(ctx context.Context, companyID, opnameID
 	now := time.Now()
 	item.CountedStock = &counted
 	item.VarianceQty = counted - item.SystemStock
-	item.VarianceValue = float64(item.VarianceQty) * item.UnitCost
+	item.VarianceValue = item.UnitCost.Mul(decimal.NewFromInt(int64(item.VarianceQty)))
 	item.Notes = req.Notes
 	item.CountedBy = &userID
 	item.CountedAt = &now
@@ -198,7 +199,7 @@ func (s *StockOpnameService) BulkUpdateItems(ctx context.Context, companyID, opn
 		counted := line.CountedStock
 		item.CountedStock = &counted
 		item.VarianceQty = counted - item.SystemStock
-		item.VarianceValue = float64(item.VarianceQty) * item.UnitCost
+		item.VarianceValue = item.UnitCost.Mul(decimal.NewFromInt(int64(item.VarianceQty)))
 		item.Notes = line.Notes
 		item.CountedBy = &userID
 		item.CountedAt = &now
@@ -232,7 +233,7 @@ func (s *StockOpnameService) Complete(ctx context.Context, companyID, opnameID, 
 		}
 
 		var totalVarianceQty int
-		var totalVarianceValue float64
+		var totalVarianceValue decimal.Decimal
 		refType := "stock_opname"
 
 		for _, item := range items {
@@ -283,7 +284,7 @@ func (s *StockOpnameService) Complete(ctx context.Context, companyID, opnameID, 
 			}
 
 			totalVarianceQty += item.VarianceQty
-			totalVarianceValue += item.VarianceValue
+			totalVarianceValue = totalVarianceValue.Add(item.VarianceValue)
 		}
 
 		now := time.Now()

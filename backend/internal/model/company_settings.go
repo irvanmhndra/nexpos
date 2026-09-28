@@ -1,19 +1,23 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type CompanySettings struct {
 	ID        int64 `db:"id" json:"id"`
 	CompanyID int64 `db:"company_id" json:"company_id"`
 
 	// Tax configuration
-	TaxEnabled   bool    `db:"tax_enabled" json:"tax_enabled"`
-	TaxRate      float64 `db:"tax_rate" json:"tax_rate"`
-	TaxInclusive bool    `db:"tax_inclusive" json:"tax_inclusive"`
+	TaxEnabled   bool            `db:"tax_enabled" json:"tax_enabled"`
+	TaxRate      decimal.Decimal `db:"tax_rate" json:"tax_rate"`
+	TaxInclusive bool            `db:"tax_inclusive" json:"tax_inclusive"`
 
 	// Rounding configuration
-	RoundingEnabled bool    `db:"rounding_enabled" json:"rounding_enabled"`
-	RoundingAmount  float64 `db:"rounding_amount" json:"rounding_amount"`
+	RoundingEnabled bool            `db:"rounding_enabled" json:"rounding_enabled"`
+	RoundingAmount  decimal.Decimal `db:"rounding_amount" json:"rounding_amount"`
 
 	// Order settings
 	AutoCompleteCounterOrders  bool `db:"auto_complete_counter_orders" json:"auto_complete_counter_orders"`

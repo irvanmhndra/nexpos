@@ -7,6 +7,7 @@ import (
 
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/jmoiron/sqlx"
+	"github.com/shopspring/decimal"
 )
 
 type PaymentRepository struct {
@@ -100,26 +101,26 @@ func (r *PaymentRepository) DeleteByOrderID(ctx context.Context, orderID int64) 
 	return err
 }
 
-func (r *PaymentRepository) GetTotalPaidByOrderID(ctx context.Context, orderID int64) (float64, error) {
-	var total float64
+func (r *PaymentRepository) GetTotalPaidByOrderID(ctx context.Context, orderID int64) (decimal.Decimal, error) {
+	var total decimal.Decimal
 	query := `SELECT COALESCE(SUM(amount - refunded_amount), 0) FROM payments WHERE order_id = $1 AND status != 'failed'`
 	if err := conn(ctx, r.db).GetContext(ctx, &total, query, orderID); err != nil {
-		return 0, err
+		return decimal.Zero, err
 	}
 	return total, nil
 }
 
-func (r *PaymentRepository) GetTotalRefundedByOrderID(ctx context.Context, orderID int64) (float64, error) {
-	var total float64
+func (r *PaymentRepository) GetTotalRefundedByOrderID(ctx context.Context, orderID int64) (decimal.Decimal, error) {
+	var total decimal.Decimal
 	query := `SELECT COALESCE(SUM(refunded_amount), 0) FROM payments WHERE order_id = $1`
 	if err := conn(ctx, r.db).GetContext(ctx, &total, query, orderID); err != nil {
-		return 0, err
+		return decimal.Zero, err
 	}
 	return total, nil
 }
 
-func (r *PaymentRepository) GetCashTotalByPeriod(ctx context.Context, branchID int64, from, to time.Time) (float64, error) {
-	var total float64
+func (r *PaymentRepository) GetCashTotalByPeriod(ctx context.Context, branchID int64, from, to time.Time) (decimal.Decimal, error) {
+	var total decimal.Decimal
 	query := `
 		SELECT COALESCE(SUM(p.amount - p.refunded_amount), 0)
 		FROM payments p
@@ -131,7 +132,7 @@ func (r *PaymentRepository) GetCashTotalByPeriod(ctx context.Context, branchID i
 		  AND p.paid_at < $3
 	`
 	if err := conn(ctx, r.db).GetContext(ctx, &total, query, branchID, from, to); err != nil {
-		return 0, err
+		return decimal.Zero, err
 	}
 	return total, nil
 }

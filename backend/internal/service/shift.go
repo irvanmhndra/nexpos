@@ -81,9 +81,9 @@ func (s *ShiftService) CloseShift(ctx context.Context, companyID, shiftID int64,
 		return nil, apperror.InternalError(err)
 	}
 
-	expectedCash := shift.OpeningFloat + cashTotal
+	expectedCash := shift.OpeningFloat.Add(cashTotal)
 	actualCash := req.ActualCash
-	cashDifference := actualCash - expectedCash
+	cashDifference := actualCash.Sub(expectedCash)
 
 	shift.Status = model.ShiftStatusClosed
 	shift.ClosingFloat = actualCash

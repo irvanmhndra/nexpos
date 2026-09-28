@@ -28,10 +28,10 @@ func createTestSettings(companyID int64) *model.CompanySettings {
 		ID:              1,
 		CompanyID:       companyID,
 		TaxEnabled:      true,
-		TaxRate:         10.0,
+		TaxRate:         money(10.0),
 		TaxInclusive:    false,
 		RoundingEnabled: false,
-		RoundingAmount:  0,
+		RoundingAmount:  money(0),
 		MaxOfflineDays:  7,
 		CreatedAt:       now,
 		UpdatedAt:       now,
@@ -55,7 +55,7 @@ func TestCompanySettingsService_Get_Success(t *testing.T) {
 	result, err := svc.Get(ctx, 1)
 	require.NoError(t, err)
 	assert.Equal(t, true, result.TaxEnabled)
-	assert.Equal(t, 10.0, result.TaxRate)
+	assertMoney(t, 10.0, result.TaxRate)
 }
 
 func TestCompanySettingsService_Get_RepoError(t *testing.T) {
@@ -76,7 +76,7 @@ func TestCompanySettingsService_Update_Success(t *testing.T) {
 	ctx := context.Background()
 	settings := createTestSettings(1)
 
-	taxRate := 12.0
+	taxRate := money(12.0)
 	req := dto.UpdateCompanySettingsRequest{TaxRate: &taxRate}
 
 	mockRepo.EXPECT().GetByCompanyID(ctx, int64(1)).Return(settings, nil).Once()
@@ -84,7 +84,7 @@ func TestCompanySettingsService_Update_Success(t *testing.T) {
 
 	result, err := svc.Update(ctx, 1, req)
 	require.NoError(t, err)
-	assert.Equal(t, 12.0, result.TaxRate)
+	assertMoney(t, 12.0, result.TaxRate)
 }
 
 func TestCompanySettingsService_Update_PartialUpdate(t *testing.T) {
@@ -101,7 +101,7 @@ func TestCompanySettingsService_Update_PartialUpdate(t *testing.T) {
 	result, err := svc.Update(ctx, 1, req)
 	require.NoError(t, err)
 	assert.Equal(t, false, result.TaxEnabled)
-	assert.Equal(t, 10.0, result.TaxRate) // unchanged
+	assertMoney(t, 10.0, result.TaxRate) // unchanged
 }
 
 func TestCompanySettingsService_Update_GetError(t *testing.T) {

@@ -1,6 +1,10 @@
 package dto
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 // ============== Request DTOs ==============
 
@@ -12,26 +16,26 @@ type ReportRequest struct {
 // ============== Response DTOs ==============
 
 type ReportSummaryResponse struct {
-	TotalRevenue      float64 `json:"total_revenue"`
-	TotalOrders       int     `json:"total_orders"`
-	TotalItemsSold    int     `json:"total_items_sold"`
-	AvgOrderValue     float64 `json:"avg_order_value"`
-	TotalCustomers    int     `json:"total_customers"`
-	NewCustomers      int     `json:"new_customers"`
-	CompletedOrders   int     `json:"completed_orders"`
-	CancelledOrders   int     `json:"cancelled_orders"`
-	PendingOrders     int     `json:"pending_orders"`
-	TotalDiscount     float64 `json:"total_discount"`
-	TotalTax          float64 `json:"total_tax"`
-	GrossProfit       float64 `json:"gross_profit"`
-	GrossProfitMargin float64 `json:"gross_profit_margin"`
+	TotalRevenue      decimal.Decimal `json:"total_revenue"`
+	TotalOrders       int             `json:"total_orders"`
+	TotalItemsSold    int             `json:"total_items_sold"`
+	AvgOrderValue     decimal.Decimal `json:"avg_order_value"`
+	TotalCustomers    int             `json:"total_customers"`
+	NewCustomers      int             `json:"new_customers"`
+	CompletedOrders   int             `json:"completed_orders"`
+	CancelledOrders   int             `json:"cancelled_orders"`
+	PendingOrders     int             `json:"pending_orders"`
+	TotalDiscount     decimal.Decimal `json:"total_discount"`
+	TotalTax          decimal.Decimal `json:"total_tax"`
+	GrossProfit       decimal.Decimal `json:"gross_profit"`
+	GrossProfitMargin float64         `json:"gross_profit_margin"`
 }
 
 type SalesTrendItem struct {
-	Date   string  `json:"date"`
-	Sales  float64 `json:"sales"`
-	Orders int     `json:"orders"`
-	Items  int     `json:"items"`
+	Date   string          `json:"date"`
+	Sales  decimal.Decimal `json:"sales"`
+	Orders int             `json:"orders"`
+	Items  int             `json:"items"`
 }
 
 type SalesTrendResponse struct {
@@ -39,10 +43,10 @@ type SalesTrendResponse struct {
 }
 
 type TopProductItem struct {
-	ProductID   int64   `json:"product_id"`
-	ProductName string  `json:"product_name"`
-	TotalSold   int     `json:"total_sold"`
-	TotalAmount float64 `json:"total_amount"`
+	ProductID   int64           `json:"product_id"`
+	ProductName string          `json:"product_name"`
+	TotalSold   int             `json:"total_sold"`
+	TotalAmount decimal.Decimal `json:"total_amount"`
 }
 
 type TopProductsResponse struct {
@@ -50,10 +54,10 @@ type TopProductsResponse struct {
 }
 
 type CategoryRevenueItem struct {
-	CategoryID   int64   `json:"category_id"`
-	CategoryName string  `json:"category_name"`
-	TotalAmount  float64 `json:"total_amount"`
-	OrderCount   int     `json:"order_count"`
+	CategoryID   int64           `json:"category_id"`
+	CategoryName string          `json:"category_name"`
+	TotalAmount  decimal.Decimal `json:"total_amount"`
+	OrderCount   int             `json:"order_count"`
 }
 
 type CategoryRevenueResponse struct {
@@ -61,9 +65,9 @@ type CategoryRevenueResponse struct {
 }
 
 type PaymentMethodItem struct {
-	Method      string  `json:"method"`
-	TotalAmount float64 `json:"total_amount"`
-	Count       int     `json:"count"`
+	Method      string          `json:"method"`
+	TotalAmount decimal.Decimal `json:"total_amount"`
+	Count       int             `json:"count"`
 }
 
 type PaymentMethodResponse struct {
@@ -71,9 +75,9 @@ type PaymentMethodResponse struct {
 }
 
 type HourlySalesItem struct {
-	Hour        int     `json:"hour"`
-	TotalAmount float64 `json:"total_amount"`
-	OrderCount  int     `json:"order_count"`
+	Hour        int             `json:"hour"`
+	TotalAmount decimal.Decimal `json:"total_amount"`
+	OrderCount  int             `json:"order_count"`
 }
 
 type HourlySalesResponse struct {

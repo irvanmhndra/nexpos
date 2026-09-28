@@ -8,6 +8,7 @@ import (
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/irvanmhndra/nexpos-api/internal/repository"
 	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
+	"github.com/shopspring/decimal"
 )
 
 type PurchaseOrderService struct {
@@ -183,11 +184,11 @@ func (s *PurchaseOrderService) CreatePO(ctx context.Context, companyID, branchID
 		OrderedAt:  &now,
 	}
 
-	var totalAmount float64
+	var totalAmount decimal.Decimal
 	items := make([]*model.PurchaseOrderItem, len(req.Items))
 	for i, itemReq := range req.Items {
-		subtotal := float64(itemReq.Quantity) * itemReq.UnitCost
-		totalAmount += subtotal
+		subtotal := itemReq.UnitCost.Mul(decimal.NewFromInt(int64(itemReq.Quantity)))
+		totalAmount = totalAmount.Add(subtotal)
 		items[i] = &model.PurchaseOrderItem{
 			ProductVariantID: itemReq.ProductVariantID,
 			SKU:              itemReq.SKU,
@@ -357,7 +358,7 @@ func (s *PurchaseOrderService) ReceivePO(ctx context.Context, companyID, poID in
 				if err != nil {
 					return apperror.InternalError(err)
 				}
-				if variant != nil && item.UnitCost > 0 {
+				if variant != nil && item.UnitCost.IsPositive() {
 					variant.LastPurchaseCost = item.UnitCost
 					if err := s.variantRepo.Update(ctx, variant); err != nil {
 						return apperror.InternalError(err)

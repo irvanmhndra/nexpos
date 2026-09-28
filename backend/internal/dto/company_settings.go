@@ -1,19 +1,23 @@
 package dto
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type CompanySettingsResponse struct {
 	ID        int64 `json:"id"`
 	CompanyID int64 `json:"company_id"`
 
 	// Tax configuration
-	TaxEnabled   bool    `json:"tax_enabled"`
-	TaxRate      float64 `json:"tax_rate"`
-	TaxInclusive bool    `json:"tax_inclusive"`
+	TaxEnabled   bool            `json:"tax_enabled"`
+	TaxRate      decimal.Decimal `json:"tax_rate"`
+	TaxInclusive bool            `json:"tax_inclusive"`
 
 	// Rounding configuration
-	RoundingEnabled bool    `json:"rounding_enabled"`
-	RoundingAmount  float64 `json:"rounding_amount"`
+	RoundingEnabled bool            `json:"rounding_enabled"`
+	RoundingAmount  decimal.Decimal `json:"rounding_amount"`
 
 	// Order settings
 	AutoCompleteCounterOrders  bool `json:"auto_complete_counter_orders"`
@@ -34,13 +38,13 @@ type CompanySettingsResponse struct {
 
 type UpdateCompanySettingsRequest struct {
 	// Tax configuration
-	TaxEnabled   *bool    `json:"tax_enabled"`
-	TaxRate      *float64 `json:"tax_rate" validate:"omitempty,gte=0,lte=100"`
-	TaxInclusive *bool    `json:"tax_inclusive"`
+	TaxEnabled   *bool            `json:"tax_enabled"`
+	TaxRate      *decimal.Decimal `json:"tax_rate" validate:"omitempty,gte=0,lte=100"`
+	TaxInclusive *bool            `json:"tax_inclusive"`
 
 	// Rounding configuration
-	RoundingEnabled *bool    `json:"rounding_enabled"`
-	RoundingAmount  *float64 `json:"rounding_amount" validate:"omitempty,gte=0"`
+	RoundingEnabled *bool            `json:"rounding_enabled"`
+	RoundingAmount  *decimal.Decimal `json:"rounding_amount" validate:"omitempty,gte=0"`
 
 	// Order settings
 	AutoCompleteCounterOrders  *bool `json:"auto_complete_counter_orders"`

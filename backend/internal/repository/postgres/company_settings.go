@@ -7,6 +7,7 @@ import (
 
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/jmoiron/sqlx"
+	"github.com/shopspring/decimal"
 )
 
 type CompanySettingsRepository struct {
@@ -35,10 +36,10 @@ func (r *CompanySettingsRepository) GetByCompanyID(ctx context.Context, companyI
 			return &model.CompanySettings{
 				CompanyID:                  companyID,
 				TaxEnabled:                 false,
-				TaxRate:                    0,
+				TaxRate:                    decimal.Zero,
 				TaxInclusive:               true,
 				RoundingEnabled:            false,
-				RoundingAmount:             0,
+				RoundingAmount:             decimal.Zero,
 				AutoCompleteCounterOrders:  true,
 				RequireCustomerForDelivery: true,
 				ShowTaxOnReceipt:           true,

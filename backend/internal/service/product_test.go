@@ -43,7 +43,7 @@ func createTestVariant(id, productID int64, sku string) *model.ProductVariant {
 		ProductID: productID,
 		SKU:       sku,
 		Name:      "Variant " + sku,
-		Price:     10000,
+		Price:     money(10000),
 		IsDefault: id == 1,
 		IsActive:  true,
 		CreatedAt: now,
@@ -69,7 +69,7 @@ func TestProductService_Create_Success(t *testing.T) {
 	req := dto.CreateProductRequest{
 		Name:       "New Product",
 		CategoryID: &catID,
-		Variants:   []dto.ProductVariantInput{{SKU: "SKU001", Name: "Default", Price: 10000}},
+		Variants:   []dto.ProductVariantInput{{SKU: "SKU001", Name: "Default", Price: money(10000)}},
 	}
 
 	category := createTestCategory(1, 1, "CAT1")
@@ -118,7 +118,7 @@ func TestProductService_Create_CategoryNotFound(t *testing.T) {
 	req := dto.CreateProductRequest{
 		Name:       "Product",
 		CategoryID: &catID,
-		Variants:   []dto.ProductVariantInput{{SKU: "SKU001", Name: "V1", Price: 100}},
+		Variants:   []dto.ProductVariantInput{{SKU: "SKU001", Name: "V1", Price: money(100)}},
 	}
 
 	categoryRepo.EXPECT().GetByID(ctx, int64(1), int64(999)).Return(nil, nil).Once()
@@ -136,7 +136,7 @@ func TestProductService_Create_SKUExists(t *testing.T) {
 
 	req := dto.CreateProductRequest{
 		Name:     "Product",
-		Variants: []dto.ProductVariantInput{{SKU: "EXISTING", Name: "V1", Price: 100}},
+		Variants: []dto.ProductVariantInput{{SKU: "EXISTING", Name: "V1", Price: money(100)}},
 	}
 
 	variantRepo.EXPECT().SKUExists(ctx, "EXISTING", int64(0)).Return(true, nil).Once()
@@ -313,7 +313,7 @@ func TestProductService_Create_DuplicateBarcode_Rejected(t *testing.T) {
 
 	req := dto.CreateProductRequest{
 		Name:     "New Product",
-		Variants: []dto.ProductVariantInput{{SKU: "SKU001", Barcode: &barcode, Name: "Default", Price: 10000}},
+		Variants: []dto.ProductVariantInput{{SKU: "SKU001", Barcode: &barcode, Name: "Default", Price: money(10000)}},
 	}
 
 	variantRepo.EXPECT().SKUExists(ctx, "SKU001", int64(0)).Return(false, nil).Once()

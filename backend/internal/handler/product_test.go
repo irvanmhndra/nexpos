@@ -13,6 +13,7 @@ import (
 	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
 	"github.com/irvanmhndra/nexpos-api/pkg/validator"
 	"github.com/labstack/echo/v5"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -43,7 +44,7 @@ func TestProductHandler_Create_Success(t *testing.T) {
 		Name:     "Test Product",
 		IsActive: true,
 		Variants: []*dto.ProductVariantResponse{
-			{ID: 1, SKU: "SKU-001", Name: "Default", Price: 10000},
+			{ID: 1, SKU: "SKU-001", Name: "Default", Price: decimal.NewFromInt(10000)},
 		},
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/irvanmhndra/nexpos-api/internal/model"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -69,19 +70,19 @@ func (m *MockPaymentRepository) DeleteByOrderID(ctx context.Context, orderID int
 	return ret.Error(0)
 }
 
-func (m *MockPaymentRepository) GetTotalPaidByOrderID(ctx context.Context, orderID int64) (float64, error) {
+func (m *MockPaymentRepository) GetTotalPaidByOrderID(ctx context.Context, orderID int64) (decimal.Decimal, error) {
 	ret := m.Called(ctx, orderID)
-	return ret.Get(0).(float64), ret.Error(1)
+	return ret.Get(0).(decimal.Decimal), ret.Error(1)
 }
 
-func (m *MockPaymentRepository) GetTotalRefundedByOrderID(ctx context.Context, orderID int64) (float64, error) {
+func (m *MockPaymentRepository) GetTotalRefundedByOrderID(ctx context.Context, orderID int64) (decimal.Decimal, error) {
 	ret := m.Called(ctx, orderID)
-	return ret.Get(0).(float64), ret.Error(1)
+	return ret.Get(0).(decimal.Decimal), ret.Error(1)
 }
 
-func (m *MockPaymentRepository) GetCashTotalByPeriod(ctx context.Context, branchID int64, from, to time.Time) (float64, error) {
+func (m *MockPaymentRepository) GetCashTotalByPeriod(ctx context.Context, branchID int64, from, to time.Time) (decimal.Decimal, error) {
 	ret := m.Called(ctx, branchID, from, to)
-	return ret.Get(0).(float64), ret.Error(1)
+	return ret.Get(0).(decimal.Decimal), ret.Error(1)
 }
 
 // MockPaymentRepositoryExpectation is the expectation builder for MockPaymentRepository.

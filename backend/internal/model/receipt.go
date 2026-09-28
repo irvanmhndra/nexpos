@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // Receipt is an immutable snapshot of an order captured at completion time.
@@ -20,10 +22,10 @@ type Receipt struct {
 	CustomerName  *string         `db:"customer_name"  json:"customer_name"`
 	Items         ReceiptItems    `db:"items"          json:"items"`
 	Payments      ReceiptPayments `db:"payments"       json:"payments"`
-	TotalAmount   float64         `db:"total_amount"   json:"total_amount"`
-	TotalDiscount float64         `db:"total_discount" json:"total_discount"`
-	TotalTax      float64         `db:"total_tax"      json:"total_tax"`
-	GrandTotal    float64         `db:"grand_total"    json:"grand_total"`
+	TotalAmount   decimal.Decimal `db:"total_amount"   json:"total_amount"`
+	TotalDiscount decimal.Decimal `db:"total_discount" json:"total_discount"`
+	TotalTax      decimal.Decimal `db:"total_tax"      json:"total_tax"`
+	GrandTotal    decimal.Decimal `db:"grand_total"    json:"grand_total"`
 	Notes         *string         `db:"notes"          json:"notes"`
 	CompletedAt   time.Time       `db:"completed_at"   json:"completed_at"`
 	CreatedAt     time.Time       `db:"created_at"     json:"created_at"`
@@ -31,21 +33,21 @@ type Receipt struct {
 
 // ReceiptItem is a single line item on the receipt.
 type ReceiptItem struct {
-	ProductName string  `json:"product_name"`
-	VariantName *string `json:"variant_name"`
-	SKU         string  `json:"sku"`
-	Quantity    int     `json:"quantity"`
-	UnitPrice   float64 `json:"unit_price"`
-	Discount    float64 `json:"discount"`
-	Tax         float64 `json:"tax"`
-	Subtotal    float64 `json:"subtotal"`
+	ProductName string          `json:"product_name"`
+	VariantName *string         `json:"variant_name"`
+	SKU         string          `json:"sku"`
+	Quantity    int             `json:"quantity"`
+	UnitPrice   decimal.Decimal `json:"unit_price"`
+	Discount    decimal.Decimal `json:"discount"`
+	Tax         decimal.Decimal `json:"tax"`
+	Subtotal    decimal.Decimal `json:"subtotal"`
 }
 
 // ReceiptPayment is a single payment entry on the receipt.
 type ReceiptPayment struct {
-	Method      string  `json:"method"`
-	Amount      float64 `json:"amount"`
-	ReferenceNo *string `json:"reference_no"`
+	Method      string          `json:"method"`
+	Amount      decimal.Decimal `json:"amount"`
+	ReferenceNo *string         `json:"reference_no"`
 }
 
 // ReceiptItems is a JSONB-backed slice. Implements driver.Valuer + sql.Scanner.

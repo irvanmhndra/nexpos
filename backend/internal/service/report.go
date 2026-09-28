@@ -4,8 +4,10 @@ import (
 	"context"
 
 	"github.com/irvanmhndra/nexpos-api/internal/dto"
+	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/irvanmhndra/nexpos-api/internal/repository"
 	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
+	"github.com/shopspring/decimal"
 )
 
 type ReportService struct {
@@ -25,15 +27,15 @@ func (s *ReportService) GetSummary(ctx context.Context, companyID int64, dateFro
 	}
 
 	// Calculate derived metrics
-	avgOrderValue := float64(0)
+	var avgOrderValue decimal.Decimal
 	if summary.TotalOrders > 0 {
-		avgOrderValue = summary.TotalRevenue / float64(summary.TotalOrders)
+		avgOrderValue = summary.TotalRevenue.Div(decimal.NewFromInt(int64(summary.TotalOrders))).Round(model.MoneyScale)
 	}
 
-	grossProfit := summary.TotalRevenue - summary.TotalCOGS
-	grossProfitMargin := float64(0)
-	if summary.TotalRevenue > 0 {
-		grossProfitMargin = (grossProfit / summary.TotalRevenue) * 100
+	grossProfit := summary.TotalRevenue.Sub(summary.TotalCOGS)
+	grossProfitMargin := float64(0) // a percentage for display, not money
+	if summary.TotalRevenue.IsPositive() {
+		grossProfitMargin = grossProfit.Div(summary.TotalRevenue).Mul(hundred).InexactFloat64()
 	}
 
 	// Get new customers count

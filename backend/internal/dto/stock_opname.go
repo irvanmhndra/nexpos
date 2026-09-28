@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
+	"github.com/shopspring/decimal"
 )
 
 // ============== Requests ==============
@@ -43,40 +44,40 @@ type ListStockOpnameRequest struct {
 // ============== Responses ==============
 
 type StockOpnameResponse struct {
-	ID                 int64      `json:"id"`
-	BranchID           int64      `json:"branch_id"`
-	OpnameNumber       string     `json:"opname_number"`
-	Status             string     `json:"status"`
-	Notes              *string    `json:"notes"`
-	TotalItems         int        `json:"total_items"`
-	CountedItems       int        `json:"counted_items"`
-	TotalVarianceQty   int        `json:"total_variance_qty"`
-	TotalVarianceValue float64    `json:"total_variance_value"`
-	StartedBy          *int64     `json:"started_by"`
-	CompletedBy        *int64     `json:"completed_by"`
-	StartedAt          time.Time  `json:"started_at"`
-	CompletedAt        *time.Time `json:"completed_at"`
-	CancelledAt        *time.Time `json:"cancelled_at"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	ID                 int64           `json:"id"`
+	BranchID           int64           `json:"branch_id"`
+	OpnameNumber       string          `json:"opname_number"`
+	Status             string          `json:"status"`
+	Notes              *string         `json:"notes"`
+	TotalItems         int             `json:"total_items"`
+	CountedItems       int             `json:"counted_items"`
+	TotalVarianceQty   int             `json:"total_variance_qty"`
+	TotalVarianceValue decimal.Decimal `json:"total_variance_value"`
+	StartedBy          *int64          `json:"started_by"`
+	CompletedBy        *int64          `json:"completed_by"`
+	StartedAt          time.Time       `json:"started_at"`
+	CompletedAt        *time.Time      `json:"completed_at"`
+	CancelledAt        *time.Time      `json:"cancelled_at"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
 
 	Items []*StockOpnameItemResponse `json:"items,omitempty"`
 }
 
 type StockOpnameItemResponse struct {
-	ID               int64      `json:"id"`
-	StockOpnameID    int64      `json:"stock_opname_id"`
-	ProductVariantID int64      `json:"product_variant_id"`
-	SKU              string     `json:"sku"`
-	ProductName      string     `json:"product_name"`
-	VariantName      string     `json:"variant_name"`
-	SystemStock      int        `json:"system_stock"`
-	CountedStock     *int       `json:"counted_stock"`
-	VarianceQty      int        `json:"variance_qty"`
-	UnitCost         float64    `json:"unit_cost"`
-	VarianceValue    float64    `json:"variance_value"`
-	Notes            *string    `json:"notes"`
-	CountedAt        *time.Time `json:"counted_at"`
+	ID               int64           `json:"id"`
+	StockOpnameID    int64           `json:"stock_opname_id"`
+	ProductVariantID int64           `json:"product_variant_id"`
+	SKU              string          `json:"sku"`
+	ProductName      string          `json:"product_name"`
+	VariantName      string          `json:"variant_name"`
+	SystemStock      int             `json:"system_stock"`
+	CountedStock     *int            `json:"counted_stock"`
+	VarianceQty      int             `json:"variance_qty"`
+	UnitCost         decimal.Decimal `json:"unit_cost"`
+	VarianceValue    decimal.Decimal `json:"variance_value"`
+	Notes            *string         `json:"notes"`
+	CountedAt        *time.Time      `json:"counted_at"`
 }
 
 type StockOpnameListResponse struct {

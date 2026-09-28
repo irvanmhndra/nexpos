@@ -5,6 +5,7 @@ import (
 
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/irvanmhndra/nexpos-api/internal/repository"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -96,9 +97,9 @@ func (m *MockDailySettlementRepository) GetPaymentBreakdown(ctx context.Context,
 	return r0, ret.Error(1)
 }
 
-func (m *MockDailySettlementRepository) GetExpensesTotal(ctx context.Context, companyID, branchID int64, date string) (float64, error) {
+func (m *MockDailySettlementRepository) GetExpensesTotal(ctx context.Context, companyID, branchID int64, date string) (decimal.Decimal, error) {
 	ret := m.Called(ctx, companyID, branchID, date)
-	return ret.Get(0).(float64), ret.Error(1)
+	return ret.Get(0).(decimal.Decimal), ret.Error(1)
 }
 
 type MockDailySettlementRepositoryExpectation struct {

@@ -4,24 +4,25 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type Order struct {
-	ID                int64     `db:"id" json:"id"`
-	CompanyID         int64     `db:"company_id" json:"company_id"`
-	BranchID          int64     `db:"branch_id" json:"branch_id"`
-	OrderNo           string    `db:"order_no" json:"order_no"`
-	CustomerID        *int64    `db:"customer_id" json:"customer_id"`
-	CashierID         int64     `db:"cashier_id" json:"cashier_id"`
-	Status            string    `db:"status" json:"status"`
-	TotalAmount       float64   `db:"total_amount" json:"total_amount"`
-	TotalDiscount     float64   `db:"total_discount" json:"total_discount"`
-	TotalTax          float64   `db:"total_tax" json:"total_tax"`
-	GrandTotal        float64   `db:"grand_total" json:"grand_total"`
-	AppliedPromotions JSONMap   `db:"applied_promotions" json:"applied_promotions"`
-	Notes             *string   `db:"notes" json:"notes"`
-	CreatedAt         time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt         time.Time `db:"updated_at" json:"updated_at"`
+	ID                int64           `db:"id" json:"id"`
+	CompanyID         int64           `db:"company_id" json:"company_id"`
+	BranchID          int64           `db:"branch_id" json:"branch_id"`
+	OrderNo           string          `db:"order_no" json:"order_no"`
+	CustomerID        *int64          `db:"customer_id" json:"customer_id"`
+	CashierID         int64           `db:"cashier_id" json:"cashier_id"`
+	Status            string          `db:"status" json:"status"`
+	TotalAmount       decimal.Decimal `db:"total_amount" json:"total_amount"`
+	TotalDiscount     decimal.Decimal `db:"total_discount" json:"total_discount"`
+	TotalTax          decimal.Decimal `db:"total_tax" json:"total_tax"`
+	GrandTotal        decimal.Decimal `db:"grand_total" json:"grand_total"`
+	AppliedPromotions JSONMap         `db:"applied_promotions" json:"applied_promotions"`
+	Notes             *string         `db:"notes" json:"notes"`
+	CreatedAt         time.Time       `db:"created_at" json:"created_at"`
+	UpdatedAt         time.Time       `db:"updated_at" json:"updated_at"`
 
 	// New lifecycle columns
 	PaymentStatus     string     `db:"payment_status" json:"payment_status"`

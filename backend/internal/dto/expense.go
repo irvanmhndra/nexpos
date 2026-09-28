@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
+	"github.com/shopspring/decimal"
 )
 
 // ============== Requests ==============
@@ -25,23 +26,23 @@ type ListExpenseCategoryRequest struct {
 }
 
 type CreateExpenseRequest struct {
-	BranchID    *int64  `json:"branch_id"`
-	CategoryID  *int64  `json:"category_id"`
-	Amount      float64 `json:"amount"       validate:"required,min=0.01"`
-	Description string  `json:"description"  validate:"required,min=1,max=500"`
-	ReferenceNo *string `json:"reference_no" validate:"omitempty,max=100"`
-	ExpenseDate string  `json:"expense_date" validate:"required"`
-	Notes       *string `json:"notes"`
+	BranchID    *int64          `json:"branch_id"`
+	CategoryID  *int64          `json:"category_id"`
+	Amount      decimal.Decimal `json:"amount"       validate:"required,min=0.01"`
+	Description string          `json:"description"  validate:"required,min=1,max=500"`
+	ReferenceNo *string         `json:"reference_no" validate:"omitempty,max=100"`
+	ExpenseDate string          `json:"expense_date" validate:"required"`
+	Notes       *string         `json:"notes"`
 }
 
 type UpdateExpenseRequest struct {
-	BranchID    *int64  `json:"branch_id"`
-	CategoryID  *int64  `json:"category_id"`
-	Amount      float64 `json:"amount"       validate:"required,min=0.01"`
-	Description string  `json:"description"  validate:"required,min=1,max=500"`
-	ReferenceNo *string `json:"reference_no" validate:"omitempty,max=100"`
-	ExpenseDate string  `json:"expense_date" validate:"required"`
-	Notes       *string `json:"notes"`
+	BranchID    *int64          `json:"branch_id"`
+	CategoryID  *int64          `json:"category_id"`
+	Amount      decimal.Decimal `json:"amount"       validate:"required,min=0.01"`
+	Description string          `json:"description"  validate:"required,min=1,max=500"`
+	ReferenceNo *string         `json:"reference_no" validate:"omitempty,max=100"`
+	ExpenseDate string          `json:"expense_date" validate:"required"`
+	Notes       *string         `json:"notes"`
 }
 
 type ListExpenseRequest struct {
@@ -75,17 +76,17 @@ type ExpenseCategoryListResponse struct {
 }
 
 type ExpenseResponse struct {
-	ID          int64     `json:"id"`
-	BranchID    *int64    `json:"branch_id"`
-	CategoryID  *int64    `json:"category_id"`
-	Amount      float64   `json:"amount"`
-	Description string    `json:"description"`
-	ReferenceNo *string   `json:"reference_no"`
-	ExpenseDate string    `json:"expense_date"`
-	RecordedBy  *int64    `json:"recorded_by"`
-	Notes       *string   `json:"notes"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          int64           `json:"id"`
+	BranchID    *int64          `json:"branch_id"`
+	CategoryID  *int64          `json:"category_id"`
+	Amount      decimal.Decimal `json:"amount"`
+	Description string          `json:"description"`
+	ReferenceNo *string         `json:"reference_no"`
+	ExpenseDate string          `json:"expense_date"`
+	RecordedBy  *int64          `json:"recorded_by"`
+	Notes       *string         `json:"notes"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
 type ExpenseListResponse struct {
@@ -94,15 +95,15 @@ type ExpenseListResponse struct {
 }
 
 type ExpenseSummaryResponse struct {
-	TotalAmount float64                      `json:"total_amount"`
+	TotalAmount decimal.Decimal              `json:"total_amount"`
 	DateFrom    string                       `json:"date_from"`
 	DateTo      string                       `json:"date_to"`
 	ByCategory  []*ExpenseByCategoryResponse `json:"by_category"`
 }
 
 type ExpenseByCategoryResponse struct {
-	CategoryID   *int64  `json:"category_id"`
-	CategoryName string  `json:"category_name"`
-	TotalAmount  float64 `json:"total_amount"`
-	Count        int     `json:"count"`
+	CategoryID   *int64          `json:"category_id"`
+	CategoryName string          `json:"category_name"`
+	TotalAmount  decimal.Decimal `json:"total_amount"`
+	Count        int             `json:"count"`
 }

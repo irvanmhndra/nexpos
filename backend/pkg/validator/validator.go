@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
+	"github.com/shopspring/decimal"
 )
 
 type CustomValidator struct {
@@ -23,6 +24,15 @@ func New() *CustomValidator {
 		}
 		return name
 	})
+
+	// Validate decimal money fields by value, so tags like gt=0 and min=0
+	// keep working on decimal.Decimal.
+	v.RegisterCustomTypeFunc(func(field reflect.Value) any {
+		if d, ok := field.Interface().(decimal.Decimal); ok {
+			return d.InexactFloat64()
+		}
+		return nil
+	}, decimal.Decimal{})
 
 	return &CustomValidator{validator: v}
 }

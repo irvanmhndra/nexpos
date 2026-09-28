@@ -378,7 +378,7 @@ func TestInventoryService_GetInventoryStats_Success(t *testing.T) {
 		TotalSKU:        50,
 		LowStock:        5,
 		OutOfStock:      2,
-		TotalStockValue: 5_000_000,
+		TotalStockValue: money(5_000_000),
 	}
 
 	s.stockRepo.EXPECT().GetInventoryStats(ctx, companyID, branchID).Return(stats, nil).Once()
@@ -389,7 +389,7 @@ func TestInventoryService_GetInventoryStats_Success(t *testing.T) {
 	assert.Equal(t, 50, resp.TotalSKU)
 	assert.Equal(t, 5, resp.LowStock)
 	assert.Equal(t, 2, resp.OutOfStock)
-	assert.Equal(t, float64(5_000_000), resp.TotalStockValue)
+	assertMoney(t, 5_000_000, resp.TotalStockValue)
 }
 
 func TestInventoryService_GetInventoryStats_RepoError(t *testing.T) {

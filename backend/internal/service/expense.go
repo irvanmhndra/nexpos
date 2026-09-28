@@ -8,6 +8,7 @@ import (
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/irvanmhndra/nexpos-api/internal/repository"
 	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
+	"github.com/shopspring/decimal"
 )
 
 type ExpenseService struct {
@@ -275,9 +276,9 @@ func (s *ExpenseService) GetExpenseSummary(ctx context.Context, companyID int64,
 			return nil, apperror.InternalError(err)
 		}
 		if catTotal > 0 {
-			catSum := 0.0
+			var catSum decimal.Decimal
 			for _, e := range catExpenses {
-				catSum += e.Amount
+				catSum = catSum.Add(e.Amount)
 			}
 			catIDPtr := catID
 			byCategory = append(byCategory, &dto.ExpenseByCategoryResponse{
@@ -311,10 +312,10 @@ func (s *ExpenseService) GetExpenseSummary(ctx context.Context, companyID int64,
 
 	// Simple summary: just return total per category that we already have
 	// For uncategorized, compute as total - sum of all categorized
-	categorizedTotal := 0.0
+	var categorizedTotal decimal.Decimal
 	categorizedCount := 0
 	for _, item := range byCategory {
-		categorizedTotal += item.TotalAmount
+		categorizedTotal = categorizedTotal.Add(item.TotalAmount)
 		categorizedCount += item.Count
 	}
 
@@ -331,11 +332,11 @@ func (s *ExpenseService) GetExpenseSummary(ctx context.Context, companyID int64,
 		return nil, apperror.InternalError(err)
 	}
 
-	uncategorizedSum := 0.0
+	var uncategorizedSum decimal.Decimal
 	uncategorizedCount := 0
 	for _, e := range allExpenses {
 		if e.CategoryID == nil {
-			uncategorizedSum += e.Amount
+			uncategorizedSum = uncategorizedSum.Add(e.Amount)
 			uncategorizedCount++
 		}
 	}

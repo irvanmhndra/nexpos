@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
+	"github.com/shopspring/decimal"
 )
 
 // ============== Requests ==============
@@ -15,8 +16,8 @@ type CreateDailySettlementRequest struct {
 }
 
 type UpdateSettlementItemRequest struct {
-	ActualAmount float64 `json:"actual_amount" validate:"gte=0"`
-	Notes        *string `json:"notes"`
+	ActualAmount decimal.Decimal `json:"actual_amount" validate:"gte=0"`
+	Notes        *string         `json:"notes"`
 }
 
 type BulkUpdateSettlementItemsRequest struct {
@@ -24,9 +25,9 @@ type BulkUpdateSettlementItemsRequest struct {
 }
 
 type BulkUpdateSettlementItem struct {
-	ItemID       int64   `json:"item_id"       validate:"required"`
-	ActualAmount float64 `json:"actual_amount" validate:"gte=0"`
-	Notes        *string `json:"notes"`
+	ItemID       int64           `json:"item_id"       validate:"required"`
+	ActualAmount decimal.Decimal `json:"actual_amount" validate:"gte=0"`
+	Notes        *string         `json:"notes"`
 }
 
 type FinalizeDailySettlementRequest struct {
@@ -50,33 +51,33 @@ type DailySettlementReportRequest struct {
 // ============== Responses ==============
 
 type DailySettlementResponse struct {
-	ID             int64      `json:"id"`
-	BranchID       int64      `json:"branch_id"`
-	SettlementDate string     `json:"settlement_date"`
-	Status         string     `json:"status"`
-	TotalSales     float64    `json:"total_sales"`
-	TotalRefunds   float64    `json:"total_refunds"`
-	TotalExpenses  float64    `json:"total_expenses"`
-	TotalExpected  float64    `json:"total_expected"`
-	TotalActual    float64    `json:"total_actual"`
-	TotalVariance  float64    `json:"total_variance"`
-	Notes          *string    `json:"notes"`
-	RecordedBy     *int64     `json:"recorded_by"`
-	FinalizedBy    *int64     `json:"finalized_by"`
-	FinalizedAt    *time.Time `json:"finalized_at"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID             int64           `json:"id"`
+	BranchID       int64           `json:"branch_id"`
+	SettlementDate string          `json:"settlement_date"`
+	Status         string          `json:"status"`
+	TotalSales     decimal.Decimal `json:"total_sales"`
+	TotalRefunds   decimal.Decimal `json:"total_refunds"`
+	TotalExpenses  decimal.Decimal `json:"total_expenses"`
+	TotalExpected  decimal.Decimal `json:"total_expected"`
+	TotalActual    decimal.Decimal `json:"total_actual"`
+	TotalVariance  decimal.Decimal `json:"total_variance"`
+	Notes          *string         `json:"notes"`
+	RecordedBy     *int64          `json:"recorded_by"`
+	FinalizedBy    *int64          `json:"finalized_by"`
+	FinalizedAt    *time.Time      `json:"finalized_at"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
 
 	Items []*DailySettlementItemResponse `json:"items,omitempty"`
 }
 
 type DailySettlementItemResponse struct {
-	ID             int64    `json:"id"`
-	PaymentMethod  string   `json:"payment_method"`
-	ExpectedAmount float64  `json:"expected_amount"`
-	ActualAmount   *float64 `json:"actual_amount"`
-	VarianceAmount float64  `json:"variance_amount"`
-	Notes          *string  `json:"notes"`
+	ID             int64            `json:"id"`
+	PaymentMethod  string           `json:"payment_method"`
+	ExpectedAmount decimal.Decimal  `json:"expected_amount"`
+	ActualAmount   *decimal.Decimal `json:"actual_amount"`
+	VarianceAmount decimal.Decimal  `json:"variance_amount"`
+	Notes          *string          `json:"notes"`
 }
 
 type DailySettlementListResponse struct {
@@ -90,17 +91,17 @@ type DailySettlementListResponse struct {
 type DailySettlementReportResponse struct {
 	BranchID       int64                        `json:"branch_id"`
 	SettlementDate string                       `json:"settlement_date"`
-	TotalSales     float64                      `json:"total_sales"`
-	TotalRefunds   float64                      `json:"total_refunds"`
-	TotalExpenses  float64                      `json:"total_expenses"`
-	TotalExpected  float64                      `json:"total_expected"`
+	TotalSales     decimal.Decimal              `json:"total_sales"`
+	TotalRefunds   decimal.Decimal              `json:"total_refunds"`
+	TotalExpenses  decimal.Decimal              `json:"total_expenses"`
+	TotalExpected  decimal.Decimal              `json:"total_expected"`
 	ByMethod       []*SettlementMethodBreakdown `json:"by_method"`
 }
 
 type SettlementMethodBreakdown struct {
-	PaymentMethod  string  `json:"payment_method"`
-	GrossSales     float64 `json:"gross_sales"`
-	Refunds        float64 `json:"refunds"`
-	ExpensesOut    float64 `json:"expenses_out"` // non-zero only for cash
-	ExpectedAmount float64 `json:"expected_amount"`
+	PaymentMethod  string          `json:"payment_method"`
+	GrossSales     decimal.Decimal `json:"gross_sales"`
+	Refunds        decimal.Decimal `json:"refunds"`
+	ExpensesOut    decimal.Decimal `json:"expenses_out"` // non-zero only for cash
+	ExpectedAmount decimal.Decimal `json:"expected_amount"`
 }

@@ -4,16 +4,17 @@ import (
 	"time"
 
 	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
+	"github.com/shopspring/decimal"
 )
 
 // ============== Requests ==============
 
 type CreatePOItemRequest struct {
-	ProductVariantID *int64  `json:"product_variant_id"`
-	SKU              string  `json:"sku"          validate:"required,max=100"`
-	VariantName      string  `json:"variant_name" validate:"required,max=255"`
-	Quantity         int     `json:"quantity"     validate:"required,min=1"`
-	UnitCost         float64 `json:"unit_cost"    validate:"min=0"`
+	ProductVariantID *int64          `json:"product_variant_id"`
+	SKU              string          `json:"sku"          validate:"required,max=100"`
+	VariantName      string          `json:"variant_name" validate:"required,max=255"`
+	Quantity         int             `json:"quantity"     validate:"required,min=1"`
+	UnitCost         decimal.Decimal `json:"unit_cost"    validate:"min=0"`
 }
 
 type CreatePurchaseOrderRequest struct {
@@ -42,14 +43,14 @@ type ListPurchaseOrderRequest struct {
 // ============== Responses ==============
 
 type POItemResponse struct {
-	ID               int64   `json:"id"`
-	ProductVariantID *int64  `json:"product_variant_id"`
-	SKU              string  `json:"sku"`
-	VariantName      string  `json:"variant_name"`
-	Quantity         int     `json:"quantity"`
-	ReceivedQuantity int     `json:"received_quantity"`
-	UnitCost         float64 `json:"unit_cost"`
-	Subtotal         float64 `json:"subtotal"`
+	ID               int64           `json:"id"`
+	ProductVariantID *int64          `json:"product_variant_id"`
+	SKU              string          `json:"sku"`
+	VariantName      string          `json:"variant_name"`
+	Quantity         int             `json:"quantity"`
+	ReceivedQuantity int             `json:"received_quantity"`
+	UnitCost         decimal.Decimal `json:"unit_cost"`
+	Subtotal         decimal.Decimal `json:"subtotal"`
 }
 
 type PurchaseOrderResponse struct {
@@ -59,7 +60,7 @@ type PurchaseOrderResponse struct {
 	PONumber    string            `json:"po_number"`
 	Status      string            `json:"status"`
 	Notes       *string           `json:"notes"`
-	TotalAmount float64           `json:"total_amount"`
+	TotalAmount decimal.Decimal   `json:"total_amount"`
 	OrderedAt   *time.Time        `json:"ordered_at"`
 	ReceivedAt  *time.Time        `json:"received_at"`
 	CancelledAt *time.Time        `json:"cancelled_at"`

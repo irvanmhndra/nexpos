@@ -13,6 +13,7 @@ import (
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/irvanmhndra/nexpos-api/internal/repository"
 	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
+	"github.com/shopspring/decimal"
 )
 
 type OrderService struct {
@@ -114,7 +115,7 @@ func (s *OrderService) Create(ctx context.Context, companyID, branchID, cashierI
 	}
 
 	// Calculate totals
-	var totalAmount, totalDiscount, totalTax float64
+	var totalAmount, totalDiscount, totalTax decimal.Decimal
 	orderItems := make([]*model.OrderItem, 0, len(req.Items))
 
 	for _, itemInput := range req.Items {
@@ -149,28 +150,15 @@ func (s *OrderService) Create(ctx context.Context, companyID, branchID, cashierI
 
 		// Calculate item amounts
 		unitPrice := effectivePrice(variant)
-		quantity := float64(itemInput.Quantity)
 		discountAmount := itemInput.DiscountAmount
-		subtotal := (unitPrice * quantity) - discountAmount
-
-		// Tax calculation
-		var taxAmount float64
-		if settings.TaxEnabled {
-			if settings.TaxInclusive {
-				// Price includes tax, extract it
-				taxAmount = subtotal * settings.TaxRate / (100 + settings.TaxRate)
-			} else {
-				// Price excludes tax, add it
-				taxAmount = subtotal * settings.TaxRate / 100
-			}
-		}
+		gross, subtotal, taxAmount := lineAmounts(unitPrice, itemInput.Quantity, discountAmount, settings)
 
 		// COGS
-		cogsAmount := variant.StandardCost * quantity
+		cogsAmount := variant.StandardCost.Mul(decimal.NewFromInt(int64(itemInput.Quantity)))
 
-		totalAmount += unitPrice * quantity
-		totalDiscount += discountAmount
-		totalTax += taxAmount
+		totalAmount = totalAmount.Add(gross)
+		totalDiscount = totalDiscount.Add(discountAmount)
+		totalTax = totalTax.Add(taxAmount)
 
 		orderItems = append(orderItems, &model.OrderItem{
 			ProductID:         &variant.ProductID,
@@ -190,16 +178,16 @@ func (s *OrderService) Create(ctx context.Context, companyID, branchID, cashierI
 	}
 
 	// Evaluate and apply promotion
-	subtotal := totalAmount - totalDiscount
+	subtotal := totalAmount.Sub(totalDiscount)
 	promo, promoDiscount := s.evaluatePromotion(ctx, companyID, req.PromoCode, subtotal)
 	if promo != nil {
-		totalDiscount += promoDiscount
+		totalDiscount = totalDiscount.Add(promoDiscount)
 	}
 
-	grandTotal := totalAmount - totalDiscount + totalTax
+	grandTotal := totalAmount.Sub(totalDiscount).Add(totalTax)
 
 	// Apply rounding if enabled
-	if settings.RoundingEnabled && settings.RoundingAmount > 0 {
+	if settings.RoundingEnabled && settings.RoundingAmount.IsPositive() {
 		grandTotal = roundToNearest(grandTotal, settings.RoundingAmount)
 	}
 
@@ -282,7 +270,7 @@ func (s *OrderService) Preview(ctx context.Context, companyID, branchID int64, r
 		return nil, apperror.InternalError(err)
 	}
 
-	var totalAmount, itemDiscount, totalTax float64
+	var totalAmount, itemDiscount, totalTax decimal.Decimal
 
 	for _, itemInput := range req.Items {
 		if itemInput.ProductVariantID == nil {
@@ -298,29 +286,19 @@ func (s *OrderService) Preview(ctx context.Context, companyID, branchID int64, r
 		}
 
 		unitPrice := effectivePrice(variant)
-		quantity := float64(itemInput.Quantity)
 		discount := itemInput.DiscountAmount
-		subtotalItem := (unitPrice * quantity) - discount
+		gross, _, taxAmount := lineAmounts(unitPrice, itemInput.Quantity, discount, settings)
 
-		var taxAmount float64
-		if settings.TaxEnabled {
-			if settings.TaxInclusive {
-				taxAmount = subtotalItem * settings.TaxRate / (100 + settings.TaxRate)
-			} else {
-				taxAmount = subtotalItem * settings.TaxRate / 100
-			}
-		}
-
-		totalAmount += unitPrice * quantity
-		itemDiscount += discount
-		totalTax += taxAmount
+		totalAmount = totalAmount.Add(gross)
+		itemDiscount = itemDiscount.Add(discount)
+		totalTax = totalTax.Add(taxAmount)
 	}
 
-	subtotalAfterItemDiscounts := totalAmount - itemDiscount
+	subtotalAfterItemDiscounts := totalAmount.Sub(itemDiscount)
 	promo, promoDiscount := s.evaluatePromotion(ctx, companyID, req.PromoCode, subtotalAfterItemDiscounts)
 
-	grandTotal := subtotalAfterItemDiscounts - promoDiscount + totalTax
-	if settings.RoundingEnabled && settings.RoundingAmount > 0 {
+	grandTotal := subtotalAfterItemDiscounts.Sub(promoDiscount).Add(totalTax)
+	if settings.RoundingEnabled && settings.RoundingAmount.IsPositive() {
 		grandTotal = roundToNearest(grandTotal, settings.RoundingAmount)
 	}
 
@@ -555,18 +533,18 @@ func (s *OrderService) RefundPayment(ctx context.Context, companyID, orderID int
 		}
 
 		// Validate refund amount
-		availableForRefund := payment.Amount - payment.RefundedAmount
-		if req.Amount > availableForRefund {
+		availableForRefund := payment.Amount.Sub(payment.RefundedAmount)
+		if req.Amount.GreaterThan(availableForRefund) {
 			return apperror.BadRequest("Refund amount exceeds available amount")
 		}
 
 		// Update payment
 		now := time.Now()
-		payment.RefundedAmount += req.Amount
+		payment.RefundedAmount = payment.RefundedAmount.Add(req.Amount)
 		payment.RefundedAt = &now
 		payment.RefundReason = &req.RefundReason
 
-		if payment.RefundedAmount >= payment.Amount {
+		if payment.RefundedAmount.GreaterThanOrEqual(payment.Amount) {
 			payment.Status = model.PaymentStatusRefunded
 		} else {
 			payment.Status = model.PaymentStatusPartiallyRefunded
@@ -630,7 +608,7 @@ func (s *OrderService) UpdateOrder(ctx context.Context, companyID, id int64, req
 			}
 
 			// Recalculate and create new items
-			var totalAmount, totalDiscount, totalTax float64
+			var totalAmount, totalDiscount, totalTax decimal.Decimal
 			for _, itemInput := range req.Items {
 				if itemInput.ProductVariantID == nil {
 					return apperror.BadRequest("Product variant is required")
@@ -645,24 +623,14 @@ func (s *OrderService) UpdateOrder(ctx context.Context, companyID, id int64, req
 				}
 
 				unitPrice := effectivePrice(variant)
-				quantity := float64(itemInput.Quantity)
 				discountAmount := itemInput.DiscountAmount
-				subtotal := (unitPrice * quantity) - discountAmount
+				gross, subtotal, taxAmount := lineAmounts(unitPrice, itemInput.Quantity, discountAmount, settings)
 
-				var taxAmount float64
-				if settings.TaxEnabled {
-					if settings.TaxInclusive {
-						taxAmount = subtotal * settings.TaxRate / (100 + settings.TaxRate)
-					} else {
-						taxAmount = subtotal * settings.TaxRate / 100
-					}
-				}
+				cogsAmount := variant.StandardCost.Mul(decimal.NewFromInt(int64(itemInput.Quantity)))
 
-				cogsAmount := variant.StandardCost * quantity
-
-				totalAmount += unitPrice * quantity
-				totalDiscount += discountAmount
-				totalTax += taxAmount
+				totalAmount = totalAmount.Add(gross)
+				totalDiscount = totalDiscount.Add(discountAmount)
+				totalTax = totalTax.Add(taxAmount)
 
 				item := &model.OrderItem{
 					OrderID:           order.ID,
@@ -689,9 +657,9 @@ func (s *OrderService) UpdateOrder(ctx context.Context, companyID, id int64, req
 			order.TotalAmount = totalAmount
 			order.TotalDiscount = totalDiscount
 			order.TotalTax = totalTax
-			order.GrandTotal = totalAmount - totalDiscount + totalTax
+			order.GrandTotal = totalAmount.Sub(totalDiscount).Add(totalTax)
 
-			if settings.RoundingEnabled && settings.RoundingAmount > 0 {
+			if settings.RoundingEnabled && settings.RoundingAmount.IsPositive() {
 				order.GrandTotal = roundToNearest(order.GrandTotal, settings.RoundingAmount)
 			}
 		}
@@ -805,53 +773,53 @@ func (s *OrderService) List(ctx context.Context, companyID int64, req dto.ListOr
 // evaluatePromotion finds the best applicable promotion for an order.
 // If promoCode is provided, validates that specific promo.
 // Otherwise auto-applies the highest-discount active promotion.
-func (s *OrderService) evaluatePromotion(ctx context.Context, companyID int64, promoCode *string, subtotalAfterItemDiscounts float64) (*model.Promotion, float64) {
+func (s *OrderService) evaluatePromotion(ctx context.Context, companyID int64, promoCode *string, subtotalAfterItemDiscounts decimal.Decimal) (*model.Promotion, decimal.Decimal) {
 	now := time.Now()
 	var candidates []*model.Promotion
 
 	if promoCode != nil && *promoCode != "" {
 		p, err := s.promotionRepo.GetByCode(ctx, companyID, *promoCode)
 		if err != nil || p == nil || !p.IsActive {
-			return nil, 0
+			return nil, decimal.Zero
 		}
 		if p.StartAt.After(now) || (p.EndAt != nil && p.EndAt.Before(now)) {
-			return nil, 0
+			return nil, decimal.Zero
 		}
 		candidates = []*model.Promotion{p}
 	} else {
 		var err error
 		candidates, err = s.promotionRepo.GetActivePromotions(ctx, companyID, now)
 		if err != nil {
-			return nil, 0
+			return nil, decimal.Zero
 		}
 	}
 
 	var bestPromo *model.Promotion
-	var bestDiscount float64
+	var bestDiscount decimal.Decimal
 
 	for _, p := range candidates {
 		if p.DiscountType == nil || p.DiscountValue == nil {
 			continue
 		}
-		if p.MinPurchase != nil && subtotalAfterItemDiscounts < *p.MinPurchase {
+		if p.MinPurchase != nil && subtotalAfterItemDiscounts.LessThan(*p.MinPurchase) {
 			continue
 		}
 
-		var discount float64
+		var discount decimal.Decimal
 		switch *p.DiscountType {
 		case "percentage":
-			discount = subtotalAfterItemDiscounts * (*p.DiscountValue) / 100
-			if p.MaxDiscount != nil && discount > *p.MaxDiscount {
+			discount = subtotalAfterItemDiscounts.Mul(*p.DiscountValue).Div(hundred).Round(model.MoneyScale)
+			if p.MaxDiscount != nil && discount.GreaterThan(*p.MaxDiscount) {
 				discount = *p.MaxDiscount
 			}
 		case "fixed":
 			discount = *p.DiscountValue
-			if discount > subtotalAfterItemDiscounts {
+			if discount.GreaterThan(subtotalAfterItemDiscounts) {
 				discount = subtotalAfterItemDiscounts
 			}
 		}
 
-		if discount > bestDiscount {
+		if discount.GreaterThan(bestDiscount) {
 			bestDiscount = discount
 			bestPromo = p
 		}
@@ -924,11 +892,11 @@ func (s *OrderService) processPayments(ctx context.Context, order *model.Order, 
 	return payments, nil
 }
 
-func (s *OrderService) updateOrderPaymentStatus(ctx context.Context, order *model.Order, totalPaid float64) {
-	if totalPaid <= 0 {
+func (s *OrderService) updateOrderPaymentStatus(ctx context.Context, order *model.Order, totalPaid decimal.Decimal) {
+	if !totalPaid.IsPositive() {
 		order.PaymentStatus = model.PaymentStatusUnpaid
 		order.PaidAt = nil
-	} else if totalPaid >= order.GrandTotal {
+	} else if totalPaid.GreaterThanOrEqual(order.GrandTotal) {
 		order.PaymentStatus = model.PaymentStatusPaid
 		if order.PaidAt == nil {
 			now := time.Now()
@@ -970,17 +938,17 @@ func (s *OrderService) toResponse(ctx context.Context, companyID int64, order *m
 	}
 
 	// Calculate paid amounts
-	var paidAmount, refundedTotal float64
+	var paidAmount, refundedTotal decimal.Decimal
 	if order.Payments != nil {
 		for _, p := range order.Payments {
 			if p.Status != model.PaymentStatusFailed {
-				paidAmount += p.Amount - p.RefundedAmount
-				refundedTotal += p.RefundedAmount
+				paidAmount = paidAmount.Add(p.Amount.Sub(p.RefundedAmount))
+				refundedTotal = refundedTotal.Add(p.RefundedAmount)
 			}
 		}
 	}
 	resp.PaidAmount = paidAmount
-	resp.BalanceDue = order.GrandTotal - paidAmount
+	resp.BalanceDue = order.GrandTotal.Sub(paidAmount)
 	resp.RefundedTotal = refundedTotal
 
 	// Get customer name
@@ -1057,8 +1025,12 @@ func (s *OrderService) toResponse(ctx context.Context, companyID int64, order *m
 		}
 		if disc, ok := order.AppliedPromotions["discount_amount"]; ok {
 			switch v := disc.(type) {
-			case float64:
+			case decimal.Decimal: // freshly built, not yet reloaded from JSONB
 				ap.DiscountAmount = v
+			case float64: // decoded from JSONB
+				ap.DiscountAmount = decimal.NewFromFloat(v)
+			case string:
+				ap.DiscountAmount, _ = decimal.NewFromString(v)
 			}
 		}
 		if ap.Code != "" {
@@ -1070,9 +1042,9 @@ func (s *OrderService) toResponse(ctx context.Context, companyID int64, order *m
 }
 
 // effectivePrice returns the sale price if it's active, otherwise the normal price.
-func effectivePrice(v *model.ProductVariant) float64 {
+func effectivePrice(v *model.ProductVariant) decimal.Decimal {
 	now := time.Now()
-	if v.SalePrice != nil && *v.SalePrice < v.Price &&
+	if v.SalePrice != nil && v.SalePrice.LessThan(v.Price) &&
 		(v.SaleStart == nil || !now.Before(*v.SaleStart)) &&
 		(v.SaleEnd == nil || !now.After(*v.SaleEnd)) {
 		return *v.SalePrice
@@ -1080,11 +1052,35 @@ func effectivePrice(v *model.ProductVariant) float64 {
 	return v.Price
 }
 
-func roundToNearest(value, nearest float64) float64 {
-	if nearest <= 0 {
+var hundred = decimal.NewFromInt(100)
+
+// lineAmounts prices one order line: gross is unit price × quantity, subtotal
+// is gross minus the line discount, and tax is the tax on that subtotal,
+// rounded to money precision per line so an order's tax is exactly the sum of
+// its lines' tax.
+func lineAmounts(unitPrice decimal.Decimal, quantity int, discount decimal.Decimal, settings *model.CompanySettings) (gross, subtotal, tax decimal.Decimal) {
+	gross = unitPrice.Mul(decimal.NewFromInt(int64(quantity)))
+	subtotal = gross.Sub(discount)
+	if settings.TaxEnabled {
+		if settings.TaxInclusive {
+			// Price includes tax, extract it
+			tax = subtotal.Mul(settings.TaxRate).Div(hundred.Add(settings.TaxRate))
+		} else {
+			// Price excludes tax, add it
+			tax = subtotal.Mul(settings.TaxRate).Div(hundred)
+		}
+		tax = tax.Round(model.MoneyScale)
+	}
+	return gross, subtotal, tax
+}
+
+// roundToNearest rounds value to the nearest multiple of nearest (cash
+// rounding), halves rounding up.
+func roundToNearest(value, nearest decimal.Decimal) decimal.Decimal {
+	if !nearest.IsPositive() {
 		return value
 	}
-	return float64(int64((value+nearest/2)/nearest)) * nearest
+	return value.Div(nearest).Round(0).Mul(nearest)
 }
 
 // deductStockForOrder creates OUT movements for each order item. It runs inside

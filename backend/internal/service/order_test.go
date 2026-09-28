@@ -59,7 +59,7 @@ func setupOrderTest(t *testing.T) *orderTestSetup {
 func defaultSettings() *model.CompanySettings {
 	return &model.CompanySettings{
 		TaxEnabled:                false,
-		TaxRate:                   0,
+		TaxRate:                   money(0),
 		TaxInclusive:              false,
 		RoundingEnabled:           false,
 		AutoCompleteCounterOrders: false,
@@ -73,8 +73,8 @@ func testVariant(id int64, price float64) *model.ProductVariant {
 		SKU:          "SKU-001",
 		Name:         "Default",
 		ProductName:  "Test Product",
-		Price:        price,
-		StandardCost: price * 0.6,
+		Price:        money(price),
+		StandardCost: money(price * 0.6),
 	}
 }
 
@@ -88,7 +88,7 @@ func testOrder(id, companyID, branchID int64, status string) *model.Order {
 		Status:          status,
 		PaymentStatus:   model.PaymentStatusUnpaid,
 		FulfillmentType: model.FulfillmentTypeCounter,
-		GrandTotal:      100_000,
+		GrandTotal:      money(100_000),
 	}
 }
 
@@ -139,12 +139,12 @@ func TestOrderService_Create_Success(t *testing.T) {
 	s.promoRepo.On("GetActivePromotions", ctx, companyID, mock.AnythingOfType("time.Time")).
 		Return(([]*model.Promotion)(nil), nil).Once()
 	s.orderRepo.EXPECT().Create(ctx, mock.MatchedBy(func(o *model.Order) bool {
-		return o.CompanyID == companyID && o.GrandTotal == 100_000
+		return o.CompanyID == companyID && o.GrandTotal.Equal(money(100_000))
 	})).Return(nil).Once()
 	s.itemRepo.EXPECT().Create(ctx, mock.AnythingOfType("*model.OrderItem")).Return(nil).Once()
 
 	createdOrder := testOrder(0, companyID, branchID, model.OrderStatusDraft)
-	createdOrder.GrandTotal = 100_000
+	createdOrder.GrandTotal = money(100_000)
 	s.expectReload(ctx, companyID, 0, createdOrder)
 
 	resp, err := s.svc.Create(ctx, companyID, branchID, cashierID, req)
@@ -244,7 +244,7 @@ func TestOrderService_Create_WithTax_Exclusive(t *testing.T) {
 	settings := &model.CompanySettings{
 		TaxEnabled:   true,
 		TaxInclusive: false,
-		TaxRate:      10, // 10%
+		TaxRate:      money(10), // 10%
 	}
 
 	req := dto.CreateOrderRequest{
@@ -261,12 +261,12 @@ func TestOrderService_Create_WithTax_Exclusive(t *testing.T) {
 		Return(([]*model.Promotion)(nil), nil).Once()
 	s.orderRepo.EXPECT().Create(ctx, mock.MatchedBy(func(o *model.Order) bool {
 		// tax = 100000 * 10/100 = 10000; grand = 110000
-		return o.TotalTax == 10_000 && o.GrandTotal == 110_000
+		return o.TotalTax.Equal(money(10_000)) && o.GrandTotal.Equal(money(110_000))
 	})).Return(nil).Once()
 	s.itemRepo.EXPECT().Create(ctx, mock.AnythingOfType("*model.OrderItem")).Return(nil).Once()
 
 	order := testOrder(0, companyID, branchID, model.OrderStatusDraft)
-	order.GrandTotal = 110_000
+	order.GrandTotal = money(110_000)
 	s.expectReload(ctx, companyID, 0, order)
 
 	resp, err := s.svc.Create(ctx, companyID, branchID, 99, req)
@@ -301,7 +301,7 @@ func TestOrderService_Create_WithPromoCode(t *testing.T) {
 	companyID, branchID := int64(1), int64(2)
 	variantID := int64(5)
 	code := "DISC10"
-	discountVal := 10.0
+	discountVal := money(10.0)
 	promoNow := time.Now().Add(-time.Hour)
 
 	promo := &model.Promotion{
@@ -328,12 +328,12 @@ func TestOrderService_Create_WithPromoCode(t *testing.T) {
 	s.promoRepo.EXPECT().GetByCode(ctx, companyID, code).Return(promo, nil).Once()
 	s.orderRepo.EXPECT().Create(ctx, mock.MatchedBy(func(o *model.Order) bool {
 		// discount = 10% of 100000 = 10000; grand = 90000
-		return o.TotalDiscount == 10_000 && o.GrandTotal == 90_000
+		return o.TotalDiscount.Equal(money(10_000)) && o.GrandTotal.Equal(money(90_000))
 	})).Return(nil).Once()
 	s.itemRepo.EXPECT().Create(ctx, mock.AnythingOfType("*model.OrderItem")).Return(nil).Once()
 
 	order := testOrder(0, companyID, branchID, model.OrderStatusDraft)
-	order.GrandTotal = 90_000
+	order.GrandTotal = money(90_000)
 	s.expectReload(ctx, companyID, 0, order)
 
 	resp, err := s.svc.Create(ctx, companyID, branchID, 99, req)
@@ -364,8 +364,8 @@ func TestOrderService_Preview_Success(t *testing.T) {
 	resp, err := s.svc.Preview(ctx, companyID, branchID, req)
 
 	require.NoError(t, err)
-	assert.Equal(t, float64(100_000), resp.Subtotal)
-	assert.Equal(t, float64(100_000), resp.GrandTotal)
+	assertMoney(t, 100_000, resp.Subtotal)
+	assertMoney(t, 100_000, resp.GrandTotal)
 }
 
 func TestOrderService_Preview_EmptyItems(t *testing.T) {
@@ -435,16 +435,16 @@ func TestOrderService_AddPayment_Success(t *testing.T) {
 	companyID, orderID := int64(1), int64(10)
 
 	order := testOrder(orderID, companyID, 2, model.OrderStatusDraft)
-	order.GrandTotal = 100_000
+	order.GrandTotal = money(100_000)
 
 	req := dto.AddPaymentRequest{
-		Payments: []dto.PaymentInput{{Method: "cash", Amount: 100_000}},
+		Payments: []dto.PaymentInput{{Method: "cash", Amount: money(100_000)}},
 	}
 
 	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(defaultSettings(), nil).Once()
 	s.paymentRepo.EXPECT().Create(ctx, mock.AnythingOfType("*model.Payment")).Return(nil).Once()
-	s.paymentRepo.EXPECT().GetTotalPaidByOrderID(ctx, orderID).Return(100_000.0, nil).Once()
+	s.paymentRepo.EXPECT().GetTotalPaidByOrderID(ctx, orderID).Return(money(100_000.0), nil).Once()
 	s.orderRepo.EXPECT().Update(ctx, mock.MatchedBy(func(o *model.Order) bool {
 		return o.PaymentStatus == model.PaymentStatusPaid
 	})).Return(nil).Once()
@@ -462,16 +462,16 @@ func TestOrderService_AddPayment_PartialPayment(t *testing.T) {
 	companyID, orderID := int64(1), int64(10)
 
 	order := testOrder(orderID, companyID, 2, model.OrderStatusDraft)
-	order.GrandTotal = 100_000
+	order.GrandTotal = money(100_000)
 
 	req := dto.AddPaymentRequest{
-		Payments: []dto.PaymentInput{{Method: "cash", Amount: 50_000}},
+		Payments: []dto.PaymentInput{{Method: "cash", Amount: money(50_000)}},
 	}
 
 	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(defaultSettings(), nil).Once()
 	s.paymentRepo.EXPECT().Create(ctx, mock.AnythingOfType("*model.Payment")).Return(nil).Once()
-	s.paymentRepo.EXPECT().GetTotalPaidByOrderID(ctx, orderID).Return(50_000.0, nil).Once()
+	s.paymentRepo.EXPECT().GetTotalPaidByOrderID(ctx, orderID).Return(money(50_000.0), nil).Once()
 	s.orderRepo.EXPECT().Update(ctx, mock.MatchedBy(func(o *model.Order) bool {
 		return o.PaymentStatus == model.PaymentStatusPartial
 	})).Return(nil).Once()
@@ -492,7 +492,7 @@ func TestOrderService_AddPayment_WrongStatus(t *testing.T) {
 	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 
 	_, err := s.svc.AddPayment(ctx, companyID, orderID, dto.AddPaymentRequest{
-		Payments: []dto.PaymentInput{{Method: "cash", Amount: 100_000}},
+		Payments: []dto.PaymentInput{{Method: "cash", Amount: money(100_000)}},
 	})
 
 	require.Error(t, err)
@@ -773,24 +773,24 @@ func TestOrderService_RefundPayment_Success(t *testing.T) {
 	payment := &model.Payment{
 		ID:             paymentID,
 		OrderID:        orderID,
-		Amount:         100_000,
-		RefundedAmount: 0,
+		Amount:         money(100_000),
+		RefundedAmount: money(0),
 		Status:         model.PaymentStatusCompleted,
 		PaidAt:         time.Now(),
 	}
 
 	req := dto.RefundPaymentRequest{
 		PaymentID:    paymentID,
-		Amount:       50_000,
+		Amount:       money(50_000),
 		RefundReason: "partial refund",
 	}
 
 	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
 	s.paymentRepo.EXPECT().GetByIDForUpdate(ctx, paymentID).Return(payment, nil).Once()
 	s.paymentRepo.EXPECT().Update(ctx, mock.MatchedBy(func(p *model.Payment) bool {
-		return p.RefundedAmount == 50_000 && p.Status == model.PaymentStatusPartiallyRefunded
+		return p.RefundedAmount.Equal(money(50_000)) && p.Status == model.PaymentStatusPartiallyRefunded
 	})).Return(nil).Once()
-	s.paymentRepo.EXPECT().GetTotalPaidByOrderID(ctx, orderID).Return(50_000.0, nil).Once()
+	s.paymentRepo.EXPECT().GetTotalPaidByOrderID(ctx, orderID).Return(money(50_000.0), nil).Once()
 	// updateOrderPaymentStatus is in-memory only — no orderRepo.Update call in RefundPayment
 	s.expectReload(ctx, companyID, orderID, testOrder(orderID, companyID, 2, model.OrderStatusCompleted))
 
@@ -807,21 +807,21 @@ func TestOrderService_RefundPayment_FullRefund(t *testing.T) {
 
 	order := testOrder(orderID, companyID, 2, model.OrderStatusCompleted)
 	payment := &model.Payment{
-		ID: paymentID, OrderID: orderID, Amount: 100_000,
+		ID: paymentID, OrderID: orderID, Amount: money(100_000),
 		Status: model.PaymentStatusCompleted, PaidAt: time.Now(),
 	}
 
 	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
 	s.paymentRepo.EXPECT().GetByIDForUpdate(ctx, paymentID).Return(payment, nil).Once()
 	s.paymentRepo.EXPECT().Update(ctx, mock.MatchedBy(func(p *model.Payment) bool {
-		return p.RefundedAmount == 100_000 && p.Status == model.PaymentStatusRefunded
+		return p.RefundedAmount.Equal(money(100_000)) && p.Status == model.PaymentStatusRefunded
 	})).Return(nil).Once()
-	s.paymentRepo.EXPECT().GetTotalPaidByOrderID(ctx, orderID).Return(0.0, nil).Once()
+	s.paymentRepo.EXPECT().GetTotalPaidByOrderID(ctx, orderID).Return(money(0.0), nil).Once()
 	// updateOrderPaymentStatus is in-memory only — no orderRepo.Update call in RefundPayment
 	s.expectReload(ctx, companyID, orderID, testOrder(orderID, companyID, 2, model.OrderStatusCompleted))
 
 	resp, err := s.svc.RefundPayment(ctx, companyID, orderID, dto.RefundPaymentRequest{
-		PaymentID: paymentID, Amount: 100_000, RefundReason: "customer complaint",
+		PaymentID: paymentID, Amount: money(100_000), RefundReason: "customer complaint",
 	})
 
 	require.NoError(t, err)
@@ -835,7 +835,7 @@ func TestOrderService_RefundPayment_ExceedsAvailable(t *testing.T) {
 
 	order := testOrder(orderID, companyID, 2, model.OrderStatusCompleted)
 	payment := &model.Payment{
-		ID: paymentID, OrderID: orderID, Amount: 100_000, RefundedAmount: 80_000,
+		ID: paymentID, OrderID: orderID, Amount: money(100_000), RefundedAmount: money(80_000),
 		PaidAt: time.Now(),
 	}
 
@@ -843,7 +843,7 @@ func TestOrderService_RefundPayment_ExceedsAvailable(t *testing.T) {
 	s.paymentRepo.EXPECT().GetByIDForUpdate(ctx, paymentID).Return(payment, nil).Once()
 
 	_, err := s.svc.RefundPayment(ctx, companyID, orderID, dto.RefundPaymentRequest{
-		PaymentID: paymentID, Amount: 50_000, RefundReason: "too much",
+		PaymentID: paymentID, Amount: money(50_000), RefundReason: "too much",
 	})
 
 	require.Error(t, err)
@@ -859,14 +859,14 @@ func TestOrderService_RefundPayment_WrongOrder(t *testing.T) {
 	order := testOrder(orderID, companyID, 2, model.OrderStatusCompleted)
 	payment := &model.Payment{
 		ID: paymentID, OrderID: 999, // belongs to different order
-		Amount: 100_000, PaidAt: time.Now(),
+		Amount: money(100_000), PaidAt: time.Now(),
 	}
 
 	s.orderRepo.EXPECT().GetByID(ctx, companyID, orderID).Return(order, nil).Once()
 	s.paymentRepo.EXPECT().GetByIDForUpdate(ctx, paymentID).Return(payment, nil).Once()
 
 	_, err := s.svc.RefundPayment(ctx, companyID, orderID, dto.RefundPaymentRequest{
-		PaymentID: paymentID, Amount: 50_000, RefundReason: "test",
+		PaymentID: paymentID, Amount: money(50_000), RefundReason: "test",
 	})
 
 	require.Error(t, err)
@@ -883,19 +883,19 @@ func TestOrderService_AddPayment_AutoCompleteCounterOrder(t *testing.T) {
 	companyID, orderID := int64(1), int64(10)
 
 	order := testOrder(orderID, companyID, 2, model.OrderStatusDraft)
-	order.GrandTotal = 100_000
+	order.GrandTotal = money(100_000)
 	order.Items = []*model.OrderItem{} // empty → deductStock is no-op
 
 	settings := &model.CompanySettings{AutoCompleteCounterOrders: true}
 
 	req := dto.AddPaymentRequest{
-		Payments: []dto.PaymentInput{{Method: "cash", Amount: 100_000}},
+		Payments: []dto.PaymentInput{{Method: "cash", Amount: money(100_000)}},
 	}
 
 	s.orderRepo.EXPECT().GetByIDForUpdate(ctx, companyID, orderID).Return(order, nil).Once()
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(settings, nil).Once()
 	s.paymentRepo.EXPECT().Create(ctx, mock.AnythingOfType("*model.Payment")).Return(nil).Once()
-	s.paymentRepo.EXPECT().GetTotalPaidByOrderID(ctx, orderID).Return(100_000.0, nil).Once()
+	s.paymentRepo.EXPECT().GetTotalPaidByOrderID(ctx, orderID).Return(money(100_000.0), nil).Once()
 	s.orderRepo.EXPECT().Update(ctx, mock.MatchedBy(func(o *model.Order) bool {
 		return o.Status == model.OrderStatusCompleted
 	})).Return(nil).Once()

@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type StockMovementType string
 
@@ -19,7 +23,7 @@ type StockMovement struct {
 	Quantity         int               `db:"quantity"           json:"quantity"`
 	StockBefore      int               `db:"stock_before"       json:"stock_before"`
 	StockAfter       int               `db:"stock_after"        json:"stock_after"`
-	UnitCost         *float64          `db:"unit_cost"          json:"unit_cost"`
+	UnitCost         *decimal.Decimal  `db:"unit_cost"          json:"unit_cost"`
 	ReferenceType    *string           `db:"reference_type"     json:"reference_type"`
 	ReferenceID      *int64            `db:"reference_id"       json:"reference_id"`
 	Note             *string           `db:"note"               json:"note"`

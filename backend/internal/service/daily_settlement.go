@@ -8,6 +8,7 @@ import (
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/irvanmhndra/nexpos-api/internal/repository"
 	"github.com/irvanmhndra/nexpos-api/pkg/apperror"
+	"github.com/shopspring/decimal"
 )
 
 type DailySettlementService struct {
@@ -102,7 +103,7 @@ func (s *DailySettlementService) Create(ctx context.Context, companyID, userID i
 			DailySettlementID: settlement.ID,
 			PaymentMethod:     bm.PaymentMethod,
 			ExpectedAmount:    bm.ExpectedAmount,
-			VarianceAmount:    -bm.ExpectedAmount, // actual=0 until user enters
+			VarianceAmount:    bm.ExpectedAmount.Neg(), // actual=0 until user enters
 		}
 		if err := s.repo.CreateItem(ctx, item); err != nil {
 			return nil, apperror.InternalError(err)
@@ -191,7 +192,7 @@ func (s *DailySettlementService) UpdateItem(ctx context.Context, companyID, sett
 
 	actual := req.ActualAmount
 	item.ActualAmount = &actual
-	item.VarianceAmount = actual - item.ExpectedAmount
+	item.VarianceAmount = actual.Sub(item.ExpectedAmount)
 	item.Notes = req.Notes
 
 	if err := s.repo.UpdateItem(ctx, item); err != nil {
@@ -222,7 +223,7 @@ func (s *DailySettlementService) BulkUpdateItems(ctx context.Context, companyID,
 		}
 		actual := line.ActualAmount
 		item.ActualAmount = &actual
-		item.VarianceAmount = actual - item.ExpectedAmount
+		item.VarianceAmount = actual.Sub(item.ExpectedAmount)
 		item.Notes = line.Notes
 		if err := s.repo.UpdateItem(ctx, item); err != nil {
 			return nil, apperror.InternalError(err)
@@ -275,10 +276,10 @@ func (s *DailySettlementService) validateBranch(ctx context.Context, companyID, 
 
 type breakdownResult struct {
 	byMethod      []*dto.SettlementMethodBreakdown
-	totalSales    float64
-	totalRefunds  float64
-	totalExpenses float64
-	totalExpected float64
+	totalSales    decimal.Decimal
+	totalRefunds  decimal.Decimal
+	totalExpenses decimal.Decimal
+	totalExpected decimal.Decimal
 }
 
 func (s *DailySettlementService) computeBreakdown(ctx context.Context, companyID, branchID int64, date string) (*breakdownResult, error) {
@@ -299,17 +300,15 @@ func (s *DailySettlementService) computeBreakdown(ctx context.Context, companyID
 	result := &breakdownResult{totalExpenses: expenses}
 	result.byMethod = make([]*dto.SettlementMethodBreakdown, 0, len(allMethods))
 	for _, method := range allMethods {
-		gross := 0.0
-		refunds := 0.0
+		var gross, refunds, expensesOut decimal.Decimal
 		if t, ok := byMethod[method]; ok {
 			gross = t.GrossSales
 			refunds = t.Refunds
 		}
-		expensesOut := 0.0
 		if method == model.PaymentMethodCash {
 			expensesOut = expenses
 		}
-		expected := gross - refunds - expensesOut
+		expected := gross.Sub(refunds).Sub(expensesOut)
 
 		result.byMethod = append(result.byMethod, &dto.SettlementMethodBreakdown{
 			PaymentMethod:  method,
@@ -318,9 +317,9 @@ func (s *DailySettlementService) computeBreakdown(ctx context.Context, companyID
 			ExpensesOut:    expensesOut,
 			ExpectedAmount: expected,
 		})
-		result.totalSales += gross
-		result.totalRefunds += refunds
-		result.totalExpected += expected
+		result.totalSales = result.totalSales.Add(gross)
+		result.totalRefunds = result.totalRefunds.Add(refunds)
+		result.totalExpected = result.totalExpected.Add(expected)
 	}
 	return result, nil
 }
@@ -346,11 +345,11 @@ func toSettlementResponse(s *model.DailySettlement) *dto.DailySettlementResponse
 		resp.Items = make([]*dto.DailySettlementItemResponse, len(s.Items))
 		for i, it := range s.Items {
 			resp.Items[i] = toSettlementItemResponse(it)
-			resp.TotalExpected += it.ExpectedAmount
+			resp.TotalExpected = resp.TotalExpected.Add(it.ExpectedAmount)
 			if it.ActualAmount != nil {
-				resp.TotalActual += *it.ActualAmount
+				resp.TotalActual = resp.TotalActual.Add(*it.ActualAmount)
 			}
-			resp.TotalVariance += it.VarianceAmount
+			resp.TotalVariance = resp.TotalVariance.Add(it.VarianceAmount)
 		}
 	}
 	return resp

@@ -25,7 +25,7 @@ func setupPromotionTest(t *testing.T) (*PromotionService, *repoMocks.MockPromoti
 func createTestPromotion(id, companyID int64, code string) *model.Promotion {
 	now := time.Now()
 	discountType := "percentage"
-	discountValue := 10.0
+	discountValue := money(10.0)
 	return &model.Promotion{
 		ID:            id,
 		CompanyID:     companyID,

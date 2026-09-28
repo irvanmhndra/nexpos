@@ -8,6 +8,7 @@ import (
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/irvanmhndra/nexpos-api/internal/repository"
 	"github.com/jmoiron/sqlx"
+	"github.com/shopspring/decimal"
 )
 
 type ExpenseCategoryRepository struct {
@@ -261,8 +262,8 @@ func (r *ExpenseRepository) Delete(ctx context.Context, companyID, id int64) err
 	return nil
 }
 
-func (r *ExpenseRepository) GetTotalByDateRange(ctx context.Context, companyID int64, branchID *int64, from, to string) (float64, error) {
-	var total float64
+func (r *ExpenseRepository) GetTotalByDateRange(ctx context.Context, companyID int64, branchID *int64, from, to string) (decimal.Decimal, error) {
+	var total decimal.Decimal
 
 	whereClause := "WHERE company_id = $1"
 	args := []interface{}{companyID}
@@ -287,7 +288,7 @@ func (r *ExpenseRepository) GetTotalByDateRange(ctx context.Context, companyID i
 
 	query := "SELECT COALESCE(SUM(amount), 0) FROM expenses " + whereClause
 	if err := conn(ctx, r.db).GetContext(ctx, &total, query, args...); err != nil {
-		return 0, err
+		return decimal.Zero, err
 	}
 
 	return total, nil

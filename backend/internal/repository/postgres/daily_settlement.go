@@ -8,6 +8,7 @@ import (
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/irvanmhndra/nexpos-api/internal/repository"
 	"github.com/jmoiron/sqlx"
+	"github.com/shopspring/decimal"
 )
 
 type DailySettlementRepository struct {
@@ -253,8 +254,8 @@ func (r *DailySettlementRepository) GetPaymentBreakdown(ctx context.Context, com
 	return totals, nil
 }
 
-func (r *DailySettlementRepository) GetExpensesTotal(ctx context.Context, companyID, branchID int64, date string) (float64, error) {
-	var total float64
+func (r *DailySettlementRepository) GetExpensesTotal(ctx context.Context, companyID, branchID int64, date string) (decimal.Decimal, error) {
+	var total decimal.Decimal
 	query := `
 		SELECT COALESCE(SUM(amount), 0)
 		FROM expenses
@@ -263,7 +264,7 @@ func (r *DailySettlementRepository) GetExpensesTotal(ctx context.Context, compan
 		  AND expense_date = $3
 	`
 	if err := conn(ctx, r.db).GetContext(ctx, &total, query, companyID, branchID, date); err != nil {
-		return 0, err
+		return decimal.Zero, err
 	}
 	return total, nil
 }

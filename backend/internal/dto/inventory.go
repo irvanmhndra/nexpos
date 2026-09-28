@@ -5,6 +5,7 @@ import (
 
 	"github.com/irvanmhndra/nexpos-api/internal/model"
 	"github.com/irvanmhndra/nexpos-api/pkg/httputil"
+	"github.com/shopspring/decimal"
 )
 
 // ============== Stock Status ==============
@@ -24,7 +25,7 @@ type AdjustStockRequest struct {
 	BranchID  int64                   `json:"branch_id"  validate:"required"`
 	Type      model.StockMovementType `json:"type"       validate:"required,oneof=IN OUT ADJUST"`
 	Quantity  int                     `json:"quantity"   validate:"required,min=1"`
-	UnitCost  *float64                `json:"unit_cost"`
+	UnitCost  *decimal.Decimal        `json:"unit_cost"`
 	Note      *string                 `json:"note"`
 }
 
@@ -54,27 +55,27 @@ type ListMovementsRequest struct {
 // ============== Responses ==============
 
 type InventoryItemResponse struct {
-	ProductVariantID int64       `json:"product_variant_id"`
-	ProductID        int64       `json:"product_id"`
-	ProductName      string      `json:"product_name"`
-	VariantName      string      `json:"variant_name"`
-	SKU              string      `json:"sku"`
-	CategoryName     string      `json:"category_name"`
-	ImageData        *string     `json:"image_data"`
-	BranchID         int64       `json:"branch_id"`
-	BranchName       string      `json:"branch_name"`
-	CurrentStock     int         `json:"current_stock"`
-	MinStock         int         `json:"min_stock"`
-	StockValue       float64     `json:"stock_value"`
-	Status           StockStatus `json:"status"`
-	HasVariants      bool        `json:"has_variants"`
+	ProductVariantID int64           `json:"product_variant_id"`
+	ProductID        int64           `json:"product_id"`
+	ProductName      string          `json:"product_name"`
+	VariantName      string          `json:"variant_name"`
+	SKU              string          `json:"sku"`
+	CategoryName     string          `json:"category_name"`
+	ImageData        *string         `json:"image_data"`
+	BranchID         int64           `json:"branch_id"`
+	BranchName       string          `json:"branch_name"`
+	CurrentStock     int             `json:"current_stock"`
+	MinStock         int             `json:"min_stock"`
+	StockValue       decimal.Decimal `json:"stock_value"`
+	Status           StockStatus     `json:"status"`
+	HasVariants      bool            `json:"has_variants"`
 }
 
 type InventoryStatsResponse struct {
-	TotalSKU        int     `json:"total_sku"`
-	LowStock        int     `json:"low_stock"`
-	OutOfStock      int     `json:"out_of_stock"`
-	TotalStockValue float64 `json:"total_stock_value"`
+	TotalSKU        int             `json:"total_sku"`
+	LowStock        int             `json:"low_stock"`
+	OutOfStock      int             `json:"out_of_stock"`
+	TotalStockValue decimal.Decimal `json:"total_stock_value"`
 }
 
 type StockMovementResponse struct {
@@ -89,7 +90,7 @@ type StockMovementResponse struct {
 	Quantity         int                     `json:"quantity"`
 	StockBefore      int                     `json:"stock_before"`
 	StockAfter       int                     `json:"stock_after"`
-	UnitCost         *float64                `json:"unit_cost"`
+	UnitCost         *decimal.Decimal        `json:"unit_cost"`
 	ReferenceType    *string                 `json:"reference_type"`
 	ReferenceID      *int64                  `json:"reference_id"`
 	Note             *string                 `json:"note"`

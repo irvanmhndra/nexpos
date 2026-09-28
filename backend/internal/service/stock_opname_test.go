@@ -122,17 +122,17 @@ func TestStockOpnameService_UpdateItem_Success(t *testing.T) {
 	s.opnameRepo.EXPECT().GetItem(ctx, int64(10), int64(20)).
 		Return(&model.StockOpnameItem{
 			ID: 20, StockOpnameID: 10, ProductVariantID: 5,
-			SystemStock: 10, UnitCost: 1000,
+			SystemStock: 10, UnitCost: money(1000),
 		}, nil).Once()
 	s.opnameRepo.EXPECT().UpdateItem(ctx, mock.MatchedBy(func(it *model.StockOpnameItem) bool {
 		return it.ID == 20 && it.CountedStock != nil && *it.CountedStock == 8 &&
-			it.VarianceQty == -2 && it.VarianceValue == -2000
+			it.VarianceQty == -2 && it.VarianceValue.Equal(money(-2000))
 	})).Return(nil).Once()
 
 	resp, err := s.svc.UpdateItem(ctx, companyID, 10, 20, userID, dto.UpdateOpnameItemRequest{CountedStock: 8})
 	require.NoError(t, err)
 	assert.Equal(t, -2, resp.VarianceQty)
-	assert.Equal(t, float64(-2000), resp.VarianceValue)
+	assertMoney(t, -2000, resp.VarianceValue)
 }
 
 func TestStockOpnameService_UpdateItem_NotInProgress(t *testing.T) {
@@ -159,12 +159,12 @@ func TestStockOpnameService_Complete_Success(t *testing.T) {
 
 	items := []*model.StockOpnameItem{
 		{ID: 1, StockOpnameID: 10, ProductVariantID: 100, SystemStock: 10, CountedStock: intPtr(8),
-			VarianceQty: -2, UnitCost: 1000, VarianceValue: -2000},
+			VarianceQty: -2, UnitCost: money(1000), VarianceValue: money(-2000)},
 		{ID: 2, StockOpnameID: 10, ProductVariantID: 101, SystemStock: 5, CountedStock: intPtr(5),
-			VarianceQty: 0, UnitCost: 500, VarianceValue: 0},
+			VarianceQty: 0, UnitCost: money(500), VarianceValue: money(0)},
 		// Item 3 has no count — should be skipped from adjustment
 		{ID: 3, StockOpnameID: 10, ProductVariantID: 102, SystemStock: 3, CountedStock: nil,
-			VarianceQty: 0, UnitCost: 100, VarianceValue: 0},
+			VarianceQty: 0, UnitCost: money(100), VarianceValue: money(0)},
 	}
 	s.opnameRepo.EXPECT().GetItems(ctx, int64(10)).Return(items, nil).Once()
 
@@ -186,13 +186,13 @@ func TestStockOpnameService_Complete_Success(t *testing.T) {
 	// Final status update
 	s.opnameRepo.EXPECT().Update(ctx, mock.MatchedBy(func(op *model.StockOpname) bool {
 		return op.ID == 10 && op.Status == model.StockOpnameStatusCompleted &&
-			op.TotalVarianceQty == -2 && op.TotalVarianceValue == -2000
+			op.TotalVarianceQty == -2 && op.TotalVarianceValue.Equal(money(-2000))
 	})).Return(nil).Once()
 
 	// GetByID for the return value
 	s.opnameRepo.EXPECT().GetByID(ctx, companyID, int64(10)).
 		Return(&model.StockOpname{ID: 10, CompanyID: companyID, BranchID: branchID,
-			Status: model.StockOpnameStatusCompleted, TotalVarianceQty: -2, TotalVarianceValue: -2000}, nil).Once()
+			Status: model.StockOpnameStatusCompleted, TotalVarianceQty: -2, TotalVarianceValue: money(-2000)}, nil).Once()
 	s.opnameRepo.EXPECT().GetItems(ctx, int64(10)).Return(items, nil).Once()
 	s.opnameRepo.EXPECT().GetItemStats(ctx, int64(10)).Return(3, 2, nil).Once()
 
@@ -200,7 +200,7 @@ func TestStockOpnameService_Complete_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, model.StockOpnameStatusCompleted, resp.Status)
 	assert.Equal(t, -2, resp.TotalVarianceQty)
-	assert.Equal(t, float64(-2000), resp.TotalVarianceValue)
+	assertMoney(t, -2000, resp.TotalVarianceValue)
 }
 
 func TestStockOpnameService_Complete_NotInProgress(t *testing.T) {
@@ -244,15 +244,15 @@ func TestStockOpnameService_BulkUpdateItems_Success(t *testing.T) {
 		Return(&model.StockOpname{ID: 10, CompanyID: companyID, Status: model.StockOpnameStatusInProgress}, nil).Once()
 
 	s.opnameRepo.EXPECT().GetItem(ctx, int64(10), int64(1)).
-		Return(&model.StockOpnameItem{ID: 1, StockOpnameID: 10, SystemStock: 10, UnitCost: 100}, nil).Once()
+		Return(&model.StockOpnameItem{ID: 1, StockOpnameID: 10, SystemStock: 10, UnitCost: money(100)}, nil).Once()
 	s.opnameRepo.EXPECT().UpdateItem(ctx, mock.MatchedBy(func(it *model.StockOpnameItem) bool {
-		return it.ID == 1 && *it.CountedStock == 12 && it.VarianceQty == 2 && it.VarianceValue == 200
+		return it.ID == 1 && *it.CountedStock == 12 && it.VarianceQty == 2 && it.VarianceValue.Equal(money(200))
 	})).Return(nil).Once()
 
 	s.opnameRepo.EXPECT().GetItem(ctx, int64(10), int64(2)).
-		Return(&model.StockOpnameItem{ID: 2, StockOpnameID: 10, SystemStock: 5, UnitCost: 50}, nil).Once()
+		Return(&model.StockOpnameItem{ID: 2, StockOpnameID: 10, SystemStock: 5, UnitCost: money(50)}, nil).Once()
 	s.opnameRepo.EXPECT().UpdateItem(ctx, mock.MatchedBy(func(it *model.StockOpnameItem) bool {
-		return it.ID == 2 && *it.CountedStock == 3 && it.VarianceQty == -2 && it.VarianceValue == -100
+		return it.ID == 2 && *it.CountedStock == 3 && it.VarianceQty == -2 && it.VarianceValue.Equal(money(-100))
 	})).Return(nil).Once()
 
 	// GetByID for the response
