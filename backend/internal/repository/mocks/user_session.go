@@ -30,8 +30,8 @@ func (m *MockUserSessionRepository) Create(ctx context.Context, session *model.U
 	return ret.Error(0)
 }
 
-func (m *MockUserSessionRepository) GetByAccessToken(ctx context.Context, accessToken string) (*model.UserSession, error) {
-	ret := m.Called(ctx, accessToken)
+func (m *MockUserSessionRepository) GetByAccessTokenHash(ctx context.Context, accessTokenHash string) (*model.UserSession, error) {
+	ret := m.Called(ctx, accessTokenHash)
 	var r0 *model.UserSession
 	if ret.Get(0) != nil {
 		r0 = ret.Get(0).(*model.UserSession)
@@ -39,13 +39,18 @@ func (m *MockUserSessionRepository) GetByAccessToken(ctx context.Context, access
 	return r0, ret.Error(1)
 }
 
-func (m *MockUserSessionRepository) GetByRefreshToken(ctx context.Context, refreshToken string) (*model.UserSession, error) {
-	ret := m.Called(ctx, refreshToken)
+func (m *MockUserSessionRepository) GetByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (*model.UserSession, error) {
+	ret := m.Called(ctx, refreshTokenHash)
 	var r0 *model.UserSession
 	if ret.Get(0) != nil {
 		r0 = ret.Get(0).(*model.UserSession)
 	}
 	return r0, ret.Error(1)
+}
+
+func (m *MockUserSessionRepository) Rotate(ctx context.Context, oldID int64, next *model.UserSession) (bool, error) {
+	ret := m.Called(ctx, oldID, next)
+	return ret.Bool(0), ret.Error(1)
 }
 
 func (m *MockUserSessionRepository) UpdateLastUsed(ctx context.Context, id int64) error {
@@ -71,12 +76,16 @@ func (e *MockUserSessionRepositoryExpectation) Create(ctx context.Context, sessi
 	return e.mock.On("Create", ctx, session)
 }
 
-func (e *MockUserSessionRepositoryExpectation) GetByAccessToken(ctx context.Context, accessToken string) *mock.Call {
-	return e.mock.On("GetByAccessToken", ctx, accessToken)
+func (e *MockUserSessionRepositoryExpectation) GetByAccessTokenHash(ctx context.Context, accessTokenHash string) *mock.Call {
+	return e.mock.On("GetByAccessTokenHash", ctx, accessTokenHash)
 }
 
-func (e *MockUserSessionRepositoryExpectation) GetByRefreshToken(ctx context.Context, refreshToken string) *mock.Call {
-	return e.mock.On("GetByRefreshToken", ctx, refreshToken)
+func (e *MockUserSessionRepositoryExpectation) GetByRefreshTokenHash(ctx context.Context, refreshTokenHash string) *mock.Call {
+	return e.mock.On("GetByRefreshTokenHash", ctx, refreshTokenHash)
+}
+
+func (e *MockUserSessionRepositoryExpectation) Rotate(ctx context.Context, oldID int64, next interface{}) *mock.Call {
+	return e.mock.On("Rotate", ctx, oldID, next)
 }
 
 func (e *MockUserSessionRepositoryExpectation) UpdateLastUsed(ctx context.Context, id int64) *mock.Call {

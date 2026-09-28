@@ -123,8 +123,8 @@ Body:
 Creates a new user + company. Response mirrors login.
 
 ### POST `/auth/refresh`
-Body: `{ "refresh_token": "<jwt>" }`
-Response: `{ access_token, refresh_token, expires_in }`.
+Body: `{ "refresh_token": "<refresh_token>" }`
+Response: `{ access_token, refresh_token, expires_in }`. Tokens are opaque (not JWTs). Each refresh token is single-use: the old session, including its access token, is revoked, and replaying an exchanged refresh token returns 401.
 
 ### POST `/auth/logout`
 Header: `Authorization: Bearer <access_token>`. Revokes the session.

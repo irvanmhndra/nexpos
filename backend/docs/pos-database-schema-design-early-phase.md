@@ -10,9 +10,9 @@ This version intentionally prioritizes:
 - Debuggability
 - Observability
 
-⚠️ **Important**  
-Some security compromises (raw token storage) are **intentional and temporary**.
-They MUST be refactored before production launch.
+✅ **Resolved**  
+The early-phase raw token storage has been replaced: migration `000036_hash_session_tokens`
+stores only SHA-256 digests (see `user_sessions` and the Exit Plan below).
 
 ---
 
@@ -93,7 +93,7 @@ oauth_clients
 
 ---
 
-### user_sessions  ⚠️ EARLY PHASE MODE
+### user_sessions
 ```
 user_sessions
 - id (PK)
@@ -102,11 +102,11 @@ user_sessions
 - branch_id (nullable)
 - terminal_id (nullable)
 
-- access_token                 -- RAW TOKEN (TEMPORARY)
+- access_token_hash            -- hex SHA-256 of the access token
 - access_token_expires_at      -- now() + 2 hours
 
-- refresh_token                -- RAW TOKEN (TEMPORARY)
-- expires_at                   -- refresh token expiry
+- refresh_token_hash           -- hex SHA-256 of the refresh token
+- refresh_token_expires_at     -- refresh token expiry
 
 - is_revoked
 - device_info
@@ -115,11 +115,11 @@ user_sessions
 - created_at
 ```
 
-⚠️ **WARNING**
-```
-Raw access_token and refresh_token are stored for early-phase debugging only.
-This is NOT production-safe and MUST be refactored.
-```
+Tokens are random 256-bit values returned to the client once
+(`pkg/sessiontoken`); the table only holds their digests, so a leaked backup or
+replica cannot be replayed. Refreshing rotates the session atomically
+(`UserSessionRepository.Rotate`): the old row is revoked with a conditional
+update and a refresh token can be exchanged only once.
 
 ---
 
@@ -346,20 +346,18 @@ INV-{BRANCH_CODE}-{YYYYMMDD}-{SEQUENCE}
 
 ---
 
-## Exit Plan (MANDATORY BEFORE PRODUCTION)
-
-The following refactor MUST be done before production:
+## Exit Plan — done (migration 000036)
 
 ```
-- access_token       → access_token_hash / jti
-- refresh_token      → refresh_token_hash
-- DROP raw token columns
+- access_token       → access_token_hash      ✅ renamed, existing rows hashed in place
+- refresh_token      → refresh_token_hash     ✅ renamed, existing rows hashed in place
+- DROP raw token columns                      ✅ no raw column remains
 ```
 
-Feature flag:
-```
-ALLOW_RAW_TOKEN_STORAGE=false
-```
+Existing sessions keep working across the upgrade because the migration and
+the API hash with the same function (`encode(sha256(convert_to(t, 'UTF8')), 'hex')`
+= `sessiontoken.Hash`). Rolling back 000036 revokes every session, since
+digests cannot be turned back into tokens.
 
 ---
 

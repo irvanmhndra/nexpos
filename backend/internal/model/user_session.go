@@ -7,9 +7,9 @@ type UserSession struct {
 	UserID                int64      `db:"user_id"`
 	CompanyID             int64      `db:"company_id"`
 	BranchID              *int64     `db:"branch_id"`
-	AccessToken           string     `db:"access_token"`
+	AccessTokenHash       string     `db:"access_token_hash"` // sessiontoken.Hash; never the raw token
 	AccessTokenExpiresAt  time.Time  `db:"access_token_expires_at"`
-	RefreshToken          string     `db:"refresh_token"`
+	RefreshTokenHash      string     `db:"refresh_token_hash"` // sessiontoken.Hash; never the raw token
 	RefreshTokenExpiresAt time.Time  `db:"refresh_token_expires_at"`
 	IsRevoked             bool       `db:"is_revoked"`
 	DeviceInfo            *string    `db:"device_info"`
