@@ -275,6 +275,66 @@ func TestOrderService_Create_WithTax_Exclusive(t *testing.T) {
 	assert.NotNil(t, resp)
 }
 
+func TestOrderService_Create_WithTax_Inclusive(t *testing.T) {
+	s := setupOrderTest(t)
+	ctx := context.Background()
+	companyID, branchID := int64(1), int64(2)
+	variantID := int64(5)
+
+	settings := &model.CompanySettings{
+		TaxEnabled:   true,
+		TaxInclusive: true,
+		TaxRate:      money(10), // 10%, already inside the price
+	}
+
+	req := dto.CreateOrderRequest{
+		Items: []dto.OrderItemInput{{ProductVariantID: &variantID, Quantity: 1}},
+	}
+
+	variant := testVariant(variantID, 110_000)
+	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(settings, nil).Once()
+	s.orderRepo.EXPECT().GenerateOrderNo(ctx, companyID, branchID).Return("ORD-001", nil).Once()
+	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(variant, nil).Once()
+	s.stockRepo.EXPECT().GetByVariantAndBranch(ctx, variantID, branchID).
+		Return(&model.Stock{Quantity: 5}, nil).Once()
+	s.promoRepo.On("GetActivePromotions", ctx, companyID, mock.AnythingOfType("time.Time")).
+		Return(([]*model.Promotion)(nil), nil).Once()
+	s.orderRepo.EXPECT().Create(ctx, mock.MatchedBy(func(o *model.Order) bool {
+		// tax inside 110000 at 10% = 110000 * 10/110 = 10000, reported but not
+		// added again: the customer pays the shelf price, 110000
+		return o.TotalTax.Equal(money(10_000)) && o.GrandTotal.Equal(money(110_000))
+	})).Return(nil).Once()
+	s.itemRepo.EXPECT().Create(ctx, mock.AnythingOfType("*model.OrderItem")).Return(nil).Once()
+
+	order := testOrder(0, companyID, branchID, model.OrderStatusDraft)
+	order.GrandTotal = money(110_000)
+	s.expectReload(ctx, companyID, 0, order)
+
+	_, err := s.svc.Create(ctx, companyID, branchID, 99, req)
+	require.NoError(t, err)
+}
+
+func TestOrderService_Preview_WithTax_Inclusive(t *testing.T) {
+	s := setupOrderTest(t)
+	ctx := context.Background()
+	companyID, branchID := int64(1), int64(2)
+	variantID := int64(5)
+
+	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(&model.CompanySettings{
+		TaxEnabled: true, TaxInclusive: true, TaxRate: money(10),
+	}, nil).Once()
+	s.variantRepo.EXPECT().GetByID(ctx, variantID).Return(testVariant(variantID, 110_000), nil).Once()
+	s.promoRepo.On("GetActivePromotions", ctx, companyID, mock.AnythingOfType("time.Time")).
+		Return(([]*model.Promotion)(nil), nil).Once()
+
+	resp, err := s.svc.Preview(ctx, companyID, branchID, dto.PreviewOrderRequest{
+		Items: []dto.OrderItemInput{{ProductVariantID: &variantID, Quantity: 1}},
+	})
+	require.NoError(t, err)
+	assertMoney(t, 10_000, resp.Tax)
+	assertMoney(t, 110_000, resp.GrandTotal)
+}
+
 func TestOrderService_Create_DeliveryRequiresCustomer(t *testing.T) {
 	s := setupOrderTest(t)
 	ctx := context.Background()

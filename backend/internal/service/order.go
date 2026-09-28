@@ -184,12 +184,7 @@ func (s *OrderService) Create(ctx context.Context, companyID, branchID, cashierI
 		totalDiscount = totalDiscount.Add(promoDiscount)
 	}
 
-	grandTotal := totalAmount.Sub(totalDiscount).Add(totalTax)
-
-	// Apply rounding if enabled
-	if settings.RoundingEnabled && settings.RoundingAmount.IsPositive() {
-		grandTotal = roundToNearest(grandTotal, settings.RoundingAmount)
-	}
+	grandTotal := orderGrandTotal(totalAmount, totalDiscount, totalTax, settings)
 
 	// Initialize fulfillment status for delivery orders
 	var fulfillmentStatus *string
@@ -297,10 +292,7 @@ func (s *OrderService) Preview(ctx context.Context, companyID, branchID int64, r
 	subtotalAfterItemDiscounts := totalAmount.Sub(itemDiscount)
 	promo, promoDiscount := s.evaluatePromotion(ctx, companyID, req.PromoCode, subtotalAfterItemDiscounts)
 
-	grandTotal := subtotalAfterItemDiscounts.Sub(promoDiscount).Add(totalTax)
-	if settings.RoundingEnabled && settings.RoundingAmount.IsPositive() {
-		grandTotal = roundToNearest(grandTotal, settings.RoundingAmount)
-	}
+	grandTotal := orderGrandTotal(totalAmount, itemDiscount.Add(promoDiscount), totalTax, settings)
 
 	resp := &dto.PreviewOrderResponse{
 		Subtotal:      subtotalAfterItemDiscounts,
@@ -657,11 +649,7 @@ func (s *OrderService) UpdateOrder(ctx context.Context, companyID, id int64, req
 			order.TotalAmount = totalAmount
 			order.TotalDiscount = totalDiscount
 			order.TotalTax = totalTax
-			order.GrandTotal = totalAmount.Sub(totalDiscount).Add(totalTax)
-
-			if settings.RoundingEnabled && settings.RoundingAmount.IsPositive() {
-				order.GrandTotal = roundToNearest(order.GrandTotal, settings.RoundingAmount)
-			}
+			order.GrandTotal = orderGrandTotal(totalAmount, totalDiscount, totalTax, settings)
 		}
 
 		if err := s.orderRepo.Update(ctx, order); err != nil {
@@ -1072,6 +1060,21 @@ func lineAmounts(unitPrice decimal.Decimal, quantity int, discount decimal.Decim
 		tax = tax.Round(model.MoneyScale)
 	}
 	return gross, subtotal, tax
+}
+
+// orderGrandTotal is what the customer pays: gross minus discounts, plus tax
+// only when prices exclude it. With inclusive pricing the tax is already inside
+// the item prices, so it is reported but not charged a second time. Cash
+// rounding applies last.
+func orderGrandTotal(gross, discount, tax decimal.Decimal, settings *model.CompanySettings) decimal.Decimal {
+	total := gross.Sub(discount)
+	if !settings.TaxInclusive {
+		total = total.Add(tax)
+	}
+	if settings.RoundingEnabled && settings.RoundingAmount.IsPositive() {
+		total = roundToNearest(total, settings.RoundingAmount)
+	}
+	return total
 }
 
 // roundToNearest rounds value to the nearest multiple of nearest (cash
