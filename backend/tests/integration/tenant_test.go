@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -62,4 +63,20 @@ func TestTenancy_UnknownVariantIsNotFound(t *testing.T) {
 		"items": []map[string]any{{"product_variant_id": 999999, "quantity": 1}},
 	}, auth.Token)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "unknown variant: %s", string(resp.Body))
+}
+
+// The database itself rejects a cross-company reference, even from code that
+// skips the service checks (migration 000037).
+func TestTenancy_DatabaseRejectsCrossCompanyReference(t *testing.T) {
+	cleanupDatabase(t)
+	a := registerTestUser(t)
+	b := registerTestUser(t)
+	categoryA := createTestCategory(t, a.Token)
+	productB, _ := createTestProduct(t, b.Token, createTestCategory(t, b.Token), "B Product", "B-SKU-1", 10.00, 5.00)
+
+	_, err := testEnv.DB.Exec(`UPDATE products SET product_category_id = $1 WHERE id = $2`, categoryA, productB)
+	var pqErr *pq.Error
+	require.ErrorAs(t, err, &pqErr)
+	assert.Equal(t, pq.ErrorCode("23503"), pqErr.Code)
+	assert.Equal(t, "fk_products_product_category_id_same_company", pqErr.Constraint)
 }
