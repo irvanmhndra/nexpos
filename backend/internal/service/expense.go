@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/irvanmhndra/nexpos-api/internal/dto"
@@ -132,6 +133,9 @@ func (s *ExpenseService) CreateExpense(ctx context.Context, companyID int64, rec
 	}
 
 	if err := s.expenseRepo.Create(ctx, expense); err != nil {
+		if errors.Is(err, repository.ErrForeignReference) {
+			return nil, apperror.BadRequest("Branch not found")
+		}
 		return nil, apperror.InternalError(err)
 	}
 
@@ -215,6 +219,9 @@ func (s *ExpenseService) UpdateExpense(ctx context.Context, companyID, id int64,
 	expense.Notes = req.Notes
 
 	if err := s.expenseRepo.Update(ctx, expense); err != nil {
+		if errors.Is(err, repository.ErrForeignReference) {
+			return nil, apperror.BadRequest("Branch not found")
+		}
 		return nil, apperror.InternalError(err)
 	}
 

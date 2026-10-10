@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/irvanmhndra/nexpos-api/internal/repository"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -75,4 +76,21 @@ func (m *TxManager) WithinTx(ctx context.Context, fn func(ctx context.Context) e
 		return err
 	}
 	return tx.Commit()
+}
+
+// ownBranch returns repository.ErrForeignReference unless the (optional)
+// branch belongs to the company.
+func ownBranch(ctx context.Context, q querier, companyID int64, branchID *int64) error {
+	if branchID == nil {
+		return nil
+	}
+	var ok bool
+	if err := q.GetContext(ctx, &ok,
+		`SELECT EXISTS (SELECT 1 FROM branches WHERE company_id = $1 AND id = $2)`, companyID, *branchID); err != nil {
+		return err
+	}
+	if !ok {
+		return repository.ErrForeignReference
+	}
+	return nil
 }

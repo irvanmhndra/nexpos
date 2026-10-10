@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/irvanmhndra/nexpos-api/internal/model"
@@ -406,3 +407,7 @@ type StockOpnameListParams struct {
 	Limit    int
 	Offset   int
 }
+
+// ErrForeignReference is returned when a write references a record that is
+// missing or belongs to another company.
+var ErrForeignReference = errors.New("reference belongs to another company")

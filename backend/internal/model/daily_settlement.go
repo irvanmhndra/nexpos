@@ -27,7 +27,7 @@ type DailySettlement struct {
 	CreatedAt      time.Time       `db:"created_at"      json:"created_at"`
 	UpdatedAt      time.Time       `db:"updated_at"      json:"updated_at"`
 
-	Items []*DailySettlementItem `db:"-" json:"items,omitempty"`
+	Items []*DailySettlementItem `db:"-" json:"items"`
 }
 
 type DailySettlementItem struct {

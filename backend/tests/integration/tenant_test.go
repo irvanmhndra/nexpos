@@ -80,3 +80,21 @@ func TestTenancy_DatabaseRejectsCrossCompanyReference(t *testing.T) {
 	assert.Equal(t, pq.ErrorCode("23503"), pqErr.Code)
 	assert.Equal(t, "fk_products_product_category_id_same_company", pqErr.Constraint)
 }
+
+func TestTenancy_ExpenseRejectsForeignBranch(t *testing.T) {
+	cleanupDatabase(t)
+	owner := registerTestUser(t)
+	other := registerTestUser(t)
+	expense := func(branchID int64) map[string]any {
+		return map[string]any{"branch_id": branchID, "amount": "15000", "description": "Listrik", "expense_date": "2026-10-01"}
+	}
+
+	resp := doPost(t, "/api/v1/expenses", expense(owner.BranchID), other.Token)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "expense linked to another company's branch")
+	resp = doPost(t, "/api/v1/expenses", expense(other.BranchID), other.Token)
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	// Empty lists are [], never null.
+	r := decodeResponse(t, doGet(t, "/api/v1/suppliers", owner.Token))
+	assert.Equal(t, "[]", string(r.Data))
+}

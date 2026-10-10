@@ -64,7 +64,7 @@ type PurchaseOrderResponse struct {
 	OrderedAt   *time.Time        `json:"ordered_at"`
 	ReceivedAt  *time.Time        `json:"received_at"`
 	CancelledAt *time.Time        `json:"cancelled_at"`
-	Items       []*POItemResponse `json:"items,omitempty"`
+	Items       []*POItemResponse `json:"items"`
 	CreatedAt   time.Time         `json:"created_at"`
 	UpdatedAt   time.Time         `json:"updated_at"`
 }

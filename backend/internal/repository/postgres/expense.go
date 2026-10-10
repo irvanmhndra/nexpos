@@ -132,6 +132,9 @@ func NewExpenseRepository(db *sqlx.DB) *ExpenseRepository {
 }
 
 func (r *ExpenseRepository) Create(ctx context.Context, expense *model.Expense) error {
+	if err := ownBranch(ctx, conn(ctx, r.db), expense.CompanyID, expense.BranchID); err != nil {
+		return err
+	}
 	query := `
 		INSERT INTO expenses (company_id, branch_id, category_id, amount, description, reference_no, expense_date, recorded_by, notes)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -215,6 +218,9 @@ func (r *ExpenseRepository) List(ctx context.Context, companyID int64, params *r
 }
 
 func (r *ExpenseRepository) Update(ctx context.Context, expense *model.Expense) error {
+	if err := ownBranch(ctx, conn(ctx, r.db), expense.CompanyID, expense.BranchID); err != nil {
+		return err
+	}
 	query := `
 		UPDATE expenses
 		SET branch_id = $1, category_id = $2, amount = $3, description = $4, reference_no = $5, expense_date = $6, notes = $7, updated_at = NOW()

@@ -29,7 +29,7 @@ type StockOpname struct {
 	CreatedAt          time.Time       `db:"created_at"           json:"created_at"`
 	UpdatedAt          time.Time       `db:"updated_at"           json:"updated_at"`
 
-	Items []*StockOpnameItem `db:"-" json:"items,omitempty"`
+	Items []*StockOpnameItem `db:"-" json:"items"`
 }
 
 type StockOpnameItem struct {
