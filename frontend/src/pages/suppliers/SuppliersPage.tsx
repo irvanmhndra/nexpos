@@ -410,7 +410,7 @@ export function SuppliersPage() {
             <div>
               <p className="text-xs text-text-sub dark:text-gray-400 mb-1">Supplier Aktif</p>
               <p className="text-2xl font-bold text-text-main dark:text-white">
-                {data?.data.filter(s => s.is_active).length || 0}
+                {(data?.data ?? []).filter(s => s.is_active).length || 0}
               </p>
             </div>
             <div className="w-12 h-12 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center">
@@ -424,7 +424,7 @@ export function SuppliersPage() {
             <div>
               <p className="text-xs text-text-sub dark:text-gray-400 mb-1">Supplier Nonaktif</p>
               <p className="text-2xl font-bold text-text-main dark:text-white">
-                {data?.data.filter(s => !s.is_active).length || 0}
+                {(data?.data ?? []).filter(s => !s.is_active).length || 0}
               </p>
             </div>
             <div className="w-12 h-12 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center">

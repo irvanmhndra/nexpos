@@ -137,7 +137,7 @@ export function POSPage() {
   const changeAmount = paymentAmountNum - grandTotal;
   const stockMap = useMemo(() => {
     const map: Record<number, number> = {};
-    inventoryData?.data.forEach(item => { map[item.product_variant_id] = item.current_stock; });
+    (inventoryData?.data ?? []).forEach(item => { map[item.product_variant_id] = item.current_stock; });
     return map;
   }, [inventoryData]);
 

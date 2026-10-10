@@ -361,7 +361,7 @@ export function ProductCategoriesPage() {
     setPage(1);
   };
 
-  const activeCount = data?.data.filter(c => c.is_active).length || 0;
+  const activeCount = (data?.data ?? []).filter(c => c.is_active).length || 0;
 
   return (
     <div className="space-y-6">

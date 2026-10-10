@@ -310,7 +310,7 @@ export function CustomersPage() {
     setPage(1);
   };
 
-  const memberCount = data?.data.filter(c => c.is_member).length || 0;
+  const memberCount = (data?.data ?? []).filter(c => c.is_member).length || 0;
 
   return (
     <div className="space-y-6">

@@ -320,7 +320,7 @@ export function UserManagement() {
           </div>
         ) : (
           <div className="space-y-3">
-            {data?.data.map((user) => (
+            {(data?.data ?? []).map((user) => (
               <div
                 key={user.id}
                 className="flex items-center gap-4 p-4 bg-background-light dark:bg-background-dark rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors"
@@ -379,7 +379,7 @@ export function UserManagement() {
         {data && data.total > 0 && (
           <div className="mt-4 pt-4 border-t border-border-light dark:border-border-dark">
             <p className="text-sm text-text-sub dark:text-gray-400">
-              Menampilkan {data.data.length} dari {data.total} pengguna
+              Menampilkan {(data.data ?? []).length} dari {data.total} pengguna
             </p>
           </div>
         )}

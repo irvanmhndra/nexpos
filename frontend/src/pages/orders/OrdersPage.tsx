@@ -167,10 +167,10 @@ export function OrdersPage() {
   };
 
   // Count orders by status
-  const draftCount = data?.data.filter(o => o.status === 'draft').length || 0;
-  const confirmedCount = data?.data.filter(o => o.status === 'confirmed').length || 0;
-  const completedCount = data?.data.filter(o => o.status === 'completed').length || 0;
-  const cancelledCount = data?.data.filter(o => o.status === 'cancelled' || o.status === 'voided').length || 0;
+  const draftCount = (data?.data ?? []).filter(o => o.status === 'draft').length || 0;
+  const confirmedCount = (data?.data ?? []).filter(o => o.status === 'confirmed').length || 0;
+  const completedCount = (data?.data ?? []).filter(o => o.status === 'completed').length || 0;
+  const cancelledCount = (data?.data ?? []).filter(o => o.status === 'cancelled' || o.status === 'voided').length || 0;
 
   return (
     <div className="space-y-6">
@@ -408,7 +408,7 @@ export function OrdersPage() {
                   </td>
                 </tr>
               ) : (
-                data?.data.map((order) => (
+                (data?.data ?? []).map((order) => (
                   <tr
                     key={order.id}
                     className="hover:bg-background-light dark:hover:bg-background-dark transition-colors cursor-pointer"
