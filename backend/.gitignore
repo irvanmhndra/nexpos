@@ -1,0 +1,6 @@
+.env
+*.sh
+/bin
+.idea/
+.DS_Store
+tmp/

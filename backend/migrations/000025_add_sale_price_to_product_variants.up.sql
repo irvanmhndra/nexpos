@@ -1,0 +1,4 @@
+ALTER TABLE product_variants
+ADD COLUMN sale_price DECIMAL(15,2),
+ADD COLUMN sale_start TIMESTAMPTZ,
+ADD COLUMN sale_end TIMESTAMPTZ;

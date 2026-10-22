@@ -1,0 +1,30 @@
+-- Drop the composite FKs first: they depend on the parents' unique keys.
+ALTER TABLE user_sessions DROP CONSTRAINT IF EXISTS fk_user_sessions_branch_id_same_company;
+ALTER TABLE user_sessions DROP CONSTRAINT IF EXISTS fk_user_sessions_user_id_same_company;
+ALTER TABLE product_categories DROP CONSTRAINT IF EXISTS fk_product_categories_parent_id_same_company;
+ALTER TABLE products DROP CONSTRAINT IF EXISTS fk_products_product_category_id_same_company;
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS fk_orders_branch_id_same_company;
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS fk_orders_cashier_id_same_company;
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS fk_orders_customer_id_same_company;
+ALTER TABLE purchase_orders DROP CONSTRAINT IF EXISTS fk_purchase_orders_branch_id_same_company;
+ALTER TABLE purchase_orders DROP CONSTRAINT IF EXISTS fk_purchase_orders_supplier_id_same_company;
+ALTER TABLE shifts DROP CONSTRAINT IF EXISTS fk_shifts_branch_id_same_company;
+ALTER TABLE shifts DROP CONSTRAINT IF EXISTS fk_shifts_cashier_id_same_company;
+ALTER TABLE expenses DROP CONSTRAINT IF EXISTS fk_expenses_branch_id_same_company;
+ALTER TABLE expenses DROP CONSTRAINT IF EXISTS fk_expenses_category_id_same_company;
+ALTER TABLE expenses DROP CONSTRAINT IF EXISTS fk_expenses_recorded_by_same_company;
+ALTER TABLE stock_opnames DROP CONSTRAINT IF EXISTS fk_stock_opnames_branch_id_same_company;
+ALTER TABLE stock_opnames DROP CONSTRAINT IF EXISTS fk_stock_opnames_started_by_same_company;
+ALTER TABLE stock_opnames DROP CONSTRAINT IF EXISTS fk_stock_opnames_completed_by_same_company;
+ALTER TABLE daily_settlements DROP CONSTRAINT IF EXISTS fk_daily_settlements_branch_id_same_company;
+ALTER TABLE daily_settlements DROP CONSTRAINT IF EXISTS fk_daily_settlements_recorded_by_same_company;
+ALTER TABLE daily_settlements DROP CONSTRAINT IF EXISTS fk_daily_settlements_finalized_by_same_company;
+ALTER TABLE receipts DROP CONSTRAINT IF EXISTS fk_receipts_order_id_same_company;
+
+ALTER TABLE branches DROP CONSTRAINT IF EXISTS uq_branches_company_id_id;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS uq_users_company_id_id;
+ALTER TABLE customers DROP CONSTRAINT IF EXISTS uq_customers_company_id_id;
+ALTER TABLE product_categories DROP CONSTRAINT IF EXISTS uq_product_categories_company_id_id;
+ALTER TABLE suppliers DROP CONSTRAINT IF EXISTS uq_suppliers_company_id_id;
+ALTER TABLE expense_categories DROP CONSTRAINT IF EXISTS uq_expense_categories_company_id_id;
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS uq_orders_company_id_id;

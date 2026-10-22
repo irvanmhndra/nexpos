@@ -1,0 +1,413 @@
+package repository
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/irvanmhndra/nexpos-api/internal/model"
+	"github.com/shopspring/decimal"
+)
+
+// Transactor runs fn atomically. Repository calls made with the ctx that fn
+// receives take part in the transaction; a nested WithinTx joins the outer one.
+type Transactor interface {
+	WithinTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+type SupplierRepository interface {
+	Create(ctx context.Context, supplier *model.Supplier) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.Supplier, error)
+	GetByCode(ctx context.Context, companyID int64, code string) (*model.Supplier, error)
+	List(ctx context.Context, companyID int64, search string, isActive *bool, limit, offset int) ([]*model.Supplier, int, error)
+	Update(ctx context.Context, supplier *model.Supplier) error
+	Delete(ctx context.Context, companyID, id int64) error
+}
+
+type PurchaseOrderRepository interface {
+	Create(ctx context.Context, po *model.PurchaseOrder) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.PurchaseOrder, error)
+	// GetByIDForUpdate is GetByID with a row lock; it must run inside WithinTx.
+	GetByIDForUpdate(ctx context.Context, companyID, id int64) (*model.PurchaseOrder, error)
+	GeneratePONumber(ctx context.Context, companyID int64) (string, error)
+	List(ctx context.Context, companyID int64, params *POListParams) ([]*model.PurchaseOrder, int, error)
+	Update(ctx context.Context, po *model.PurchaseOrder) error
+	GetItems(ctx context.Context, poID int64) ([]*model.PurchaseOrderItem, error)
+	CreateItem(ctx context.Context, item *model.PurchaseOrderItem) error
+	UpdateItem(ctx context.Context, item *model.PurchaseOrderItem) error
+}
+
+// POListParams for filtering purchase orders
+type POListParams struct {
+	Status     string
+	SupplierID *int64
+	Limit      int
+	Offset     int
+}
+
+type ShiftRepository interface {
+	Create(ctx context.Context, shift *model.Shift) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.Shift, error)
+	GetOpenShift(ctx context.Context, companyID, branchID, cashierID int64) (*model.Shift, error)
+	List(ctx context.Context, companyID int64, params *ShiftListParams) ([]*model.Shift, int, error)
+	Update(ctx context.Context, shift *model.Shift) error
+}
+
+// ShiftListParams for filtering shifts
+type ShiftListParams struct {
+	BranchID  *int64
+	CashierID *int64
+	Status    string
+	DateFrom  string
+	DateTo    string
+	Limit     int
+	Offset    int
+}
+
+type ExpenseCategoryRepository interface {
+	Create(ctx context.Context, category *model.ExpenseCategory) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.ExpenseCategory, error)
+	List(ctx context.Context, companyID int64, search string, limit, offset int) ([]*model.ExpenseCategory, int, error)
+	Update(ctx context.Context, category *model.ExpenseCategory) error
+	Delete(ctx context.Context, companyID, id int64) error
+}
+
+type ExpenseRepository interface {
+	Create(ctx context.Context, expense *model.Expense) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.Expense, error)
+	List(ctx context.Context, companyID int64, params *ExpenseListParams) ([]*model.Expense, int, error)
+	Update(ctx context.Context, expense *model.Expense) error
+	Delete(ctx context.Context, companyID, id int64) error
+	GetTotalByDateRange(ctx context.Context, companyID int64, branchID *int64, from, to string) (decimal.Decimal, error)
+}
+
+// ExpenseListParams for filtering expenses
+type ExpenseListParams struct {
+	BranchID   *int64
+	CategoryID *int64
+	DateFrom   string
+	DateTo     string
+	Limit      int
+	Offset     int
+}
+
+type UserRepository interface {
+	Create(ctx context.Context, user *model.User) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.User, error)
+	GetByEmail(ctx context.Context, email string) (*model.User, error)
+	List(ctx context.Context, companyID int64, limit, offset int) ([]*model.User, int, error)
+	Update(ctx context.Context, user *model.User) error
+	UpdateStatus(ctx context.Context, companyID, id int64, status model.UserStatus) error
+	Delete(ctx context.Context, companyID, id int64) error
+	EmailExists(ctx context.Context, email string, excludeID int64) (bool, error)
+}
+
+type CompanyRepository interface {
+	Create(ctx context.Context, company *model.Company) error
+	GetByID(ctx context.Context, id int64) (*model.Company, error)
+	GetByCode(ctx context.Context, code string) (*model.Company, error)
+	Update(ctx context.Context, company *model.Company) error
+}
+
+type BranchRepository interface {
+	Create(ctx context.Context, branch *model.Branch) error
+	GetByID(ctx context.Context, id int64) (*model.Branch, error)
+	ListByCompanyID(ctx context.Context, companyID int64) ([]*model.Branch, error)
+	List(ctx context.Context, companyID int64, search string, isActive *bool, limit, offset int) ([]*model.Branch, int, error)
+	Update(ctx context.Context, branch *model.Branch) error
+	Delete(ctx context.Context, id int64) error
+	CodeExists(ctx context.Context, companyID int64, code string, excludeID int64) (bool, error)
+}
+
+type UserSessionRepository interface {
+	Create(ctx context.Context, session *model.UserSession) error
+	GetByAccessTokenHash(ctx context.Context, accessTokenHash string) (*model.UserSession, error)
+	GetByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (*model.UserSession, error)
+	// Rotate revokes the session oldID and creates next in one transaction.
+	// It returns false, creating nothing, when oldID was already revoked, so
+	// a refresh token can be exchanged only once even under concurrent use.
+	Rotate(ctx context.Context, oldID int64, next *model.UserSession) (bool, error)
+	UpdateLastUsed(ctx context.Context, id int64) error
+	Revoke(ctx context.Context, id int64) error
+	RevokeAllByUserID(ctx context.Context, userID int64) error
+}
+
+type RoleRepository interface {
+	GetByID(ctx context.Context, id int64) (*model.Role, error)
+	GetByCode(ctx context.Context, code string, companyID *int64) (*model.Role, error)
+	ListByCompanyID(ctx context.Context, companyID int64) ([]*model.Role, error)
+	ListSystemRoles(ctx context.Context) ([]*model.Role, error)
+	Create(ctx context.Context, role *model.Role) error
+	Update(ctx context.Context, role *model.Role) error
+	Delete(ctx context.Context, id int64) error
+	GetWithPermissions(ctx context.Context, id int64) (*model.Role, error)
+}
+
+type PermissionRepository interface {
+	GetAll(ctx context.Context) ([]*model.Permission, error)
+	GetByModule(ctx context.Context, module string) ([]*model.Permission, error)
+	GetByRoleID(ctx context.Context, roleID int64) ([]*model.Permission, error)
+}
+
+type RolePermissionRepository interface {
+	SetPermissions(ctx context.Context, roleID int64, permissionIDs []int64) error
+	GetPermissionIDs(ctx context.Context, roleID int64) ([]int64, error)
+}
+
+type UserBranchRepository interface {
+	Create(ctx context.Context, ub *model.UserBranch) error
+	Delete(ctx context.Context, userID, branchID int64) error
+	SetBranches(ctx context.Context, userID int64, branchIDs []int64, defaultBranchID int64) error
+	GetByUserID(ctx context.Context, userID int64) ([]*model.UserBranch, error)
+	GetDefaultBranch(ctx context.Context, userID int64) (*model.Branch, error)
+}
+
+type CustomerRepository interface {
+	Create(ctx context.Context, customer *model.Customer) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.Customer, error)
+	GetByCode(ctx context.Context, companyID int64, code string) (*model.Customer, error)
+	List(ctx context.Context, companyID int64, search string, isMember *bool, limit, offset int) ([]*model.Customer, int, error)
+	Update(ctx context.Context, customer *model.Customer) error
+	Delete(ctx context.Context, companyID, id int64) error
+	CodeExists(ctx context.Context, companyID int64, code string, excludeID int64) (bool, error)
+}
+
+type ProductCategoryRepository interface {
+	Create(ctx context.Context, category *model.ProductCategory) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.ProductCategory, error)
+	GetByCode(ctx context.Context, companyID int64, code string) (*model.ProductCategory, error)
+	List(ctx context.Context, companyID int64, search string, isActive *bool, limit, offset int) ([]*model.ProductCategory, int, error)
+	ListAll(ctx context.Context, companyID int64) ([]*model.ProductCategory, error)
+	Update(ctx context.Context, category *model.ProductCategory) error
+	Delete(ctx context.Context, companyID, id int64) error
+	CodeExists(ctx context.Context, companyID int64, code string, excludeID int64) (bool, error)
+	HasChildren(ctx context.Context, companyID, id int64) (bool, error)
+	HasProducts(ctx context.Context, companyID, id int64) (bool, error)
+}
+
+type ProductRepository interface {
+	Create(ctx context.Context, product *model.Product) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.Product, error)
+	List(ctx context.Context, companyID int64, search string, categoryID *int64, isActive *bool, limit, offset int) ([]*model.Product, int, error)
+	Update(ctx context.Context, product *model.Product) error
+	Delete(ctx context.Context, companyID, id int64) error
+}
+
+type ProductVariantRepository interface {
+	Create(ctx context.Context, variant *model.ProductVariant) error
+	GetByID(ctx context.Context, id int64) (*model.ProductVariant, error)
+	// GetByIDForCompany is GetByID limited to variants of companyID's products;
+	// use it for any variant ID that comes from a request. Returns nil, nil
+	// when there is no such variant in that company.
+	GetByIDForCompany(ctx context.Context, companyID, id int64) (*model.ProductVariant, error)
+	GetByProductID(ctx context.Context, productID int64) ([]*model.ProductVariant, error)
+	GetBySKU(ctx context.Context, sku string) (*model.ProductVariant, error)
+	Update(ctx context.Context, variant *model.ProductVariant) error
+	Delete(ctx context.Context, id int64) error
+	DeleteByProductID(ctx context.Context, productID int64) error
+	SKUExists(ctx context.Context, sku string, excludeID int64) (bool, error)
+	SKUExistsInOtherProduct(ctx context.Context, sku string, productID int64) (bool, error)
+	FindByCodeInCompany(ctx context.Context, companyID int64, code string) (*model.ProductVariant, error)
+	BarcodeExistsInOtherProduct(ctx context.Context, companyID int64, barcode string, productID int64) (bool, error)
+}
+
+type OrderRepository interface {
+	Create(ctx context.Context, order *model.Order) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.Order, error)
+	// GetByIDForUpdate is GetByID with a row lock; it must run inside WithinTx.
+	GetByIDForUpdate(ctx context.Context, companyID, id int64) (*model.Order, error)
+	GetByOrderNo(ctx context.Context, companyID int64, orderNo string) (*model.Order, error)
+	GetByOfflineID(ctx context.Context, companyID int64, offlineID string) (*model.Order, error)
+	List(ctx context.Context, companyID int64, params *OrderListParams) ([]*model.Order, int, error)
+	Update(ctx context.Context, order *model.Order) error
+	Delete(ctx context.Context, companyID, id int64) error
+	GenerateOrderNo(ctx context.Context, companyID, branchID int64) (string, error)
+}
+
+// OrderListParams for advanced filtering
+type OrderListParams struct {
+	Search            string
+	Status            *string
+	PaymentStatus     *string
+	FulfillmentType   *string
+	FulfillmentStatus *string
+	CustomerID        *int64
+	DateFrom          *string
+	DateTo            *string
+	Limit             int
+	Offset            int
+}
+
+type OrderItemRepository interface {
+	Create(ctx context.Context, item *model.OrderItem) error
+	GetByOrderID(ctx context.Context, orderID int64) ([]*model.OrderItem, error)
+	DeleteByOrderID(ctx context.Context, orderID int64) error
+}
+
+type PaymentRepository interface {
+	Create(ctx context.Context, payment *model.Payment) error
+	GetByID(ctx context.Context, id int64) (*model.Payment, error)
+	// GetByIDForUpdate is GetByID with a row lock; it must run inside WithinTx.
+	GetByIDForUpdate(ctx context.Context, id int64) (*model.Payment, error)
+	GetByOrderID(ctx context.Context, orderID int64) ([]*model.Payment, error)
+	Update(ctx context.Context, payment *model.Payment) error
+	DeleteByOrderID(ctx context.Context, orderID int64) error
+	GetTotalPaidByOrderID(ctx context.Context, orderID int64) (decimal.Decimal, error)
+	GetTotalRefundedByOrderID(ctx context.Context, orderID int64) (decimal.Decimal, error)
+	GetCashTotalByPeriod(ctx context.Context, branchID int64, from, to time.Time) (decimal.Decimal, error)
+}
+
+type CompanySettingsRepository interface {
+	GetByCompanyID(ctx context.Context, companyID int64) (*model.CompanySettings, error)
+	Upsert(ctx context.Context, settings *model.CompanySettings) error
+}
+
+type ReportRepository interface {
+	GetSummary(ctx context.Context, companyID int64, dateFrom, dateTo string) (*ReportSummary, error)
+	GetSalesTrend(ctx context.Context, companyID int64, dateFrom, dateTo string) ([]*SalesTrendItem, error)
+	GetTopProducts(ctx context.Context, companyID int64, dateFrom, dateTo string, limit int) ([]*TopProductItem, error)
+	GetCategoryRevenue(ctx context.Context, companyID int64, dateFrom, dateTo string) ([]*CategoryRevenueItem, error)
+	GetPaymentMethods(ctx context.Context, companyID int64, dateFrom, dateTo string) ([]*PaymentMethodItem, error)
+	GetHourlySales(ctx context.Context, companyID int64, dateFrom, dateTo string) ([]*HourlySalesItem, error)
+	GetNewCustomersCount(ctx context.Context, companyID int64, dateFrom, dateTo string) (int, error)
+}
+
+// Report data structures
+type ReportSummary struct {
+	TotalRevenue    decimal.Decimal
+	TotalOrders     int
+	TotalItemsSold  int
+	TotalCustomers  int
+	CompletedOrders int
+	CancelledOrders int
+	PendingOrders   int
+	TotalDiscount   decimal.Decimal
+	TotalTax        decimal.Decimal
+	TotalCOGS       decimal.Decimal
+}
+
+type SalesTrendItem struct {
+	Date   string
+	Sales  decimal.Decimal
+	Orders int
+	Items  int
+}
+
+type TopProductItem struct {
+	ProductID   int64
+	ProductName string
+	TotalSold   int
+	TotalAmount decimal.Decimal
+}
+
+type CategoryRevenueItem struct {
+	CategoryID   int64
+	CategoryName string
+	TotalAmount  decimal.Decimal
+	OrderCount   int
+}
+
+type PaymentMethodItem struct {
+	Method      string
+	TotalAmount decimal.Decimal
+	Count       int
+}
+
+type HourlySalesItem struct {
+	Hour        int
+	TotalAmount decimal.Decimal
+	OrderCount  int
+}
+
+type PromotionRepository interface {
+	Create(ctx context.Context, promotion *model.Promotion) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.Promotion, error)
+	List(ctx context.Context, companyID int64, search string, isActive *bool, promoType, status string, limit, offset int) ([]*model.Promotion, int, error)
+	Update(ctx context.Context, promotion *model.Promotion) error
+	Delete(ctx context.Context, companyID, id int64) error
+	CodeExists(ctx context.Context, companyID int64, code string, excludeID int64) (bool, error)
+	GetActivePromotions(ctx context.Context, companyID int64, now time.Time) ([]*model.Promotion, error)
+	GetByCode(ctx context.Context, companyID int64, code string) (*model.Promotion, error)
+}
+
+type StockRepository interface {
+	GetByVariantAndBranch(ctx context.Context, variantID, branchID int64) (*model.Stock, error)
+	// LockForUpdate returns the stock row for (variant, branch), creating it
+	// at zero if missing, locked until the transaction ends. Every stock
+	// change reads through it, so concurrent changes queue instead of
+	// overwriting each other. It must run inside WithinTx.
+	LockForUpdate(ctx context.Context, variantID, branchID int64) (*model.Stock, error)
+	Upsert(ctx context.Context, stock *model.Stock) error
+	UpdateMinQuantity(ctx context.Context, variantID, branchID int64, minQuantity int) error
+	ListInventory(ctx context.Context, companyID, branchID int64, search, category, status string, limit, offset int) ([]*InventoryRow, int, error)
+	GetInventoryStats(ctx context.Context, companyID, branchID int64) (*InventoryStats, error)
+}
+
+type StockMovementRepository interface {
+	Create(ctx context.Context, m *model.StockMovement) error
+	List(ctx context.Context, companyID, branchID int64, movType, search, startDate, endDate string, limit, offset int) ([]*MovementRow, int, error)
+	GetMonthlyStats(ctx context.Context, companyID, branchID int64) (*MovementStats, error)
+}
+
+type ReceiptRepository interface {
+	Save(ctx context.Context, r *model.Receipt) error
+	GetByOrderID(ctx context.Context, companyID, orderID int64) (*model.Receipt, error)
+}
+
+type DailySettlementRepository interface {
+	Create(ctx context.Context, s *model.DailySettlement) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.DailySettlement, error)
+	GetByBranchAndDate(ctx context.Context, companyID, branchID int64, date string) (*model.DailySettlement, error)
+	List(ctx context.Context, companyID int64, params *DailySettlementListParams) ([]*model.DailySettlement, int, error)
+	Update(ctx context.Context, s *model.DailySettlement) error
+	CreateItem(ctx context.Context, item *model.DailySettlementItem) error
+	GetItems(ctx context.Context, settlementID int64) ([]*model.DailySettlementItem, error)
+	GetItem(ctx context.Context, settlementID, itemID int64) (*model.DailySettlementItem, error)
+	UpdateItem(ctx context.Context, item *model.DailySettlementItem) error
+	GetPaymentBreakdown(ctx context.Context, companyID, branchID int64, date string) ([]*PaymentMethodTotals, error)
+	GetExpensesTotal(ctx context.Context, companyID, branchID int64, date string) (decimal.Decimal, error)
+}
+
+// DailySettlementListParams for filtering settlements
+type DailySettlementListParams struct {
+	Status   string
+	BranchID *int64
+	DateFrom string
+	DateTo   string
+	Limit    int
+	Offset   int
+}
+
+// PaymentMethodTotals is the aggregation result of payments by method for a given branch+date
+type PaymentMethodTotals struct {
+	Method     string          `db:"method"`
+	GrossSales decimal.Decimal `db:"gross_sales"`
+	Refunds    decimal.Decimal `db:"refunds"`
+}
+
+type StockOpnameRepository interface {
+	Create(ctx context.Context, opname *model.StockOpname) error
+	GetByID(ctx context.Context, companyID, id int64) (*model.StockOpname, error)
+	// GetByIDForUpdate is GetByID with a row lock; it must run inside WithinTx.
+	GetByIDForUpdate(ctx context.Context, companyID, id int64) (*model.StockOpname, error)
+	List(ctx context.Context, companyID int64, params *StockOpnameListParams) ([]*model.StockOpname, int, error)
+	Update(ctx context.Context, opname *model.StockOpname) error
+	GenerateOpnameNumber(ctx context.Context, companyID int64) (string, error)
+	SnapshotItems(ctx context.Context, opnameID, companyID, branchID int64, categoryID *int64) (int, error)
+	GetItems(ctx context.Context, opnameID int64) ([]*model.StockOpnameItem, error)
+	GetItem(ctx context.Context, opnameID, itemID int64) (*model.StockOpnameItem, error)
+	UpdateItem(ctx context.Context, item *model.StockOpnameItem) error
+	GetItemStats(ctx context.Context, opnameID int64) (totalItems, countedItems int, err error)
+}
+
+// StockOpnameListParams for filtering stock opnames
+type StockOpnameListParams struct {
+	Status   string
+	BranchID *int64
+	Limit    int
+	Offset   int
+}
+
+// ErrForeignReference is returned when a write references a record that is
+// missing or belongs to another company.
+var ErrForeignReference = errors.New("reference belongs to another company")
