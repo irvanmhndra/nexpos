@@ -9,7 +9,8 @@ jobs:
     name: "Detect changes"
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
+      go: ${{ steps.filter.outputs.go }}
+      rust: ${{ steps.filter.outputs.rust }}
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
       - uses: actions/checkout@v5
@@ -17,17 +18,21 @@ jobs:
         id: filter
         with:
           filters: |
-            backend:
+            go:
               - 'backend-go/**'
+              - '.github/workflows/pr-check.yml'
+            rust:
+              - 'backend/**'
+              - 'backend-go/tests/**'
               - '.github/workflows/pr-check.yml'
             frontend:
               - 'frontend/**'
               - '.github/workflows/pr-check.yml'
 
-  backend-lint:
-    name: "Backend: golangci-lint"
+  go-lint:
+    name: "Go: golangci-lint"
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -41,10 +46,10 @@ jobs:
           working-directory: backend-go
           args: --timeout=5m
 
-  backend-test:
-    name: "Backend: unit & integration"
+  go-test:
+    name: "Go: unit & integration"
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -59,10 +64,10 @@ jobs:
       - run: go test -v -race ./tests/integration/...
       - run: CGO_ENABLED=0 GOOS=linux go build -o bin/api ./cmd/api
 
-  backend-security:
-    name: "Backend: govulncheck & gosec"
+  go-security:
+    name: "Go: govulncheck & gosec"
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -79,6 +84,106 @@ jobs:
       - run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
           gosec ./...
+
+  # ==================== Rust API (backend/) ====================
+  # Not deployed yet. It must stay wire-compatible with the Go API: the
+  # conformance job runs the Go integration suite (tests listed in
+  # backend/conformance-tests.txt) against the Rust server.
+
+  rust-check:
+    name: "Rust: fmt, clippy, test"
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: nexpos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgres://test:test@localhost:5432/nexpos
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
+  rust-conformance:
+    name: "Rust: conformance with the Go suite"
+    needs: changes
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: nexpos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+          cache-dependency-path: backend-go/go.sum
+      - name: Build the Rust server
+        working-directory: backend
+        run: cargo build --release --bin nexpos-server
+      - name: Start it on :8090
+        working-directory: backend
+        env:
+          SERVER_PORT: "8090"
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: nexpos
+        run: |
+          nohup ./target/release/nexpos-server > server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8090/health/live && exit 0; sleep 1; done
+          cat server.log; exit 1
+      - name: Run the Go suite against it
+        working-directory: backend-go
+        env:
+          TARGET_BASE_URL: http://127.0.0.1:8090
+          TEST_DATABASE_URL: postgres://test:test@localhost:5432/nexpos?sslmode=disable
+        run: go test -count=1 -p 1 -v -run "$(paste -sd'|' ../backend/conformance-tests.txt)" ./tests/integration/
+      - name: Server log
+        if: failure()
+        run: cat backend/server.log
+
+  rust-image:
+    name: "Rust: Docker image builds"
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -t nexpos-rust:ci backend
 
   frontend-build:
     name: "Frontend: build"
