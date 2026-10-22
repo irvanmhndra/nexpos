@@ -1,0 +1,202 @@
+name: Deploy nexpos
+
+on:
+  push:
+    branches: [main]
+
+# One deploy at a time; a newer push waits instead of racing the running one.
+concurrency:
+  group: deploy-nexpos
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    name: "Detect changes"
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/deploy.yml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/deploy.yml'
+
+  # ==================== Backend ====================
+
+  backend-lint:
+    name: "Backend: golangci-lint"
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+          cache-dependency-path: backend/go.sum
+      - uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.11.3
+          working-directory: backend
+          args: --timeout=5m
+
+  backend-test:
+    name: "Backend: unit & integration"
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+          cache-dependency-path: backend/go.sum
+      - name: Run all tests with coverage
+        run: go test -v -race -timeout 120s -coverprofile=coverage.out -covermode=atomic -coverpkg=./internal/... ./...
+      - name: Check coverage >= 50%
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep "^total:" | awk '{print $3}' | tr -d '%')
+          echo "Combined coverage: ${COVERAGE}%"
+          awk -v cov="$COVERAGE" 'BEGIN {
+            if (cov+0 < 50) {
+              print "Coverage " cov "% is below 50% minimum"; exit 1
+            }
+            print "Coverage " cov "% meets 50% minimum"
+          }'
+
+  backend-vulncheck:
+    name: "Backend: govulncheck"
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+          cache-dependency-path: backend/go.sum
+      - run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  backend-gosec:
+    name: "Backend: gosec"
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+          cache-dependency-path: backend/go.sum
+      - run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec ./...
+
+  backend-deploy:
+    name: "Backend: deploy"
+    needs: [backend-lint, backend-test, backend-vulncheck, backend-gosec]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Login to GHCR
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | \
+            docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build & push image
+        run: |
+          docker build -t ghcr.io/irvanmhndra/nexpos-api:latest backend
+          docker push ghcr.io/irvanmhndra/nexpos-api:latest
+
+      # Ship the compose file from the repo → the server, so the repo stays the
+      # single source of truth. It only copies the compose file — never .env.
+      - name: Copy compose file to VPS
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "backend/docker-compose.prod.yml"
+          strip_components: 1
+          target: "~/nexpos"
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          # Migrate with the NEW image before switching to it, so no request hits
+          # code that expects a schema the database doesn't have yet.
+          # set -e: if the migration fails, the old container keeps serving.
+          script: |
+            set -e
+            cd ~/nexpos
+            cp docker-compose.prod.yml docker-compose.yml
+            docker compose pull nexpos-api
+            docker compose run --rm nexpos-api sh -c '/app/migrate -path /app/migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB?sslmode=$POSTGRES_SSLMODE" up'
+            echo "✅ Migrations applied: $(date)"
+            docker compose up -d --remove-orphans
+            docker image prune -af
+            echo "✅ Stack deployed: $(date)"
+
+  # ==================== Frontend ====================
+
+  # Waits for the backend so a push that changes both never ships a frontend
+  # against an API that isn't deployed yet. Skipped if any backend job failed.
+  frontend-deploy:
+    name: "Frontend: build & deploy"
+    needs: [changes, backend-lint, backend-test, backend-vulncheck, backend-gosec, backend-deploy]
+    if: >-
+      always() &&
+      needs.changes.outputs.frontend == 'true' &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Deploy to VPS
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: frontend/dist/
+          strip_components: 2
+          target: /var/www/nexpos-web/
