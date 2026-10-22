@@ -25,6 +25,9 @@ just dev-web    # web on :5173
 
 ## CI/CD
 
-- `.github/workflows/deploy.yml` runs on push to `main`. Only the side that changed is built: backend lint, test, govulncheck and gosec, then image, compose, migrate and swap. The frontend deploy waits for the backend and is skipped if any backend job failed.
-- `.github/workflows/pr-check.yml` runs the same checks on pull requests, per changed side.
+- `.github/workflows/deploy.yml` runs on push to `main` and builds only the parts that changed:
+  - **Go API** (`backend-go/`): lint, test, govulncheck and gosec, then image, compose, migrate and swap.
+  - **Rust API** (`backend/`): fmt, clippy and tests; conformance (the Go suite against the Rust server); Docker image build. Not deployed yet.
+  - **Frontend:** build and deploy. It waits for the Go API and is skipped if any Go job failed.
+- `.github/workflows/pr-check.yml` runs the same checks on pull requests.
 - Secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`.

@@ -30,9 +30,9 @@ test-api:
 test-go:
     cd backend-go && TEST_DATABASE_URL={{test_db}} go test -race -count=1 ./...
 
-# Run the Go integration suite against a running Rust server: just conformance http://127.0.0.1:8090 'TestHealth'
-# The server must use TEST_DATABASE_URL's database.
-conformance target tests:
+# Run the Go integration suite against a running server (default: the Rust API on :8090,
+# the tests listed in backend/conformance-tests.txt). The server must use TEST_DATABASE_URL's database.
+conformance target="http://127.0.0.1:8090" tests=`paste -sd'|' backend/conformance-tests.txt`:
     cd backend-go && TARGET_BASE_URL={{target}} TEST_DATABASE_URL={{test_db}} go test -count=1 -p 1 -run '{{tests}}' ./tests/integration/
 
 # Lint everything

@@ -1,6 +1,6 @@
 # NexPOS backend rewrite: Go → Rust (React stays)
 
-**Status:** proposal · **Scope:** `nexpos-api` only. `nexpos-web` keeps React; it only switches to a generated API client.
+**Status:** in progress — Phase 0 (conformance harness) and Phase 1 (skeleton) started 2026-10-23 · **Scope:** the API only. `nexpos-web` keeps React; it only switches to a generated API client.
 **Why nexpos rather than fnb:** one frontend instead of three, no SSE/QR customer flow, and a black-box HTTP integration suite that can be reused as a conformance test. Its money, stock, and tenancy rules were also just made explicit (transactions, decimal, composite FKs), so there is a precise spec to port.
 
 ---
@@ -45,23 +45,21 @@
 
 ## 3. Repository layout
 
-A Cargo workspace inside the existing repo (`nexpos-api/rust/`), or a new `nexpos-rs` repo. Same-repo is recommended while both backends live side by side:
+Since the repo restructure, the Rust workspace is `backend/` in the `nexpos` monorepo, and the Go API lives in `backend-go/` until the cutover:
 
 ```
-nexpos-api/
-├── (existing Go code — untouched until cutover)
-├── migrations/                  # stays the single schema source of truth
-└── rust/
-    ├── Cargo.toml               # [workspace]
-    ├── crates/
-    │   ├── domain/              # pure logic, no I/O: money, tax, rounding, promotions,
-    │   │                        # order state machine, stock math, errors
-    │   ├── db/                  # sqlx queries per domain, transactions, row locks
-    │   ├── http/                # axum routers per domain, extractors, AppError, OpenAPI
-    │   └── server/              # bin: config, pool, wiring, graceful shutdown
-    ├── .sqlx/                   # sqlx offline query cache (committed)
-    ├── openapi.json             # generated, committed, CI checks it is fresh
-    └── Dockerfile
+nexpos/
+├── backend/                     # Rust (Cargo workspace)
+│   ├── crates/
+│   │   ├── http/                # axum routers per domain, envelope, AppError, middleware
+│   │   ├── server/              # bin: config, pool, wiring, graceful shutdown
+│   │   ├── domain/              # (added when first needed) pure rules: money, tax, promotions, stock math
+│   │   └── db/                  # (added when first needed) sqlx queries, transactions, row locks
+│   ├── conformance-tests.txt    # Go integration tests that must pass against the Rust server
+│   └── Dockerfile
+├── backend-go/                  # Go API, serves production until the cutover
+│   └── migrations/              # stays the single schema source of truth
+└── frontend/
 ```
 
 Every crate is split by domain module: `auth`, `users`, `branches`, `customers`, `catalog` (categories, products, variants), `orders`, `payments`, `promotions`, `inventory` (stocks, movements), `purchasing` (suppliers, POs), `shifts`, `expenses`, `stock_opname`, `settlements`, `receipts`, `reports`, `settings`, `uploads`.
@@ -189,7 +187,7 @@ Rules while both run:
 
 ## 9. CI/CD
 
-- Rust jobs are filtered to `rust/**` paths; Go jobs to their own paths.
+- Rust jobs are filtered to `backend/**` paths; Go jobs to `backend-go/**`.
 - Required checks: `fmt`, `clippy -D warnings`, `nextest`, `cargo deny check`, `cargo sqlx prepare --check`, OpenAPI freshness, conformance suite against a Rust container.
 - Deploy the same way as today: build → GHCR → ssh. Keep the migrate-before-swap order, and remember **migrations still run from the Go deploy** until Phase 6.
 - Image: `cargo-chef` for dependency caching, a musl static binary, and a `FROM scratch`/distroless runtime. Expect roughly 15–30 MB, against the current Go image plus the migrate binary.
