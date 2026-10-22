@@ -1,0 +1,18 @@
+# Dependencies
+node_modules
+dist
+build
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode
+.idea
+
+# Git
+.git
