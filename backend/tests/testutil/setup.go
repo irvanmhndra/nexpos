@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/irvanmhndra/nexpos-api/config"
@@ -68,6 +69,11 @@ func Setup(ctx context.Context) (*TestEnv, error) {
 }
 
 // SetupTestEnv creates a full test environment including an HTTP test server.
+//
+// With TARGET_BASE_URL set, requests go to that running server instead of the
+// in-process Go app (conformance mode). The target must use the same database
+// as TEST_DATABASE_URL, because tests seed and truncate it directly. The Go app
+// is still built: it applies the migrations and lists the routes.
 func SetupTestEnv(ctx context.Context) (*TestEnv, error) {
 	env, err := Setup(ctx)
 	if err != nil {
@@ -75,6 +81,10 @@ func SetupTestEnv(ctx context.Context) (*TestEnv, error) {
 	}
 
 	server := NewTestServer(env.App.Echo())
+	if target := os.Getenv("TARGET_BASE_URL"); target != "" {
+		server.Close()
+		server = NewRemoteServer(target)
+	}
 	env.Server = server
 
 	origCleanup := env.Cleanup

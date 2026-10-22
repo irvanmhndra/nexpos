@@ -6,21 +6,33 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 )
 
-// TestServer wraps an httptest.Server for integration testing
+// TestServer sends integration-test requests either to an in-process
+// httptest server or to an already running server at a base URL.
 type TestServer struct {
-	server *httptest.Server
+	server  *httptest.Server
+	baseURL string
 }
 
 // NewTestServer creates a real HTTP test server
 func NewTestServer(handler http.Handler) *TestServer {
-	return &TestServer{server: httptest.NewServer(handler)}
+	srv := httptest.NewServer(handler)
+	return &TestServer{server: srv, baseURL: srv.URL}
 }
 
-// Close shuts down the test server
+// NewRemoteServer targets a server that is already running, e.g. the Rust
+// backend, so the same suite checks that it behaves like the Go one.
+func NewRemoteServer(baseURL string) *TestServer {
+	return &TestServer{baseURL: strings.TrimRight(baseURL, "/")}
+}
+
+// Close shuts down the test server (a no-op for a remote server)
 func (s *TestServer) Close() {
-	s.server.Close()
+	if s.server != nil {
+		s.server.Close()
+	}
 }
 
 // Request represents a test HTTP request
@@ -50,7 +62,7 @@ func (s *TestServer) Do(req Request) (*Response, error) {
 		bodyReader = bytes.NewReader(bodyBytes)
 	}
 
-	url := s.server.URL + req.Path
+	url := s.baseURL + req.Path
 	httpReq, err := http.NewRequest(req.Method, url, bodyReader)
 	if err != nil {
 		return nil, err
