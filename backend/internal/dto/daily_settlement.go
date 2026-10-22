@@ -68,7 +68,7 @@ type DailySettlementResponse struct {
 	CreatedAt      time.Time       `json:"created_at"`
 	UpdatedAt      time.Time       `json:"updated_at"`
 
-	Items []*DailySettlementItemResponse `json:"items"`
+	Items []*DailySettlementItemResponse `json:"items,omitzero"`
 }
 
 type DailySettlementItemResponse struct {

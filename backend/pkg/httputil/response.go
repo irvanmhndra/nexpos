@@ -38,7 +38,7 @@ func Success(c *echo.Context, status int, message string, data any) error {
 	return (*c).JSON(status, Response{
 		Success: true,
 		Message: message,
-		Data:    emptyLists(data),
+		Data:    data,
 	})
 }
 
@@ -46,7 +46,7 @@ func SuccessWithPagination(c *echo.Context, status int, message string, data any
 	return (*c).JSON(status, Response{
 		Success: true,
 		Message: message,
-		Data:    emptyLists(data),
+		Data:    data,
 		Meta:    &Meta{Pagination: pagination, Summary: summary},
 	})
 }

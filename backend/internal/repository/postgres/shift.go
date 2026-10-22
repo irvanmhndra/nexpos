@@ -63,7 +63,7 @@ func (r *ShiftRepository) GetOpenShift(ctx context.Context, companyID, branchID,
 }
 
 func (r *ShiftRepository) List(ctx context.Context, companyID int64, params *repository.ShiftListParams) ([]*model.Shift, int, error) {
-	var shifts []*model.Shift
+	shifts := []*model.Shift{}
 	var total int
 
 	whereClause := "WHERE company_id = $1"

@@ -122,7 +122,7 @@ func (r *StockMovementRepository) List(ctx context.Context, companyID, branchID 
 	}
 	defer func() { _ = rows.Close() }()
 
-	var result []*repository.MovementRow
+	result := []*repository.MovementRow{}
 	for rows.Next() {
 		var row repository.MovementRow
 		if err := rows.StructScan(&row); err != nil {

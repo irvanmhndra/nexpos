@@ -724,11 +724,12 @@ func (s *OrderService) List(ctx context.Context, companyID int64, req dto.ListOr
 
 	responses := make([]*dto.OrderResponse, 0, len(orders))
 	for _, order := range orders {
-		items, _ := s.orderItemRepo.GetByOrderID(ctx, order.ID)
-		order.Items = items
-
-		payments, _ := s.paymentRepo.GetByOrderID(ctx, order.ID)
-		order.Payments = payments
+		if order.Items, err = s.orderItemRepo.GetByOrderID(ctx, order.ID); err != nil {
+			return nil, apperror.InternalError(err)
+		}
+		if order.Payments, err = s.paymentRepo.GetByOrderID(ctx, order.ID); err != nil {
+			return nil, apperror.InternalError(err)
+		}
 
 		responses = append(responses, s.toResponse(ctx, companyID, order))
 	}

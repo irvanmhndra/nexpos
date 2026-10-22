@@ -16,7 +16,7 @@ func NewPermissionRepository(db *sqlx.DB) *PermissionRepository {
 }
 
 func (r *PermissionRepository) GetAll(ctx context.Context) ([]*model.Permission, error) {
-	var permissions []*model.Permission
+	permissions := []*model.Permission{}
 	err := conn(ctx, r.db).SelectContext(ctx, &permissions, `
 		SELECT id, code, name, module, description, created_at
 		FROM permissions
@@ -29,7 +29,7 @@ func (r *PermissionRepository) GetAll(ctx context.Context) ([]*model.Permission,
 }
 
 func (r *PermissionRepository) GetByModule(ctx context.Context, module string) ([]*model.Permission, error) {
-	var permissions []*model.Permission
+	permissions := []*model.Permission{}
 	err := conn(ctx, r.db).SelectContext(ctx, &permissions, `
 		SELECT id, code, name, module, description, created_at
 		FROM permissions WHERE module = $1
@@ -42,7 +42,7 @@ func (r *PermissionRepository) GetByModule(ctx context.Context, module string) (
 }
 
 func (r *PermissionRepository) GetByRoleID(ctx context.Context, roleID int64) ([]*model.Permission, error) {
-	var permissions []*model.Permission
+	permissions := []*model.Permission{}
 	err := conn(ctx, r.db).SelectContext(ctx, &permissions, `
 		SELECT p.id, p.code, p.name, p.module, p.description, p.created_at
 		FROM permissions p

@@ -63,7 +63,7 @@ func (r *SupplierRepository) GetByCode(ctx context.Context, companyID int64, cod
 }
 
 func (r *SupplierRepository) List(ctx context.Context, companyID int64, search string, isActive *bool, limit, offset int) ([]*model.Supplier, int, error) {
-	var suppliers []*model.Supplier
+	suppliers := []*model.Supplier{}
 	var total int
 
 	whereClause := "WHERE company_id = $1"

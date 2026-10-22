@@ -62,7 +62,7 @@ func (r *PaymentRepository) GetByIDForUpdate(ctx context.Context, id int64) (*mo
 }
 
 func (r *PaymentRepository) GetByOrderID(ctx context.Context, orderID int64) ([]*model.Payment, error) {
-	var payments []*model.Payment
+	payments := []*model.Payment{}
 	query := fmt.Sprintf(`SELECT %s FROM payments WHERE order_id = $1 ORDER BY id`, paymentColumns)
 	if err := conn(ctx, r.db).SelectContext(ctx, &payments, query, orderID); err != nil {
 		return nil, err

@@ -162,8 +162,8 @@ type OrderResponse struct {
 	BalanceDue    decimal.Decimal `json:"balance_due"`
 	RefundedTotal decimal.Decimal `json:"refunded_total"`
 
-	Items     []*OrderItemResponse `json:"items"`
-	Payments  []*PaymentResponse   `json:"payments"`
+	Items     []*OrderItemResponse `json:"items,omitzero"`
+	Payments  []*PaymentResponse   `json:"payments,omitzero"`
 	CreatedAt time.Time            `json:"created_at"`
 	UpdatedAt time.Time            `json:"updated_at"`
 }

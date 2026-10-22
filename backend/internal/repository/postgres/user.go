@@ -61,7 +61,7 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*model.U
 }
 
 func (r *userRepository) List(ctx context.Context, companyID int64, limit, offset int) ([]*model.User, int, error) {
-	var users []*model.User
+	users := []*model.User{}
 	var total int
 
 	countQuery := `SELECT COUNT(*) FROM users WHERE company_id = $1`

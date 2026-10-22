@@ -62,7 +62,7 @@ func (r *RoleRepository) GetByCode(ctx context.Context, code string, companyID *
 }
 
 func (r *RoleRepository) ListByCompanyID(ctx context.Context, companyID int64) ([]*model.Role, error) {
-	var roles []*model.Role
+	roles := []*model.Role{}
 	err := conn(ctx, r.db).SelectContext(ctx, &roles, `
 		SELECT id, company_id, code, name, description, is_system, is_active, created_at, updated_at
 		FROM roles
@@ -76,7 +76,7 @@ func (r *RoleRepository) ListByCompanyID(ctx context.Context, companyID int64) (
 }
 
 func (r *RoleRepository) ListSystemRoles(ctx context.Context) ([]*model.Role, error) {
-	var roles []*model.Role
+	roles := []*model.Role{}
 	err := conn(ctx, r.db).SelectContext(ctx, &roles, `
 		SELECT id, company_id, code, name, description, is_system, is_active, created_at, updated_at
 		FROM roles WHERE company_id IS NULL AND is_active = true
@@ -116,7 +116,7 @@ func (r *RoleRepository) GetWithPermissions(ctx context.Context, id int64) (*mod
 		return role, err
 	}
 
-	var permissions []model.Permission
+	permissions := []model.Permission{}
 	err = conn(ctx, r.db).SelectContext(ctx, &permissions, `
 		SELECT p.id, p.code, p.name, p.module, p.description, p.created_at
 		FROM permissions p

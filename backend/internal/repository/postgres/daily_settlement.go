@@ -68,7 +68,7 @@ func (r *DailySettlementRepository) GetByBranchAndDate(ctx context.Context, comp
 }
 
 func (r *DailySettlementRepository) List(ctx context.Context, companyID int64, params *repository.DailySettlementListParams) ([]*model.DailySettlement, int, error) {
-	var settlements []*model.DailySettlement
+	settlements := []*model.DailySettlement{}
 	var total int
 
 	where := "WHERE company_id = $1"
@@ -170,7 +170,7 @@ func (r *DailySettlementRepository) CreateItem(ctx context.Context, item *model.
 }
 
 func (r *DailySettlementRepository) GetItems(ctx context.Context, settlementID int64) ([]*model.DailySettlementItem, error) {
-	var items []*model.DailySettlementItem
+	items := []*model.DailySettlementItem{}
 	query := `SELECT * FROM daily_settlement_items WHERE daily_settlement_id = $1 ORDER BY id`
 	if err := conn(ctx, r.db).SelectContext(ctx, &items, query, settlementID); err != nil {
 		return nil, err
@@ -247,7 +247,7 @@ func (r *DailySettlementRepository) GetPaymentBreakdown(ctx context.Context, com
 		GROUP BY method
 		ORDER BY method
 	`
-	var totals []*repository.PaymentMethodTotals
+	totals := []*repository.PaymentMethodTotals{}
 	if err := conn(ctx, r.db).SelectContext(ctx, &totals, query, companyID, branchID, date); err != nil {
 		return nil, err
 	}

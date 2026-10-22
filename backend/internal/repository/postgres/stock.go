@@ -167,7 +167,7 @@ func (r *StockRepository) ListInventory(ctx context.Context, companyID, branchID
 	}
 	defer func() { _ = rows.Close() }()
 
-	var result []*repository.InventoryRow
+	result := []*repository.InventoryRow{}
 	for rows.Next() {
 		var row repository.InventoryRow
 		if err := rows.StructScan(&row); err != nil {

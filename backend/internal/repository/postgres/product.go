@@ -48,7 +48,7 @@ func (r *ProductRepository) GetByID(ctx context.Context, companyID, id int64) (*
 }
 
 func (r *ProductRepository) List(ctx context.Context, companyID int64, search string, categoryID *int64, isActive *bool, limit, offset int) ([]*model.Product, int, error) {
-	var products []*model.Product
+	products := []*model.Product{}
 	var total int
 
 	// Build WHERE clause

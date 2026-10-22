@@ -416,8 +416,9 @@ func (s *PurchaseOrderService) ReceivePO(ctx context.Context, companyID, poID in
 		return nil, err
 	}
 
-	items, _ := s.poRepo.GetItems(ctx, po.ID)
-	po.Items = items
+	if po.Items, err = s.poRepo.GetItems(ctx, po.ID); err != nil {
+		return nil, apperror.InternalError(err)
+	}
 
 	return toPOResponse(po), nil
 }
