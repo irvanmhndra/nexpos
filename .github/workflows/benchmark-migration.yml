@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'backend/sqldump/**'
+      - 'backend-go/sqldump/**'
       - '.github/workflows/benchmark-migration.yml'
 
 jobs:
@@ -40,7 +40,7 @@ jobs:
 
       - name: Run schema migration and measure time
         run: |
-          DUMP_FILE="backend/sqldump/schema_dump_for_other_project.sql"
+          DUMP_FILE="backend-go/sqldump/schema_dump_for_other_project.sql"
 
           echo "=========================================="
           echo "File: $DUMP_FILE"

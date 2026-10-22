@@ -23,7 +23,7 @@ jobs:
         with:
           filters: |
             backend:
-              - 'backend/**'
+              - 'backend-go/**'
               - '.github/workflows/deploy.yml'
             frontend:
               - 'frontend/**'
@@ -41,11 +41,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.6'
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: backend-go/go.sum
       - uses: golangci/golangci-lint-action@v7
         with:
           version: v2.11.3
-          working-directory: backend
+          working-directory: backend-go
           args: --timeout=5m
 
   backend-test:
@@ -55,13 +55,13 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend
+        working-directory: backend-go
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.6'
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: backend-go/go.sum
       - name: Run all tests with coverage
         run: go test -v -race -timeout 120s -coverprofile=coverage.out -covermode=atomic -coverpkg=./internal/... ./...
       - name: Check coverage >= 50%
@@ -82,13 +82,13 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend
+        working-directory: backend-go
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.6'
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: backend-go/go.sum
       - run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
@@ -100,13 +100,13 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend
+        working-directory: backend-go
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.6'
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: backend-go/go.sum
       - run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
           gosec ./...
@@ -128,7 +128,7 @@ jobs:
 
       - name: Build & push image
         run: |
-          docker build -t ghcr.io/irvanmhndra/nexpos-api:latest backend
+          docker build -t ghcr.io/irvanmhndra/nexpos-api:latest backend-go
           docker push ghcr.io/irvanmhndra/nexpos-api:latest
 
       # Ship the compose file from the repo → the server, so the repo stays the
@@ -139,7 +139,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "backend/docker-compose.prod.yml"
+          source: "backend-go/docker-compose.prod.yml"
           strip_components: 1
           target: "~/nexpos"
 
