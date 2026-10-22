@@ -1,0 +1,6 @@
+# Each side keeps its own .gitignore (backend/, frontend/); these apply everywhere.
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.env
