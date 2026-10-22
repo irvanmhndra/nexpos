@@ -80,7 +80,7 @@ func (r *PurchaseOrderRepository) GeneratePONumber(ctx context.Context, companyI
 }
 
 func (r *PurchaseOrderRepository) List(ctx context.Context, companyID int64, params *repository.POListParams) ([]*model.PurchaseOrder, int, error) {
-	var pos []*model.PurchaseOrder
+	pos := []*model.PurchaseOrder{}
 	var total int
 
 	whereClause := "WHERE company_id = $1"
@@ -149,7 +149,7 @@ func (r *PurchaseOrderRepository) Update(ctx context.Context, po *model.Purchase
 }
 
 func (r *PurchaseOrderRepository) GetItems(ctx context.Context, poID int64) ([]*model.PurchaseOrderItem, error) {
-	var items []*model.PurchaseOrderItem
+	items := []*model.PurchaseOrderItem{}
 	query := `SELECT * FROM purchase_order_items WHERE purchase_order_id = $1 ORDER BY id`
 	if err := conn(ctx, r.db).SelectContext(ctx, &items, query, poID); err != nil {
 		return nil, err

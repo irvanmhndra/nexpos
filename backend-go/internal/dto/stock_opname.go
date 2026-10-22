@@ -61,7 +61,7 @@ type StockOpnameResponse struct {
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`
 
-	Items []*StockOpnameItemResponse `json:"items"`
+	Items []*StockOpnameItemResponse `json:"items,omitzero"`
 }
 
 type StockOpnameItemResponse struct {

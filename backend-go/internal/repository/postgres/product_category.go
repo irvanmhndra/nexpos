@@ -60,7 +60,7 @@ func (r *ProductCategoryRepository) GetByCode(ctx context.Context, companyID int
 }
 
 func (r *ProductCategoryRepository) List(ctx context.Context, companyID int64, search string, isActive *bool, limit, offset int) ([]*model.ProductCategory, int, error) {
-	var categories []*model.ProductCategory
+	categories := []*model.ProductCategory{}
 	var total int
 
 	// Build WHERE clause
@@ -102,7 +102,7 @@ func (r *ProductCategoryRepository) List(ctx context.Context, companyID int64, s
 }
 
 func (r *ProductCategoryRepository) ListAll(ctx context.Context, companyID int64) ([]*model.ProductCategory, error) {
-	var categories []*model.ProductCategory
+	categories := []*model.ProductCategory{}
 	query := `
 		SELECT * FROM product_categories
 		WHERE company_id = $1 AND is_active = true

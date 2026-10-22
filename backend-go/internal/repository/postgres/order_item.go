@@ -42,7 +42,7 @@ func (r *OrderItemRepository) Create(ctx context.Context, item *model.OrderItem)
 }
 
 func (r *OrderItemRepository) GetByOrderID(ctx context.Context, orderID int64) ([]*model.OrderItem, error) {
-	var items []*model.OrderItem
+	items := []*model.OrderItem{}
 	query := `
 		SELECT id, order_id, product_id, product_variant_id, sku, product_name,
 			variant_name, variant_attributes, unit_price, unit_cost, quantity,

@@ -59,7 +59,7 @@ func (r *UserBranchRepository) SetBranches(ctx context.Context, userID int64, br
 }
 
 func (r *UserBranchRepository) GetByUserID(ctx context.Context, userID int64) ([]*model.UserBranch, error) {
-	var userBranches []*model.UserBranch
+	userBranches := []*model.UserBranch{}
 	err := conn(ctx, r.db).SelectContext(ctx, &userBranches, `
 		SELECT id, user_id, branch_id, is_default, created_at
 		FROM user_branches WHERE user_id = $1

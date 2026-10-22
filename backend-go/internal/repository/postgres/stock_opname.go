@@ -78,7 +78,7 @@ func (r *StockOpnameRepository) GenerateOpnameNumber(ctx context.Context, compan
 }
 
 func (r *StockOpnameRepository) List(ctx context.Context, companyID int64, params *repository.StockOpnameListParams) ([]*model.StockOpname, int, error) {
-	var opnames []*model.StockOpname
+	opnames := []*model.StockOpname{}
 	var total int
 
 	whereClause := "WHERE company_id = $1"
@@ -195,7 +195,7 @@ func (r *StockOpnameRepository) SnapshotItems(ctx context.Context, opnameID, com
 }
 
 func (r *StockOpnameRepository) GetItems(ctx context.Context, opnameID int64) ([]*model.StockOpnameItem, error) {
-	var items []*model.StockOpnameItem
+	items := []*model.StockOpnameItem{}
 	query := `SELECT * FROM stock_opname_items WHERE stock_opname_id = $1 ORDER BY product_name, variant_name, id`
 	if err := conn(ctx, r.db).SelectContext(ctx, &items, query, opnameID); err != nil {
 		return nil, err

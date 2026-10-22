@@ -50,7 +50,7 @@ func (r *branchRepository) GetByID(ctx context.Context, id int64) (*model.Branch
 }
 
 func (r *branchRepository) ListByCompanyID(ctx context.Context, companyID int64) ([]*model.Branch, error) {
-	var branches []*model.Branch
+	branches := []*model.Branch{}
 	query := `SELECT * FROM branches WHERE company_id = $1 ORDER BY name`
 	err := conn(ctx, r.db).SelectContext(ctx, &branches, query, companyID)
 	if err != nil {
@@ -94,7 +94,7 @@ func (r *branchRepository) List(ctx context.Context, companyID int64, search str
 		where, argIdx, argIdx+1,
 	)
 
-	var branches []*model.Branch
+	branches := []*model.Branch{}
 	if err := conn(ctx, r.db).SelectContext(ctx, &branches, listQuery, listArgs...); err != nil {
 		return nil, 0, err
 	}

@@ -60,7 +60,7 @@ func (r *CustomerRepository) GetByCode(ctx context.Context, companyID int64, cod
 }
 
 func (r *CustomerRepository) List(ctx context.Context, companyID int64, search string, isMember *bool, limit, offset int) ([]*model.Customer, int, error) {
-	var customers []*model.Customer
+	customers := []*model.Customer{}
 	var total int
 
 	// Build WHERE clause

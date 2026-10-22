@@ -46,7 +46,7 @@ func (r *ExpenseCategoryRepository) GetByID(ctx context.Context, companyID, id i
 }
 
 func (r *ExpenseCategoryRepository) List(ctx context.Context, companyID int64, search string, limit, offset int) ([]*model.ExpenseCategory, int, error) {
-	var categories []*model.ExpenseCategory
+	categories := []*model.ExpenseCategory{}
 	var total int
 
 	whereClause := "WHERE company_id = $1"
@@ -167,7 +167,7 @@ func (r *ExpenseRepository) GetByID(ctx context.Context, companyID, id int64) (*
 }
 
 func (r *ExpenseRepository) List(ctx context.Context, companyID int64, params *repository.ExpenseListParams) ([]*model.Expense, int, error) {
-	var expenses []*model.Expense
+	expenses := []*model.Expense{}
 	var total int
 
 	whereClause := "WHERE company_id = $1"

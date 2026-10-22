@@ -115,7 +115,7 @@ func (r *promotionRepository) List(ctx context.Context, companyID int64, search 
 		where, argIdx, argIdx+1,
 	)
 
-	var promotions []*model.Promotion
+	promotions := []*model.Promotion{}
 	if err := conn(ctx, r.db).SelectContext(ctx, &promotions, listQuery, listArgs...); err != nil {
 		return nil, 0, err
 	}
@@ -163,7 +163,7 @@ func (r *promotionRepository) CodeExists(ctx context.Context, companyID int64, c
 }
 
 func (r *promotionRepository) GetActivePromotions(ctx context.Context, companyID int64, now time.Time) ([]*model.Promotion, error) {
-	var promotions []*model.Promotion
+	promotions := []*model.Promotion{}
 	query := `
 		SELECT * FROM promotions
 		WHERE company_id = $1

@@ -67,7 +67,7 @@ func (r *ProductVariantRepository) GetByIDForCompany(ctx context.Context, compan
 }
 
 func (r *ProductVariantRepository) GetByProductID(ctx context.Context, productID int64) ([]*model.ProductVariant, error) {
-	var variants []*model.ProductVariant
+	variants := []*model.ProductVariant{}
 	query := `SELECT * FROM product_variants WHERE product_id = $1 ORDER BY is_default DESC, name ASC`
 	if err := conn(ctx, r.db).SelectContext(ctx, &variants, query, productID); err != nil {
 		return nil, err

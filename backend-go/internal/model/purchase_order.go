@@ -29,7 +29,7 @@ type PurchaseOrder struct {
 	CreatedAt   time.Time       `db:"created_at"   json:"created_at"`
 	UpdatedAt   time.Time       `db:"updated_at"   json:"updated_at"`
 
-	Items []*PurchaseOrderItem `db:"-" json:"items"`
+	Items []*PurchaseOrderItem `db:"-" json:"items,omitzero"`
 }
 
 type PurchaseOrderItem struct {

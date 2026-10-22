@@ -170,7 +170,7 @@ func (r *OrderRepository) List(ctx context.Context, companyID int64, params *rep
 
 	args = append(args, params.Limit, params.Offset)
 
-	var orders []*model.Order
+	orders := []*model.Order{}
 	if err := conn(ctx, r.db).SelectContext(ctx, &orders, dataQuery, args...); err != nil {
 		return nil, 0, err
 	}
