@@ -141,6 +141,15 @@ impl Validator {
         self
     }
 
+    /// A `*string` field with `omitempty`: skipped only when absent or `null`;
+    /// an empty string is still checked, as in go-playground.
+    pub fn optional(&mut self, name: &str, value: Option<&str>, rules: &[Rule]) -> &mut Self {
+        match value {
+            Some(v) => self.field(name, v, rules),
+            None => self,
+        }
+    }
+
     pub fn finish(&mut self) -> Result<(), AppError> {
         if self.errors.is_empty() {
             Ok(())

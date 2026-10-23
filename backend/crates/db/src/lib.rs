@@ -2,3 +2,5 @@
 //! (`backend-go/migrations`); these queries read and write it as-is.
 
 pub mod auth;
+pub mod branches;
+pub mod customers;

@@ -17,6 +17,9 @@ struct Config {
     auth: AuthConfig,
     /// The Go API that serves every route not ported yet (`GO_UPSTREAM_URL`).
     upstream: Option<String>,
+    /// The database's TimeZone (`DB_TIMEZONE`, IANA name, default UTC). Go shows
+    /// timestamps in it, so Rust does too.
+    timezone: chrono_tz::Tz,
 }
 
 impl Config {
@@ -63,6 +66,9 @@ impl Config {
             db,
             auth,
             upstream: env::var("GO_UPSTREAM_URL").ok().filter(|v| !v.is_empty()),
+            timezone: var("DB_TIMEZONE", "UTC")
+                .parse()
+                .map_err(|e| anyhow::anyhow!("invalid DB_TIMEZONE: {e}"))?,
         })
     }
 }
@@ -70,6 +76,7 @@ impl Config {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let config = Config::from_env()?;
+    nexpos_http::time::set_zone(config.timezone);
 
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,tower_http=info"));

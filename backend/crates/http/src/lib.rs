@@ -2,12 +2,16 @@
 //! and middleware. Wire-compatible with the Go API in `backend-go/`.
 
 mod auth;
+mod branches;
+mod customers;
 pub mod envelope;
 pub mod error;
 pub mod extract;
 mod health;
+pub mod params;
 mod proxy;
 pub mod state;
+pub mod time;
 
 use std::time::Duration;
 
@@ -39,6 +43,8 @@ pub fn app(state: AppState) -> Router {
     Router::new()
         .merge(health::router())
         .merge(auth::router())
+        .merge(branches::router())
+        .merge(customers::router())
         .fallback(proxy::fallback)
         .method_not_allowed_fallback(method_not_allowed)
         .with_state(state)
