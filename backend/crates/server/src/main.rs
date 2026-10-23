@@ -1,9 +1,9 @@
 //! nexpos Rust API server: config, database pool, tracing, graceful shutdown.
 
-use std::{env, str::FromStr, time::Duration};
+use std::{env, net::SocketAddr, str::FromStr, time::Duration};
 
 use anyhow::Context;
-use nexpos_http::AppState;
+use nexpos_http::{AppState, AuthConfig};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions, PgSslMode};
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
@@ -14,6 +14,9 @@ struct Config {
     port: u16,
     production: bool,
     db: PgConnectOptions,
+    auth: AuthConfig,
+    /// The Go API that serves every route not ported yet (`GO_UPSTREAM_URL`).
+    upstream: Option<String>,
 }
 
 impl Config {
@@ -43,10 +46,23 @@ impl Config {
                     .context("invalid POSTGRES_SSLMODE")?,
             );
 
+        let hours = |key: &str, default: &str| -> anyhow::Result<Duration> {
+            let n: u64 = var(key, default)
+                .parse()
+                .with_context(|| format!("{key} must be a number"))?;
+            Ok(Duration::from_secs(n * 3600))
+        };
+        let auth = AuthConfig {
+            access_ttl: hours("JWT_ACCESS_EXPIRES_HOURS", "2")?,
+            refresh_ttl: hours("JWT_REFRESH_EXPIRES_DAYS", "7")? * 24,
+        };
+
         Ok(Self {
             port,
             production: var("SERVER_ENV", "development") == "production",
             db,
+            auth,
+            upstream: env::var("GO_UPSTREAM_URL").ok().filter(|v| !v.is_empty()),
         })
     }
 }
@@ -77,7 +93,15 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(("0.0.0.0", config.port)).await?;
     tracing::info!(port = config.port, "nexpos-server listening");
 
-    axum::serve(listener, nexpos_http::app(AppState { db: db.clone() }))
+    let mut state = AppState::new(db.clone()).with_auth(config.auth);
+    if let Some(upstream) = &config.upstream {
+        tracing::info!(%upstream, "forwarding routes not ported yet to the Go API");
+        state = state.with_upstream(upstream);
+    }
+
+    // Connect info gives handlers the peer address, stored on sessions like Go does.
+    let app = nexpos_http::app(state).into_make_service_with_connect_info::<SocketAddr>();
+    axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 

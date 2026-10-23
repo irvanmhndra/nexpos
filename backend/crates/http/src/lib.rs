@@ -1,9 +1,12 @@
 //! HTTP layer of the nexpos Rust API: routes, the response envelope, errors,
 //! and middleware. Wire-compatible with the Go API in `backend-go/`.
 
+mod auth;
 pub mod envelope;
 pub mod error;
+pub mod extract;
 mod health;
+mod proxy;
 pub mod state;
 
 use std::time::Duration;
@@ -23,19 +26,20 @@ use tower_http::{
 };
 
 pub use error::{AppError, AppResult};
-pub use state::AppState;
+pub use state::{AppState, AuthConfig};
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
 
 /// Matches nginx's `client_max_body_size 15m` in front of the API.
 const BODY_LIMIT: usize = 15 * 1024 * 1024;
 
-/// The whole API. Unknown paths and wrong methods get the same JSON as Echo's
-/// error handler (`{"success":false,"message":"Not Found","error_code":"Not Found"}`).
+/// The whole API. Paths Rust doesn't serve go to the Go API when an upstream is
+/// configured, and otherwise get Echo's JSON 404; wrong methods get Echo's 405.
 pub fn app(state: AppState) -> Router {
     Router::new()
         .merge(health::router())
-        .fallback(not_found)
+        .merge(auth::router())
+        .fallback(proxy::fallback)
         .method_not_allowed_fallback(method_not_allowed)
         .with_state(state)
         .layer(DefaultBodyLimit::max(BODY_LIMIT))
@@ -68,10 +72,6 @@ fn cors() -> CorsLayer {
             header::CONTENT_TYPE,
             REQUEST_ID,
         ])
-}
-
-async fn not_found() -> Response {
-    envelope::failure(StatusCode::NOT_FOUND, "Not Found", "Not Found", None)
 }
 
 async fn method_not_allowed() -> Response {

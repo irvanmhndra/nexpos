@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/http", "crates/server"]
+members = ["crates/domain", "crates/db", "crates/http", "crates/server"]
 
 [workspace.package]
 edition = "2024"
@@ -10,10 +10,17 @@ publish = false
 [workspace.dependencies]
 anyhow = "1"
 axum = "0.8"
+bcrypt = "0.17"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+hex = "0.4"
+rand = "0.9"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+serde_path_to_error = "0.1"
+sha2 = "0.10"
 http-body-util = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "macros"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "macros", "chrono"] }
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "net"] }
 tower = { version = "0.5", features = ["util"] }
@@ -21,6 +28,8 @@ tower-http = { version = "0.6", features = ["cors", "trace", "request-id", "time
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
+nexpos-db = { path = "crates/db" }
+nexpos-domain = { path = "crates/domain" }
 nexpos-http = { path = "crates/http" }
 
 [profile.release]

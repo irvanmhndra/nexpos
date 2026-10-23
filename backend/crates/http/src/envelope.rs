@@ -106,6 +106,21 @@ pub fn success<T: Serialize>(status: StatusCode, message: impl Into<String>, dat
     )
 }
 
+/// `httputil.Success` with nil data: the `data` key is left out.
+pub fn success_message(status: StatusCode, message: impl Into<String>) -> Reply<()> {
+    Reply(
+        status,
+        Envelope {
+            success: true,
+            message: message.into(),
+            data: None,
+            error_code: String::new(),
+            errors: None,
+            meta: None,
+        },
+    )
+}
+
 /// `httputil.SuccessWithPagination`.
 pub fn success_with_pagination<T: Serialize>(
     status: StatusCode,

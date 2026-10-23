@@ -26,7 +26,7 @@ fn unreachable_db() -> AppState {
     let db = PgPoolOptions::new()
         .acquire_timeout(std::time::Duration::from_millis(500))
         .connect_lazy_with(opts);
-    AppState { db }
+    AppState::new(db)
 }
 
 /// The real database when DATABASE_URL is set, so /health can report healthy.
@@ -36,7 +36,7 @@ async fn database() -> Option<AppState> {
         .connect(&url)
         .await
         .expect("connect DATABASE_URL");
-    Some(AppState { db })
+    Some(AppState::new(db))
 }
 
 async fn send(app: Router, req: Request<Body>) -> (StatusCode, axum::http::HeaderMap, String) {
