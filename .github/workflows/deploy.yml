@@ -234,6 +234,22 @@ jobs:
         with:
           go-version: '1.26.6'
           cache-dependency-path: backend-go/go.sum
+      # Routes Rust doesn't serve yet go to the Go API, like in production.
+      - name: Start the Go API on :8080
+        working-directory: backend-go
+        env:
+          SERVER_PORT: "8080"
+          SERVER_ENV: test
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: nexpos
+          JWT_SECRET: conformance-secret
+        run: |
+          go build -o /tmp/nexpos-go ./cmd/api
+          nohup /tmp/nexpos-go > /tmp/go.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8080/health/live && exit 0; sleep 1; done
+          cat /tmp/go.log; exit 1
       - name: Build the Rust server
         working-directory: backend
         run: cargo build --release --bin nexpos-server
@@ -245,6 +261,7 @@ jobs:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
           POSTGRES_DB: nexpos
+          GO_UPSTREAM_URL: http://127.0.0.1:8080
         run: |
           nohup ./target/release/nexpos-server > server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:8090/health/live && exit 0; sleep 1; done
@@ -255,9 +272,9 @@ jobs:
           TARGET_BASE_URL: http://127.0.0.1:8090
           TEST_DATABASE_URL: postgres://test:test@localhost:5432/nexpos?sslmode=disable
         run: go test -count=1 -p 1 -v -run "$(paste -sd'|' ../backend/conformance-tests.txt)" ./tests/integration/
-      - name: Server log
+      - name: Server logs
         if: failure()
-        run: cat backend/server.log
+        run: cat backend/server.log /tmp/go.log
 
   rust-image:
     name: "Rust: Docker image builds"
