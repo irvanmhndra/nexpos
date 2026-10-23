@@ -21,8 +21,8 @@ The rewrite of `../backend-go`, taking over production route group by route grou
 |---|---|
 | `crates/domain` | pure rules: session tokens, bcrypt (Go's `$2a$` format), company codes |
 | `crates/db` | sqlx queries on the Go schema |
-| `crates/http` | routers, envelope, `AppError`, extractors (`JsonBody`, `Validator`, `AuthUser`, `ClientInfo`) that fail exactly like Echo + go-playground, the Go fallback proxy, middleware |
-| `crates/server` | binary: env config (same `POSTGRES_*` and `JWT_*_EXPIRES_*` as Go, `SERVER_PORT` default 8090, `GO_UPSTREAM_URL`), pool, tracing, graceful shutdown |
+| `crates/http` | routers, envelope, `AppError`, extractors (`JsonBody`, `Validator`, `AuthUser`, `ClientInfo`, `QueryParams`, `RawId`) that fail exactly like Echo + go-playground + strconv, Go-style timestamps, the Go fallback proxy, middleware |
+| `crates/server` | binary: env config (same `POSTGRES_*` and `JWT_*_EXPIRES_*` as Go, `SERVER_PORT` default 8090, `GO_UPSTREAM_URL`, `DB_TIMEZONE`), pool, tracing, graceful shutdown |
 
 ## Ported
 
@@ -30,8 +30,14 @@ The rewrite of `../backend-go`, taking over production route group by route grou
 |---|---|---|
 | health | `/health`, `/health/live`, `/health/ready` | `TestHealth_*` |
 | auth | `POST /api/v1/auth/{login,register,refresh,logout}` + the `AuthUser` extractor | `TestAuth*`, `TestMigration036_*` |
+| branches | `/api/v1/branches`, `/api/v1/branches/{id}` (list, create, get, update, delete) | `TestBranch*` |
+| customers | `/api/v1/customers`, `/api/v1/customers/{id}` | `TestCustomer*` |
 
 Sessions and passwords are interchangeable with Go: a token or account made by one backend works on the other.
+
+Timestamps are rendered like Go's `time.Time` in the database's TimeZone. sqlx always reads UTC, so set `DB_TIMEZONE` (IANA name, default `UTC`, which is what production uses) to the database's zone; locally that is usually `Asia/Jakarta`.
+
+Go quirks kept on purpose, because the web app sees them: `"<X> not found not found"` messages, pagination `count` always 0, and an empty-string optional email failing validation.
 
 ## Commands
 
