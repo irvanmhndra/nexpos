@@ -14,9 +14,9 @@ dev-db:
 dev-go:
     cd backend-go && air
 
-# Rust API on :8090 (reads the same POSTGRES_* env as the Go API)
+# Rust API on :8090 (same POSTGRES_* env as the Go API); routes it doesn't serve yet go to the Go API on :8080
 dev-api:
-    cd backend && SERVER_PORT=8090 cargo run --bin nexpos-server
+    cd backend && SERVER_PORT=8090 GO_UPSTREAM_URL=${GO_UPSTREAM_URL:-http://127.0.0.1:8080} cargo run --bin nexpos-server
 
 # Web on :5173, talks to VITE_API_BASE_URL
 dev-web:
@@ -31,7 +31,8 @@ test-go:
     cd backend-go && TEST_DATABASE_URL={{test_db}} go test -race -count=1 ./...
 
 # Run the Go integration suite against a running server (default: the Rust API on :8090,
-# the tests listed in backend/conformance-tests.txt). The server must use TEST_DATABASE_URL's database.
+# the tests listed in backend/conformance-tests.txt). Start the Go API on :8080 too (just dev-go) for
+# the routes Rust forwards; both must use TEST_DATABASE_URL's database.
 conformance target="http://127.0.0.1:8090" tests=`paste -sd'|' backend/conformance-tests.txt`:
     cd backend-go && TARGET_BASE_URL={{target}} TEST_DATABASE_URL={{test_db}} go test -count=1 -p 1 -run '{{tests}}' ./tests/integration/
 
