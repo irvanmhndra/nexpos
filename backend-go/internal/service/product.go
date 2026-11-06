@@ -375,7 +375,8 @@ func (s *ProductService) Update(ctx context.Context, companyID, id int64, req dt
 		orphan := orphans[orphanIdx]
 		if err := s.variantRepo.Delete(ctx, orphan.ID); err != nil {
 			var pqErr *pq.Error
-			if errors.As(err, &pqErr) && pqErr.Code == "23503" {
+			// 23503 for a foreign key; Postgres 18 reports RESTRICT ones as 23001.
+			if errors.As(err, &pqErr) && (pqErr.Code == "23503" || pqErr.Code == "23001") {
 				return nil, apperror.BadRequest(fmt.Sprintf(
 					"Variant '%s' (SKU: %s) tidak dapat dihapus karena sudah memiliki riwayat transaksi",
 					orphan.Name, orphan.SKU,
