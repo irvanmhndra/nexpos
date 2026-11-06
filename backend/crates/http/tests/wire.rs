@@ -44,14 +44,24 @@ async fn send(app: Router, req: Request<Body>) -> (StatusCode, axum::http::Heade
     let status = res.status();
     let headers = res.headers().clone();
     let body = res.into_body().collect().await.unwrap().to_bytes();
-    (status, headers, String::from_utf8(body.to_vec()).unwrap())
+    (status, headers, without_newline(body.to_vec()))
 }
 
 async fn body_of(res: impl IntoResponse) -> (StatusCode, String) {
     let res = res.into_response();
     let status = res.status();
     let body = res.into_body().collect().await.unwrap().to_bytes();
-    (status, String::from_utf8(body.to_vec()).unwrap())
+    (status, without_newline(body.to_vec()))
+}
+
+/// Echo ends every JSON body with a newline; so must we.
+fn without_newline(body: Vec<u8>) -> String {
+    let body = String::from_utf8(body).unwrap();
+    match body.strip_suffix('\n') {
+        Some(json) => json.to_owned(),
+        None if body.is_empty() => body,
+        None => panic!("no trailing newline: {body}"),
+    }
 }
 
 fn get(path: &str) -> Request<Body> {

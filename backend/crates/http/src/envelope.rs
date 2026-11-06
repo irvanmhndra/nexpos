@@ -2,8 +2,7 @@
 //! API's `pkg/httputil.Response` so the web app can't tell the backends apart.
 
 use axum::{
-    Json,
-    http::StatusCode,
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
 use serde::Serialize;
@@ -86,8 +85,23 @@ impl Pagination {
 pub struct Reply<T: Serialize>(pub StatusCode, pub Envelope<T>);
 
 impl<T: Serialize> IntoResponse for Reply<T> {
+    /// JSON plus the trailing newline Echo's encoder writes.
     fn into_response(self) -> Response {
-        (self.0, Json(self.1)).into_response()
+        match serde_json::to_vec(&self.1) {
+            Ok(mut body) => {
+                body.push(b'\n');
+                (self.0, [(header::CONTENT_TYPE, "application/json")], body).into_response()
+            }
+            Err(err) => {
+                tracing::error!(error = %err, "failed to serialize a response");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    [(header::CONTENT_TYPE, "application/json")],
+                    "{\"success\":false,\"message\":\"internal server error\",\"error_code\":\"INTERNAL_ERROR\"}\n",
+                )
+                    .into_response()
+            }
+        }
     }
 }
 
