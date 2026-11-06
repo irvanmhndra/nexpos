@@ -5,7 +5,7 @@ Multi-tenant POS SaaS. One repo, two sides:
 | Folder | What | Deploys to |
 |---|---|---|
 | `backend/` | **Rust API** (axum, sqlx): the rewrite. It serves every route and takes traffic at the cutover; see "Cutover" in `backend/README.md` | `ghcr.io/irvanmhndra/nexpos-rust` → `~/nexpos-rust` on the VPS → `127.0.0.1:8090`, no traffic yet |
-| `backend-go/` | Go API (Echo v5, sqlx, Postgres), formerly `nexpos-api`. It serves production until the cutover and owns the migrations | `ghcr.io/irvanmhndra/nexpos-api` → `~/nexpos` on the VPS → `https://api.nexpos.irvanmahendra.com` |
+| `backend-go/` | Go API (Echo v5, sqlx, Postgres), formerly `nexpos-api`. It serves production until the cutover and owns the migrations | `ghcr.io/irvanmhndra/nexpos-go` → `~/nexpos` on the VPS → `https://api.nexpos.irvanmahendra.com` |
 | `frontend/` | React web app (Vite, TanStack Query), formerly `nexpos-web` | static `dist/` → `/var/www/nexpos-web/` on the VPS |
 
 The Rust API must answer exactly like the Go one. The Go integration suite checks this: `just conformance <url> '<tests>'` runs it against a running server.

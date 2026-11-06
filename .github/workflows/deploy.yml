@@ -133,8 +133,8 @@ jobs:
 
       - name: Build & push image
         run: |
-          docker build -t ghcr.io/irvanmhndra/nexpos-api:latest backend-go
-          docker push ghcr.io/irvanmhndra/nexpos-api:latest
+          docker build -t ghcr.io/irvanmhndra/nexpos-go:latest backend-go
+          docker push ghcr.io/irvanmhndra/nexpos-go:latest
 
       # Ship the compose file from the repo → the server, so the repo stays the
       # single source of truth. It only copies the compose file — never .env.
