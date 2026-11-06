@@ -35,6 +35,9 @@ The rewrite of `../backend-go`, taking over production route group by route grou
 | product categories | `/api/v1/product-categories`, `/all`, `/{id}` | `TestCategory*` |
 | company settings | `GET`/`PUT /api/v1/company-settings` | `TestCompanySettings*` |
 | reports | `/api/v1/reports/{summary,sales-trend,top-products,category-revenue,payment-methods,hourly-sales}` | `TestReport*` |
+| products (reads) | `GET /api/v1/products`, `/lookup`, `/{id}`; writes on these paths still go to Go | `TestProductRead*`, `TestProduct_*` |
+
+`TestCompare_ReadsAreByteIdentical` also asks both servers for every ported GET on the same data and compares status, `Content-Type`, and raw bytes.
 
 Sessions and passwords are interchangeable with Go: a token or account made by one backend works on the other.
 

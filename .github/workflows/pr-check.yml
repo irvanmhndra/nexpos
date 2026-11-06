@@ -187,6 +187,7 @@ jobs:
         working-directory: backend-go
         env:
           TARGET_BASE_URL: http://127.0.0.1:8090
+          COMPARE_BASE_URL: http://127.0.0.1:8080
           TEST_DATABASE_URL: postgres://test:test@localhost:5432/nexpos?sslmode=disable
         run: go test -count=1 -p 1 -v -run "$(paste -sd'|' ../backend/conformance-tests.txt)" ./tests/integration/
       - name: Server logs

@@ -53,6 +53,7 @@ wait_for http://127.0.0.1:18090/health/live
 
 cd "$root/backend-go"
 TARGET_BASE_URL=http://127.0.0.1:18090 \
+COMPARE_BASE_URL=http://127.0.0.1:18080 \
 TEST_DATABASE_URL="postgres://$PGUSER${PGPASSWORD:+:$PGPASSWORD}@$PGHOST:$PGPORT/$db?sslmode=disable" \
   go test -count=1 -p 1 -v -run "$tests" ./tests/integration/ 2>&1 |
   grep -E '^(--- |ok|FAIL|panic)|Error:|expected:|actual  :|Messages:|Error Trace:' | cut -c1-260

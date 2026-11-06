@@ -6,3 +6,7 @@
 ^TestCategory
 ^TestCompanySettings
 ^TestReport
+^TestProductRead
+^TestProduct_
+^TestProductCategory_
+^TestCompare_
