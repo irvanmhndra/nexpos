@@ -1,6 +1,8 @@
 //! The response envelope every endpoint returns, byte-compatible with the Go
 //! API's `pkg/httputil.Response` so the web app can't tell the backends apart.
 
+use std::io;
+
 use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
@@ -87,8 +89,10 @@ pub struct Reply<T: Serialize>(pub StatusCode, pub Envelope<T>);
 impl<T: Serialize> IntoResponse for Reply<T> {
     /// JSON plus the trailing newline Echo's encoder writes.
     fn into_response(self) -> Response {
-        match serde_json::to_vec(&self.1) {
-            Ok(mut body) => {
+        let mut body = Vec::with_capacity(256);
+        let mut serializer = serde_json::Serializer::with_formatter(&mut body, GoFormatter);
+        match self.1.serialize(&mut serializer) {
+            Ok(()) => {
                 body.push(b'\n');
                 (self.0, [(header::CONTENT_TYPE, "application/json")], body).into_response()
             }
@@ -104,6 +108,29 @@ impl<T: Serialize> IntoResponse for Reply<T> {
         }
     }
 }
+
+/// Writes strings like Go's `encoding/json`, which also escapes `<`, `>`, `&`,
+/// U+2028, and U+2029 (HTML-safe output).
+struct GoFormatter;
+
+impl serde_json::ser::Formatter for GoFormatter {
+    fn write_string_fragment<W: ?Sized + io::Write>(
+        &mut self,
+        writer: &mut W,
+        fragment: &str,
+    ) -> io::Result<()> {
+        let mut rest = fragment;
+        while let Some(at) = rest.find(['<', '>', '&', '\u{2028}', '\u{2029}']) {
+            writer.write_all(&rest.as_bytes()[..at])?;
+            let c = rest[at..].chars().next().unwrap_or_default();
+            write!(writer, "{}u{:04x}", char::from(BACKSLASH), c as u32)?;
+            rest = &rest[at + c.len_utf8()..];
+        }
+        writer.write_all(rest.as_bytes())
+    }
+}
+
+const BACKSLASH: u8 = 92;
 
 /// `httputil.Success`.
 pub fn success<T: Serialize>(status: StatusCode, message: impl Into<String>, data: T) -> Reply<T> {
