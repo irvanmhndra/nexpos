@@ -13,19 +13,33 @@ import (
 type ShiftService struct {
 	shiftRepo   repository.ShiftRepository
 	paymentRepo repository.PaymentRepository
+	branchRepo  repository.BranchRepository
 }
 
 func NewShiftService(
 	shiftRepo repository.ShiftRepository,
 	paymentRepo repository.PaymentRepository,
+	branchRepo repository.BranchRepository,
 ) *ShiftService {
 	return &ShiftService{
 		shiftRepo:   shiftRepo,
 		paymentRepo: paymentRepo,
+		branchRepo:  branchRepo,
 	}
 }
 
 func (s *ShiftService) OpenShift(ctx context.Context, companyID, branchID, cashierID int64, req dto.OpenShiftRequest) (*dto.ShiftResponse, error) {
+	branch, err := s.branchRepo.GetByID(ctx, branchID)
+	if err != nil {
+		return nil, apperror.InternalError(err)
+	}
+	if branch == nil {
+		return nil, apperror.NotFound("Branch not found")
+	}
+	if branch.CompanyID != companyID {
+		return nil, apperror.Forbidden("Branch does not belong to your company")
+	}
+
 	existing, err := s.shiftRepo.GetOpenShift(ctx, companyID, branchID, cashierID)
 	if err != nil {
 		return nil, apperror.InternalError(err)

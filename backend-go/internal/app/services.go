@@ -67,7 +67,7 @@ func initServices(repos *Repositories, cfg *config.Config, store *storage.Client
 			repos.ProductVariant,
 			repos.Tx,
 		),
-		Shift:   service.NewShiftService(repos.Shift, repos.Payment),
+		Shift:   service.NewShiftService(repos.Shift, repos.Payment, repos.Branch),
 		Expense: service.NewExpenseService(repos.Expense, repos.ExpenseCategory),
 		StockOpname: service.NewStockOpnameService(
 			repos.StockOpname,

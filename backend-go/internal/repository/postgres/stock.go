@@ -90,7 +90,7 @@ func (r *StockRepository) ListInventory(ctx context.Context, companyID, branchID
 	var stockJoin, branchJoin string
 	if branchID > 0 {
 		stockJoin = `LEFT JOIN stocks s ON s.product_variant_id = pv.id AND s.branch_id = $` + itoa(argIdx)
-		branchJoin = `LEFT JOIN branches b ON b.id = $` + itoa(argIdx)
+		branchJoin = `LEFT JOIN branches b ON b.company_id = $1 AND b.id = $` + itoa(argIdx)
 		args = append(args, branchID)
 		argIdx++
 	} else {

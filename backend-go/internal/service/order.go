@@ -86,12 +86,12 @@ func (s *OrderService) Create(ctx context.Context, companyID, branchID, cashierI
 
 	// Validate customer if provided
 	if req.CustomerID != nil {
-		_, err := s.customerRepo.GetByID(ctx, companyID, *req.CustomerID)
+		customer, err := s.customerRepo.GetByID(ctx, companyID, *req.CustomerID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, apperror.NotFound("Customer not found")
-			}
 			return nil, apperror.InternalError(err)
+		}
+		if customer == nil {
+			return nil, apperror.NotFound("Customer not found")
 		}
 	}
 
@@ -575,6 +575,13 @@ func (s *OrderService) UpdateOrder(ctx context.Context, companyID, id int64, req
 
 		// Update fields
 		if req.CustomerID != nil {
+			customer, err := s.customerRepo.GetByID(ctx, companyID, *req.CustomerID)
+			if err != nil {
+				return apperror.InternalError(err)
+			}
+			if customer == nil {
+				return apperror.NotFound("Customer not found")
+			}
 			order.CustomerID = req.CustomerID
 		}
 		if req.FulfillmentType != nil {
