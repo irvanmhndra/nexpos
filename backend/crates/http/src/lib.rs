@@ -8,15 +8,21 @@ mod company_settings;
 mod customers;
 pub mod envelope;
 pub mod error;
+mod expenses;
 pub mod extract;
 mod health;
 pub mod money;
 pub mod params;
 mod products;
+mod promotions;
 mod proxy;
 mod reports;
 pub mod state;
+pub mod storage;
+mod suppliers;
 pub mod time;
+mod uploads;
+mod users;
 
 use std::time::Duration;
 
@@ -54,6 +60,11 @@ pub fn app(state: AppState) -> Router {
         .merge(company_settings::router())
         .merge(reports::router())
         .merge(products::router())
+        .merge(suppliers::router())
+        .merge(users::router())
+        .merge(expenses::router())
+        .merge(promotions::router())
+        .merge(uploads::router())
         .fallback(proxy::fallback)
         .method_not_allowed_fallback(method_not_allowed)
         .with_state(state)

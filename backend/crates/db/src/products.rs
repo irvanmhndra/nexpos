@@ -153,3 +153,194 @@ pub async fn find_by_code(
     .fetch_optional(db)
     .await
 }
+
+// ============== Writes ==============
+
+pub struct ProductInput<'a> {
+    pub category_id: Option<i64>,
+    pub name: &'a str,
+    pub description: Option<&'a str>,
+    pub image_data: Option<&'a str>,
+    pub image_url: Option<&'a str>,
+    pub is_active: bool,
+}
+
+pub struct VariantInput<'a> {
+    pub sku: &'a str,
+    pub barcode: Option<&'a str>,
+    pub name: &'a str,
+    pub attributes: Option<Value>,
+    pub price: Decimal,
+    pub standard_cost: Decimal,
+    pub last_purchase_cost: Decimal,
+    pub is_default: bool,
+    pub is_active: bool,
+    pub sale_price: Option<Decimal>,
+    pub sale_start: Option<DateTime<Utc>>,
+    pub sale_end: Option<DateTime<Utc>>,
+}
+
+/// SKUs are unique across all companies.
+pub async fn sku_exists(db: impl PgExecutor<'_>, sku: &str) -> sqlx::Result<bool> {
+    sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM product_variants WHERE sku = $1)")
+        .bind(sku)
+        .fetch_one(db)
+        .await
+}
+
+pub async fn sku_in_other_product(
+    db: impl PgExecutor<'_>,
+    sku: &str,
+    product_id: i64,
+) -> sqlx::Result<bool> {
+    sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM product_variants WHERE sku = $1 AND product_id != $2)",
+    )
+    .bind(sku)
+    .bind(product_id)
+    .fetch_one(db)
+    .await
+}
+
+/// Barcodes are unique per company. Pass product id 0 on create to check every product.
+pub async fn barcode_in_other_product(
+    db: impl PgExecutor<'_>,
+    company_id: i64,
+    barcode: &str,
+    product_id: i64,
+) -> sqlx::Result<bool> {
+    sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM product_variants pv JOIN products p ON p.id = pv.product_id \
+         WHERE p.company_id = $1 AND pv.barcode = $2 AND pv.product_id != $3)",
+    )
+    .bind(company_id)
+    .bind(barcode)
+    .bind(product_id)
+    .fetch_one(db)
+    .await
+}
+
+pub async fn create_product(
+    db: impl PgExecutor<'_>,
+    company_id: i64,
+    p: &ProductInput<'_>,
+) -> sqlx::Result<i64> {
+    sqlx::query_scalar(
+        "INSERT INTO products (company_id, product_category_id, name, description, image_data, image_url, is_active) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+    )
+    .bind(company_id)
+    .bind(p.category_id)
+    .bind(p.name)
+    .bind(p.description)
+    .bind(p.image_data)
+    .bind(p.image_url)
+    .bind(p.is_active)
+    .fetch_one(db)
+    .await
+}
+
+pub async fn update_product(
+    db: impl PgExecutor<'_>,
+    company_id: i64,
+    id: i64,
+    p: &ProductInput<'_>,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "UPDATE products SET product_category_id = $1, name = $2, description = $3, image_data = $4, \
+             image_url = $5, is_active = $6, updated_at = NOW() WHERE id = $7 AND company_id = $8",
+    )
+    .bind(p.category_id)
+    .bind(p.name)
+    .bind(p.description)
+    .bind(p.image_data)
+    .bind(p.image_url)
+    .bind(p.is_active)
+    .bind(id)
+    .bind(company_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_product(db: impl PgExecutor<'_>, company_id: i64, id: i64) -> sqlx::Result<()> {
+    sqlx::query("DELETE FROM products WHERE id = $1 AND company_id = $2")
+        .bind(id)
+        .bind(company_id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
+pub async fn create_variant(
+    db: impl PgExecutor<'_>,
+    product_id: i64,
+    v: &VariantInput<'_>,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "INSERT INTO product_variants (product_id, sku, name, attributes, price, standard_cost, last_purchase_cost, \
+             is_default, is_active, sale_price, sale_start, sale_end, barcode) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+    )
+    .bind(product_id)
+    .bind(v.sku)
+    .bind(v.name)
+    .bind(v.attributes.as_ref().map(Json))
+    .bind(v.price)
+    .bind(v.standard_cost)
+    .bind(v.last_purchase_cost)
+    .bind(v.is_default)
+    .bind(v.is_active)
+    .bind(v.sale_price)
+    .bind(v.sale_start)
+    .bind(v.sale_end)
+    .bind(v.barcode)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// The id must come from this product's own variants.
+pub async fn update_variant(
+    db: impl PgExecutor<'_>,
+    id: i64,
+    v: &VariantInput<'_>,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "UPDATE product_variants SET sku = $1, name = $2, attributes = $3, price = $4, standard_cost = $5, \
+             last_purchase_cost = $6, is_default = $7, is_active = $8, sale_price = $9, sale_start = $10, \
+             sale_end = $11, barcode = $12, updated_at = NOW() WHERE id = $13",
+    )
+    .bind(v.sku)
+    .bind(v.name)
+    .bind(v.attributes.as_ref().map(Json))
+    .bind(v.price)
+    .bind(v.standard_cost)
+    .bind(v.last_purchase_cost)
+    .bind(v.is_default)
+    .bind(v.is_active)
+    .bind(v.sale_price)
+    .bind(v.sale_start)
+    .bind(v.sale_end)
+    .bind(v.barcode)
+    .bind(id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_variant(db: impl PgExecutor<'_>, id: i64) -> sqlx::Result<()> {
+    sqlx::query("DELETE FROM product_variants WHERE id = $1")
+        .bind(id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
+pub async fn delete_variants_of(db: impl PgExecutor<'_>, product_id: i64) -> sqlx::Result<()> {
+    sqlx::query("DELETE FROM product_variants WHERE product_id = $1")
+        .bind(product_id)
+        .execute(db)
+        .await?;
+    Ok(())
+}

@@ -51,7 +51,7 @@ where
         serde_path_to_error::deserialize(de)
             .map(Self)
             .map_err(|err| {
-                let field = err.path().to_string();
+                let field = go_field_path(&err.path().to_string());
                 let inner = err.into_inner();
                 match inner.classify() {
                     // shopspring/decimal's UnmarshalJSON fails with a plain error,
@@ -80,6 +80,21 @@ where
     }
 }
 
+/// `variants[0].sku` → `variants.sku`: Go's type errors don't name the index.
+fn go_field_path(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+    let mut in_index = false;
+    for c in path.chars() {
+        match c {
+            '[' => in_index = true,
+            ']' => in_index = false,
+            c if !in_index => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}
+
 /// "invalid type: string \"x\", expected i64 at line 1" → "a number", like
 /// Go's `friendlyType`.
 fn friendly_type(message: &str) -> String {
@@ -102,6 +117,9 @@ fn friendly_type(message: &str) -> String {
         "a string".into()
     } else if expected.contains("bool") {
         "true or false".into()
+    } else if expected.contains("map") {
+        // Go names the field's type here.
+        "map[string]interface {}".into()
     } else {
         expected.into()
     }
@@ -115,6 +133,8 @@ pub enum Rule {
     /// Minimum length in characters (runes), like go-playground's `min` on strings.
     Min(usize),
     Max(usize),
+    /// Space-separated allowed values, as in the Go tag.
+    OneOf(&'static str),
 }
 
 /// Collects field errors in declaration order, like `ValidateAndFormat`.
@@ -135,6 +155,7 @@ impl Validator {
             Rule::Email => !is_email(value),
             Rule::Min(n) => len < *n,
             Rule::Max(n) => len > *n,
+            Rule::OneOf(allowed) => !allowed.split(' ').any(|a| a == value),
         });
         if let Some(rule) = failed {
             let message = match rule {
@@ -142,6 +163,7 @@ impl Validator {
                 Rule::Email => "Invalid email format".to_owned(),
                 Rule::Min(n) => format!("{name} must be at least {n} characters"),
                 Rule::Max(n) => format!("{name} must be at most {n} characters"),
+                Rule::OneOf(allowed) => format!("{name} must be one of: {allowed}"),
             };
             self.errors.push(FieldError::new(name, message));
         }
@@ -155,6 +177,12 @@ impl Validator {
             Some(v) => self.field(name, v, rules),
             None => self,
         }
+    }
+
+    /// A field error with a message built by the caller.
+    pub fn push(&mut self, name: &str, message: impl Into<String>) -> &mut Self {
+        self.errors.push(FieldError::new(name, message));
+        self
     }
 
     /// Tags without their own message (`gte`, `lte`): "<field> is invalid".

@@ -344,7 +344,7 @@ impl Tokens {
 }
 
 /// bcrypt is deliberately slow, so it runs off the async workers.
-async fn hash_password(password: String) -> AppResult<String> {
+pub(crate) async fn hash_password(password: String) -> AppResult<String> {
     tokio::task::spawn_blocking(move || rules::hash_password(&password))
         .await
         .map_err(anyhow::Error::from)?

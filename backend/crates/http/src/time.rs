@@ -5,7 +5,7 @@
 
 use std::sync::OnceLock;
 
-use chrono::{DateTime, Offset, Timelike, Utc};
+use chrono::{DateTime, FixedOffset, Offset, TimeZone, Timelike, Utc};
 use chrono_tz::Tz;
 use serde::Serializer;
 
@@ -23,6 +23,18 @@ fn zone() -> Tz {
 /// `2026-10-23T19:47:14.198694+07:00`, or `…Z` at offset zero.
 pub fn go_rfc3339(at: &DateTime<Utc>, zone: Tz) -> String {
     let local = at.with_timezone(&zone);
+    format_local(&local)
+}
+
+/// A time as sent by a client: Go echoes the parsed value with its own offset.
+pub fn go_rfc3339_fixed(at: &DateTime<FixedOffset>) -> String {
+    format_local(at)
+}
+
+fn format_local<Z: TimeZone>(local: &DateTime<Z>) -> String
+where
+    Z::Offset: std::fmt::Display,
+{
     let mut out = local.format("%Y-%m-%dT%H:%M:%S").to_string();
     let nanos = local.nanosecond() % 1_000_000_000;
     if nanos > 0 {
@@ -41,6 +53,11 @@ pub fn go_rfc3339(at: &DateTime<Utc>, zone: Tz) -> String {
     out
 }
 
+/// A database time as Go shows it: in the database's zone.
+pub fn render(at: &DateTime<Utc>) -> String {
+    go_rfc3339(at, zone())
+}
+
 /// Go's zero `time.Time`, shown for rows that don't exist yet. It renders the
 /// same in every zone.
 pub fn zero() -> DateTime<Utc> {
@@ -55,7 +72,7 @@ pub fn serialize<S: Serializer>(at: &DateTime<Utc>, s: S) -> Result<S::Ok, S::Er
     if at.timestamp() == ZERO_UNIX {
         return s.serialize_str("0001-01-01T00:00:00Z");
     }
-    s.serialize_str(&go_rfc3339(at, zone()))
+    s.serialize_str(&render(at))
 }
 
 /// For optional times; pair with `skip_serializing_if = "Option::is_none"`.
@@ -68,9 +85,17 @@ pub fn serialize_some<S: Serializer>(at: &Option<DateTime<Utc>>, s: S) -> Result
 
 #[cfg(test)]
 mod tests {
-    use chrono::TimeZone;
-
     use super::*;
+
+    #[test]
+    fn keeps_the_offset_a_client_sent() {
+        let at = DateTime::parse_from_rfc3339("2020-01-02T03:04:05+07:00").unwrap();
+        assert_eq!(go_rfc3339_fixed(&at), "2020-01-02T03:04:05+07:00");
+        let at = DateTime::parse_from_rfc3339("2099-01-02T03:04:05.25Z").unwrap();
+        assert_eq!(go_rfc3339_fixed(&at), "2099-01-02T03:04:05.25Z");
+        let at = DateTime::parse_from_rfc3339("2099-01-02T03:04:05+00:00").unwrap();
+        assert_eq!(go_rfc3339_fixed(&at), "2099-01-02T03:04:05Z");
+    }
 
     #[test]
     fn zero_time_is_year_one() {

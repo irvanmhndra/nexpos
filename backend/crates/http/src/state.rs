@@ -1,6 +1,8 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use sqlx::PgPool;
+
+use crate::storage::Storage;
 
 /// Shared by every handler. Cheap to clone: the pool and client are reference-counted.
 #[derive(Clone)]
@@ -9,6 +11,8 @@ pub struct AppState {
     pub auth: AuthConfig,
     /// The Go API. Routes Rust doesn't serve yet are forwarded there (strangler).
     pub upstream: Option<Upstream>,
+    /// Cloudflare R2, when configured. Without it uploads are refused.
+    pub storage: Option<Arc<Storage>>,
 }
 
 impl AppState {
@@ -17,11 +21,17 @@ impl AppState {
             db,
             auth: AuthConfig::default(),
             upstream: None,
+            storage: None,
         }
     }
 
     pub fn with_auth(mut self, auth: AuthConfig) -> Self {
         self.auth = auth;
+        self
+    }
+
+    pub fn with_storage(mut self, storage: Storage) -> Self {
+        self.storage = Some(Arc::new(storage));
         self
     }
 

@@ -1,32 +1,34 @@
-//! Reading `/api/v1/products`: list, get, and scanned-code lookup, like the Go
-//! `ProductHandler`/`ProductService`. Writes on these paths aren't ported yet
-//! and go to the Go API.
+//! `/api/v1/products`: list, get, scanned-code lookup, create, update, and delete,
+//! like the Go `ProductHandler`/`ProductService`. Writes run in one transaction
+//! (Go applies them step by step), and R2 images are removed only after commit.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use axum::{Router, extract::State, http::StatusCode, routing::get};
 use chrono::{DateTime, Utc};
-use nexpos_db::products::{self as db, ListFilter, Product, Variant};
+use nexpos_db::{
+    categories,
+    products::{self as db, ListFilter, Product, ProductInput, Variant, VariantInput},
+};
 use rust_decimal::Decimal;
-use serde::Serialize;
-use serde_json::{Number, Value};
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Number, Value};
 
 use crate::{
     AppError, AppResult, AppState,
-    envelope::{Pagination, Reply, success, success_with_pagination},
-    extract::AuthUser,
+    envelope::{Pagination, Reply, success, success_message, success_with_pagination},
+    extract::{AuthUser, JsonBody, Rule, Validator},
     params::{QueryParams, RawId, parse_id},
-    proxy,
 };
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/api/v1/products", get(list).fallback(proxy::fallback))
+        .route("/api/v1/products", get(list).post(create))
+        .route("/api/v1/products/lookup", get(lookup))
         .route(
-            "/api/v1/products/lookup",
-            get(lookup).fallback(proxy::fallback),
+            "/api/v1/products/{id}",
+            get(show).put(update).delete(destroy),
         )
-        .route("/api/v1/products/{id}", get(show).fallback(proxy::fallback))
 }
 
 #[derive(Serialize)]
@@ -232,6 +234,345 @@ async fn lookup(
             matched_variant_id: matched.id,
             matched_by,
         },
+    ))
+}
+
+// ============== Writes ==============
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct VariantRequest {
+    id: Option<i64>,
+    sku: Option<String>,
+    barcode: Option<String>,
+    name: Option<String>,
+    attributes: Option<Map<String, Value>>,
+    #[serde(deserialize_with = "crate::money::deserialize_opt")]
+    price: Option<Decimal>,
+    #[serde(deserialize_with = "crate::money::deserialize_opt")]
+    standard_cost: Option<Decimal>,
+    #[serde(deserialize_with = "crate::money::deserialize_opt")]
+    last_purchase_cost: Option<Decimal>,
+    is_default: Option<bool>,
+    is_active: Option<bool>,
+    #[serde(deserialize_with = "crate::money::deserialize_opt")]
+    sale_price: Option<Decimal>,
+    sale_start: Option<String>,
+    sale_end: Option<String>,
+}
+
+impl VariantRequest {
+    fn sku(&self) -> &str {
+        self.sku.as_deref().unwrap_or_default()
+    }
+
+    /// A trimmed barcode; a blank one is no barcode.
+    fn barcode(&self) -> Option<&str> {
+        self.barcode
+            .as_deref()
+            .map(str::trim)
+            .filter(|b| !b.is_empty())
+    }
+
+    /// `position` is the variant's place in the request: the first one is always a default.
+    fn input(&self, position: usize) -> VariantInput<'_> {
+        VariantInput {
+            sku: self.sku(),
+            barcode: self.barcode(),
+            name: self.name.as_deref().unwrap_or_default(),
+            attributes: self.attributes.clone().map(Value::Object),
+            price: self.price.unwrap_or(Decimal::ZERO),
+            standard_cost: self.standard_cost.unwrap_or(Decimal::ZERO),
+            last_purchase_cost: self.last_purchase_cost.unwrap_or(Decimal::ZERO),
+            is_default: self.is_default.unwrap_or(false) || position == 0,
+            is_active: self.is_active.unwrap_or(true),
+            sale_price: self.sale_price,
+            sale_start: optional_time(self.sale_start.as_deref()),
+            sale_end: optional_time(self.sale_end.as_deref()),
+        }
+    }
+}
+
+/// An empty or unparseable time is silently no time, as in Go.
+fn optional_time(value: Option<&str>) -> Option<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(value?)
+        .ok()
+        .map(|t| t.with_timezone(&Utc))
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct ProductRequest {
+    name: Option<String>,
+    category_id: Option<i64>,
+    description: Option<String>,
+    image_data: Option<String>,
+    image_url: Option<String>,
+    is_active: Option<bool>,
+    variants: Option<Vec<VariantRequest>>,
+}
+
+impl ProductRequest {
+    fn variants(&self) -> &[VariantRequest] {
+        self.variants.as_deref().unwrap_or_default()
+    }
+
+    /// `CreateProductRequest` / `UpdateProductRequest` tags, diving into each variant.
+    fn validate(&self) -> AppResult<()> {
+        let non_negative = |v: Option<Decimal>| v.is_none_or(|d| d >= Decimal::ZERO);
+        let mut v = Validator::new();
+        v.field(
+            "name",
+            self.name.as_deref().unwrap_or_default(),
+            &[Rule::Required, Rule::Min(1), Rule::Max(255)],
+        );
+        match &self.variants {
+            None => {
+                v.push("variants", "variants is required");
+            }
+            Some(variants) if variants.is_empty() => {
+                v.push("variants", "variants must be at least 1 characters");
+            }
+            Some(variants) => {
+                for variant in variants {
+                    v.field(
+                        "sku",
+                        variant.sku(),
+                        &[Rule::Required, Rule::Min(1), Rule::Max(100)],
+                    )
+                    .optional("barcode", variant.barcode.as_deref(), &[Rule::Max(100)])
+                    .field(
+                        "name",
+                        variant.name.as_deref().unwrap_or_default(),
+                        &[Rule::Required, Rule::Min(1), Rule::Max(255)],
+                    )
+                    .invalid_unless("price", non_negative(variant.price))
+                    .invalid_unless("standard_cost", non_negative(variant.standard_cost))
+                    .invalid_unless(
+                        "last_purchase_cost",
+                        non_negative(variant.last_purchase_cost),
+                    );
+                }
+            }
+        }
+        v.finish()
+    }
+
+    fn input(&self, is_active: bool) -> ProductInput<'_> {
+        ProductInput {
+            category_id: self.category_id,
+            name: self.name.as_deref().unwrap_or_default(),
+            description: self.description.as_deref(),
+            image_data: self.image_data.as_deref(),
+            image_url: self.image_url.as_deref(),
+            is_active,
+        }
+    }
+}
+
+/// Each barcode must be unique in the request and unused by the company's other
+/// products. Pass product id 0 on create.
+async fn check_barcodes(
+    state: &AppState,
+    company_id: i64,
+    product_id: i64,
+    variants: &[VariantRequest],
+) -> AppResult<()> {
+    let mut seen = HashSet::new();
+    for barcode in variants.iter().filter_map(VariantRequest::barcode) {
+        if !seen.insert(barcode) {
+            return Err(AppError::bad_request(format!(
+                "Duplicate barcode in request: {barcode}"
+            )));
+        }
+        if db::barcode_in_other_product(&state.db, company_id, barcode, product_id).await? {
+            return Err(AppError::bad_request(format!(
+                "Barcode already registered: {barcode}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+async fn check_category(
+    state: &AppState,
+    company_id: i64,
+    category_id: Option<i64>,
+) -> AppResult<()> {
+    if let Some(id) = category_id
+        && categories::get(&state.db, company_id, id).await?.is_none()
+    {
+        return Err(AppError::bad_request("Category not found"));
+    }
+    Ok(())
+}
+
+fn sku_taken(sku: &str) -> AppError {
+    AppError::bad_request(format!("SKU already exists: {sku}"))
+}
+
+/// Best effort: a leftover object is far less bad than a failed request.
+async fn delete_image(state: &AppState, url: &str) {
+    let Some(storage) = &state.storage else {
+        return;
+    };
+    let Some(key) = storage.key_from_url(url) else {
+        return;
+    };
+    if let Err(err) = storage.delete(&key).await {
+        tracing::warn!(%key, error = %err, "failed to delete an orphaned product image");
+    }
+}
+
+async fn create(
+    State(state): State<AppState>,
+    user: AuthUser,
+    JsonBody(req): JsonBody<ProductRequest>,
+) -> AppResult<Reply<ProductResponse>> {
+    req.validate()?;
+    let company_id = user.company_id;
+    check_category(&state, company_id, req.category_id).await?;
+    for variant in req.variants() {
+        if db::sku_exists(&state.db, variant.sku()).await? {
+            return Err(sku_taken(variant.sku()));
+        }
+    }
+    check_barcodes(&state, company_id, 0, req.variants()).await?;
+
+    let mut tx = state.db.begin().await?;
+    let id = db::create_product(
+        &mut *tx,
+        company_id,
+        &req.input(req.is_active.unwrap_or(true)),
+    )
+    .await?;
+    for (position, variant) in req.variants().iter().enumerate() {
+        db::create_variant(&mut *tx, id, &variant.input(position)).await?;
+    }
+    tx.commit().await?;
+
+    let product = load(&state, company_id, id).await?;
+    Ok(success(
+        StatusCode::CREATED,
+        "Product created successfully",
+        product,
+    ))
+}
+
+async fn update(
+    State(state): State<AppState>,
+    user: AuthUser,
+    RawId(id): RawId,
+    JsonBody(req): JsonBody<ProductRequest>,
+) -> AppResult<Reply<ProductResponse>> {
+    let id = parse_id(&id, "product")?;
+    req.validate()?;
+    let company_id = user.company_id;
+    let current = db::get(&state.db, company_id, id)
+        .await?
+        .ok_or_else(|| AppError::not_found("Product not found"))?;
+    check_category(&state, company_id, req.category_id).await?;
+
+    let existing = db::variants_of(&state.db, &[id])
+        .await?
+        .remove(&id)
+        .unwrap_or_default();
+    for variant in req.variants() {
+        if db::sku_in_other_product(&state.db, variant.sku(), id).await? {
+            return Err(sku_taken(variant.sku()));
+        }
+    }
+    check_barcodes(&state, company_id, id, req.variants()).await?;
+
+    // Variants naming one of this product's rows update it; the others reuse rows
+    // that were left out, then insert. Rows still unused are deleted.
+    let existing_ids: HashSet<i64> = existing.iter().map(|v| v.id).collect();
+    let (explicit, new): (Vec<&VariantRequest>, Vec<&VariantRequest>) = req
+        .variants()
+        .iter()
+        .partition(|v| v.id.is_some_and(|id| existing_ids.contains(&id)));
+    let kept: HashSet<i64> = explicit.iter().filter_map(|v| v.id).collect();
+    let mut orphans = existing.iter().filter(|v| !kept.contains(&v.id));
+
+    let mut tx = state.db.begin().await?;
+    let is_active = req.is_active.unwrap_or(current.is_active);
+    db::update_product(&mut *tx, company_id, id, &req.input(is_active)).await?;
+
+    for (position, variant) in explicit.iter().enumerate() {
+        if let Some(variant_id) = variant.id {
+            db::update_variant(&mut *tx, variant_id, &variant.input(position)).await?;
+        }
+    }
+    for (offset, variant) in new.iter().enumerate() {
+        let input = variant.input(explicit.len() + offset);
+        match orphans.next() {
+            Some(orphan) => db::update_variant(&mut *tx, orphan.id, &input).await?,
+            None => db::create_variant(&mut *tx, id, &input).await?,
+        }
+    }
+    for orphan in orphans {
+        if let Err(err) = db::delete_variant(&mut *tx, orphan.id).await {
+            return Err(variant_delete_error(err, orphan));
+        }
+    }
+    tx.commit().await?;
+
+    // The image was replaced or cleared: remove the old object.
+    let new_image = req.image_url.as_deref().unwrap_or_default();
+    if let Some(old_image) = current
+        .image_url
+        .as_deref()
+        .filter(|old| !old.is_empty() && *old != new_image)
+    {
+        delete_image(&state, old_image).await;
+    }
+
+    let product = load(&state, company_id, id).await?;
+    Ok(success(
+        StatusCode::OK,
+        "Product updated successfully",
+        product,
+    ))
+}
+
+/// A variant referenced by stock or order history can't be removed. Postgres reports
+/// a foreign key as 23503, or 23001 for a RESTRICT one.
+fn variant_delete_error(err: sqlx::Error, variant: &Variant) -> AppError {
+    let code = err
+        .as_database_error()
+        .and_then(|e| e.code().map(|c| c.into_owned()));
+    if matches!(code.as_deref(), Some("23503" | "23001")) {
+        AppError::bad_request(format!(
+            "Variant '{}' (SKU: {}) tidak dapat dihapus karena sudah memiliki riwayat transaksi",
+            variant.name, variant.sku
+        ))
+    } else {
+        err.into()
+    }
+}
+
+async fn destroy(
+    State(state): State<AppState>,
+    user: AuthUser,
+    RawId(id): RawId,
+) -> AppResult<Reply<()>> {
+    let id = parse_id(&id, "product")?;
+    let company_id = user.company_id;
+    let current = db::get(&state.db, company_id, id)
+        .await?
+        .ok_or_else(|| AppError::not_found("Product not found"))?;
+
+    let mut tx = state.db.begin().await?;
+    db::delete_variants_of(&mut *tx, id).await?;
+    db::delete_product(&mut *tx, company_id, id).await?;
+    tx.commit().await?;
+
+    if let Some(image) = &current.image_url {
+        delete_image(&state, image).await;
+    }
+    Ok(success_message(
+        StatusCode::OK,
+        "Product deleted successfully",
     ))
 }
 

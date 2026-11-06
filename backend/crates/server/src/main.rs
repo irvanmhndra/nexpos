@@ -3,7 +3,10 @@
 use std::{env, net::SocketAddr, str::FromStr, time::Duration};
 
 use anyhow::Context;
-use nexpos_http::{AppState, AuthConfig};
+use nexpos_http::{
+    AppState, AuthConfig,
+    storage::{Storage, StorageConfig},
+};
 use sqlx::{
     Executor,
     postgres::{PgConnectOptions, PgPoolOptions, PgSslMode},
@@ -23,6 +26,8 @@ struct Config {
     /// The database's TimeZone (`DB_TIMEZONE`, IANA name, default UTC). Go shows
     /// timestamps in it, so Rust does too.
     timezone: chrono_tz::Tz,
+    /// Cloudflare R2 (`R2_*`, same variables as Go); uploads are off without it.
+    storage: Option<StorageConfig>,
 }
 
 impl Config {
@@ -69,6 +74,13 @@ impl Config {
             db,
             auth,
             upstream: env::var("GO_UPSTREAM_URL").ok().filter(|v| !v.is_empty()),
+            storage: StorageConfig::complete(
+                var("R2_BUCKET", ""),
+                var("R2_ENDPOINT", ""),
+                var("R2_ACCESS_KEY_ID", ""),
+                var("R2_SECRET_ACCESS_KEY", ""),
+                var("R2_PUBLIC_BASE_URL", ""),
+            ),
             timezone: var("DB_TIMEZONE", "UTC")
                 .parse()
                 .map_err(|e| anyhow::anyhow!("invalid DB_TIMEZONE: {e}"))?,
@@ -112,6 +124,9 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(port = config.port, "nexpos-server listening");
 
     let mut state = AppState::new(db.clone()).with_auth(config.auth);
+    if let Some(storage) = config.storage {
+        state = state.with_storage(Storage::new(storage)?);
+    }
     if let Some(upstream) = &config.upstream {
         tracing::info!(%upstream, "forwarding routes not ported yet to the Go API");
         state = state.with_upstream(upstream);

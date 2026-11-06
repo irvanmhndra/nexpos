@@ -42,6 +42,14 @@ impl QueryParams {
         self.get(key).parse().ok()
     }
 
+    /// Echo's binder on an int field: empty is unset, anything unparseable is an error.
+    pub fn strict_int(&self, key: &str) -> Result<Option<i64>, std::num::ParseIntError> {
+        match self.get(key) {
+            "" => Ok(None),
+            value => value.parse().map(Some),
+        }
+    }
+
     /// `strconv.ParseBool`; unparseable values are ignored.
     pub fn bool(&self, key: &str) -> Option<bool> {
         match self.get(key) {
