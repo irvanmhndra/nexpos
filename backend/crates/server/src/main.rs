@@ -4,7 +4,10 @@ use std::{env, net::SocketAddr, str::FromStr, time::Duration};
 
 use anyhow::Context;
 use nexpos_http::{AppState, AuthConfig};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions, PgSslMode};
+use sqlx::{
+    Executor,
+    postgres::{PgConnectOptions, PgPoolOptions, PgSslMode},
+};
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
 
@@ -91,10 +94,18 @@ async fn main() -> anyhow::Result<()> {
 
     // Lazy: the server starts even while Postgres is down, and /health reports
     // it, instead of crash-looping like the Go API does on a failed connect.
+    //
+    // sqlx starts every session in UTC; Go's sessions use the database's TimeZone.
+    // SQL such as `DATE(created_at)` depends on it, so match Go.
+    let session_zone = format!("SET TIME ZONE '{}'", config.timezone.name());
     let db = PgPoolOptions::new()
         .max_connections(25)
         .acquire_timeout(Duration::from_secs(5))
         .max_lifetime(Duration::from_secs(5 * 60))
+        .after_connect(move |conn, _| {
+            let sql = session_zone.clone();
+            Box::pin(async move { conn.execute(sql.as_str()).await.map(|_| ()) })
+        })
         .connect_lazy_with(config.db);
 
     let listener = TcpListener::bind(("0.0.0.0", config.port)).await?;
