@@ -227,7 +227,7 @@ func TestOrderService_Create_CustomerNotFound(t *testing.T) {
 	}
 
 	s.settingsRepo.EXPECT().GetByCompanyID(ctx, companyID).Return(defaultSettings(), nil).Once()
-	s.customerRepo.EXPECT().GetByID(ctx, companyID, customerID).Return(nil, sql.ErrNoRows).Once()
+	s.customerRepo.EXPECT().GetByID(ctx, companyID, customerID).Return(nil, nil).Once()
 
 	_, err := s.svc.Create(ctx, companyID, 2, 99, req)
 
