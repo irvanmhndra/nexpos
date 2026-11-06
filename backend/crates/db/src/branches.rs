@@ -150,3 +150,11 @@ pub async fn delete(db: impl PgExecutor<'_>, company_id: i64, id: i64) -> sqlx::
         .await?;
     Ok(res.rows_affected() > 0)
 }
+
+/// The owner of a branch, for telling "unknown" from "another company's".
+pub async fn owner(db: impl PgExecutor<'_>, id: i64) -> sqlx::Result<Option<i64>> {
+    sqlx::query_scalar("SELECT company_id FROM branches WHERE id = $1")
+        .bind(id)
+        .fetch_optional(db)
+        .await
+}

@@ -6,18 +6,24 @@ mod branches;
 mod categories;
 mod company_settings;
 mod customers;
+mod daily_settlements;
 pub mod envelope;
 pub mod error;
 mod expenses;
 pub mod extract;
 mod health;
+mod inventory;
 pub mod money;
+mod orders;
 pub mod params;
 mod products;
 mod promotions;
 mod proxy;
+mod purchase_orders;
 mod reports;
+mod shifts;
 pub mod state;
+mod stock_opnames;
 pub mod storage;
 mod suppliers;
 pub mod time;
@@ -65,6 +71,12 @@ pub fn app(state: AppState) -> Router {
         .merge(expenses::router())
         .merge(promotions::router())
         .merge(uploads::router())
+        .merge(orders::router())
+        .merge(inventory::router())
+        .merge(purchase_orders::router())
+        .merge(shifts::router())
+        .merge(stock_opnames::router())
+        .merge(daily_settlements::router())
         .fallback(proxy::fallback)
         .method_not_allowed_fallback(method_not_allowed)
         .with_state(state)

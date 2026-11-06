@@ -84,7 +84,7 @@ impl From<CompanySettings> for SettingsResponse {
 }
 
 /// What a company has before its settings are first saved: id 0 and Go's zero time.
-fn defaults(company_id: i64) -> CompanySettings {
+pub(crate) fn defaults(company_id: i64) -> CompanySettings {
     CompanySettings {
         id: 0,
         company_id,

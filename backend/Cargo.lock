@@ -1114,6 +1114,7 @@ name = "nexpos-domain"
 version = "0.1.0"
 dependencies = [
  "bcrypt",
+ "chrono",
  "hex",
  "rand 0.9.5",
  "rust_decimal",

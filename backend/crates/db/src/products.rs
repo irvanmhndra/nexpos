@@ -344,3 +344,51 @@ pub async fn delete_variants_of(db: impl PgExecutor<'_>, product_id: i64) -> sql
         .await?;
     Ok(())
 }
+
+/// A variant with what an order line copies from it, scoped to the company.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct SaleVariant {
+    pub id: i64,
+    pub product_id: i64,
+    pub product_name: String,
+    pub sku: String,
+    pub name: String,
+    pub attributes: Option<Json<Value>>,
+    pub price: Decimal,
+    pub standard_cost: Decimal,
+    pub sale_price: Option<Decimal>,
+    pub sale_start: Option<DateTime<Utc>>,
+    pub sale_end: Option<DateTime<Utc>>,
+}
+
+pub async fn variant_for_company(
+    db: impl PgExecutor<'_>,
+    company_id: i64,
+    id: i64,
+) -> sqlx::Result<Option<SaleVariant>> {
+    sqlx::query_as(
+        "SELECT pv.id, pv.product_id, p.name AS product_name, pv.sku, pv.name, pv.attributes, pv.price, \
+             pv.standard_cost, pv.sale_price, pv.sale_start, pv.sale_end \
+         FROM product_variants pv JOIN products p ON p.id = pv.product_id \
+         WHERE pv.id = $1 AND p.company_id = $2",
+    )
+    .bind(id)
+    .bind(company_id)
+    .fetch_optional(db)
+    .await
+}
+
+pub async fn set_last_purchase_cost(
+    db: impl PgExecutor<'_>,
+    id: i64,
+    cost: Decimal,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "UPDATE product_variants SET last_purchase_cost = $1, updated_at = NOW() WHERE id = $2",
+    )
+    .bind(cost)
+    .bind(id)
+    .execute(db)
+    .await?;
+    Ok(())
+}

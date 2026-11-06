@@ -139,7 +139,13 @@ impl IntoResponse for AppError {
                 tracing::error!(error = ?err, "internal error");
                 failure(status, "internal server error", code, None)
             }
-            Self::Validation { message, errors } => failure(status, message, code, Some(errors)),
+            // `ValidationError(message, nil)` in Go has no `errors` at all.
+            Self::Validation { message, errors } => failure(
+                status,
+                message,
+                code,
+                Some(errors).filter(|e| !e.is_empty()),
+            ),
             other => failure(status, other.to_string(), code, None),
         }
     }

@@ -26,6 +26,20 @@ impl<S: Send + Sync> FromRequestParts<S> for RawId {
     }
 }
 
+/// The raw segments of `/{id}/items/{itemId}`.
+pub struct RawItemIds(pub String, pub String);
+
+impl<S: Send + Sync> FromRequestParts<S> for RawItemIds {
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, AppError> {
+        Path::<(String, String)>::from_request_parts(parts, state)
+            .await
+            .map(|Path((id, item))| Self(id, item))
+            .map_err(|_| AppError::bad_request("invalid ID"))
+    }
+}
+
 /// Query parameters; `get` returns the first value like Echo's `QueryParam`.
 pub struct QueryParams(Vec<(String, String)>);
 
@@ -35,6 +49,24 @@ impl QueryParams {
             .iter()
             .find(|(k, _)| k == key)
             .map_or("", |(_, v)| v.as_str())
+    }
+
+    /// Echo's binder on a `*string` field: present, even empty, is set.
+    pub fn opt(&self, key: &str) -> Option<&str> {
+        self.0
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.as_str())
+    }
+
+    /// Echo's binder on a `*int64` field: present and empty is 0, anything
+    /// unparseable is an error.
+    pub fn strict_opt_int(&self, key: &str) -> Result<Option<i64>, std::num::ParseIntError> {
+        match self.opt(key) {
+            None => Ok(None),
+            Some("") => Ok(Some(0)),
+            Some(value) => value.parse().map(Some),
+        }
     }
 
     /// `strconv.Atoi`; unparseable values are ignored.

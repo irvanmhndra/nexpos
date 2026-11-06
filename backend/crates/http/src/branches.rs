@@ -192,3 +192,19 @@ async fn destroy(
         "Branch deleted successfully",
     ))
 }
+
+/// The check before writing to a branch named in a request: unknown is 404,
+/// another company's is 403.
+pub(crate) async fn check_owned(
+    db: impl sqlx::PgExecutor<'_>,
+    company_id: i64,
+    branch_id: i64,
+) -> AppResult<()> {
+    match db::owner(db, branch_id).await? {
+        None => Err(not_found()),
+        Some(owner) if owner != company_id => Err(AppError::Forbidden(
+            "Branch does not belong to your company".into(),
+        )),
+        Some(_) => Ok(()),
+    }
+}

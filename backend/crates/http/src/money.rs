@@ -58,6 +58,12 @@ pub fn deserialize_opt<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Decimal
         .transpose()
 }
 
+/// `#[serde(deserialize_with = "crate::money::deserialize")]` for `decimal.Decimal`
+/// fields with `#[serde(default)]`: `null` is zero.
+pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Decimal, D::Error> {
+    deserialize_opt(d).map(Option::unwrap_or_default)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

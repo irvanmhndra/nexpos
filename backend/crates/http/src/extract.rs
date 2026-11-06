@@ -2,6 +2,7 @@
 //! Echo's binder plus `httputil.BindError`, `validate` follows go-playground's
 //! messages from `pkg/validator`, and `AuthUser` follows `middleware.Auth`.
 
+use rust_decimal::Decimal;
 use std::net::SocketAddr;
 
 use axum::{
@@ -135,6 +136,10 @@ pub enum Rule {
     Max(usize),
     /// Space-separated allowed values, as in the Go tag.
     OneOf(&'static str),
+    /// `gt=0` on a number; reported as "<field> is invalid".
+    Positive,
+    /// `gte=0` on a number; reported as "<field> is invalid".
+    NotNegative,
 }
 
 /// Collects field errors in declaration order, like `ValidateAndFormat`.
@@ -156,7 +161,43 @@ impl Validator {
             Rule::Min(n) => len < *n,
             Rule::Max(n) => len > *n,
             Rule::OneOf(allowed) => !allowed.split(' ').any(|a| a == value),
+            Rule::Positive | Rule::NotNegative => false,
         });
+        self.report(name, failed);
+        self
+    }
+
+    /// An integer field: `required` fails on zero, `min` compares the value.
+    pub fn int(&mut self, name: &str, value: i64, rules: &[Rule]) -> &mut Self {
+        self.decimal(name, Decimal::from(value), rules)
+    }
+
+    /// A decimal field, checked by value like the Go custom type func.
+    pub fn decimal(&mut self, name: &str, value: Decimal, rules: &[Rule]) -> &mut Self {
+        let failed = rules.iter().find(|rule| match rule {
+            Rule::Required => value.is_zero(),
+            Rule::Min(n) => value < Decimal::from(*n as u64),
+            Rule::Max(n) => value > Decimal::from(*n as u64),
+            Rule::Positive => value <= Decimal::ZERO,
+            Rule::NotNegative => value < Decimal::ZERO,
+            Rule::Email | Rule::OneOf(_) => false,
+        });
+        self.report(name, failed);
+        self
+    }
+
+    /// `required,min=1` on a list: `None` is a missing or null list.
+    pub fn list(&mut self, name: &str, len: Option<usize>) -> &mut Self {
+        let rule = match len {
+            None => Some(&Rule::Required),
+            Some(0) => Some(&Rule::Min(1)),
+            Some(_) => None,
+        };
+        self.report(name, rule);
+        self
+    }
+
+    fn report(&mut self, name: &str, failed: Option<&Rule>) {
         if let Some(rule) = failed {
             let message = match rule {
                 Rule::Required => format!("{name} is required"),
@@ -164,10 +205,10 @@ impl Validator {
                 Rule::Min(n) => format!("{name} must be at least {n} characters"),
                 Rule::Max(n) => format!("{name} must be at most {n} characters"),
                 Rule::OneOf(allowed) => format!("{name} must be one of: {allowed}"),
+                Rule::Positive | Rule::NotNegative => format!("{name} is invalid"),
             };
             self.errors.push(FieldError::new(name, message));
         }
-        self
     }
 
     /// A `*string` field with `omitempty`: skipped only when absent or `null`;

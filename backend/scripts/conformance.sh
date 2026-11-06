@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Runs the Go integration suite against the Rust API on a throwaway database:
-# Go on :18080 (serves the routes not ported yet), Rust on :18090 in front of it.
+# Rust on :18090 with no upstream, so a route it doesn't serve fails its test, and
+# Go on :18080 for the tests that compare the two byte for byte.
 # Cleans up after itself.
 #
 #   backend/scripts/conformance.sh                  # tests in conformance-tests.txt
@@ -46,7 +47,7 @@ export POSTGRES_HOST="$PGHOST" POSTGRES_PORT="$PGPORT" POSTGRES_USER="$PGUSER" P
 
 (cd "$root/backend-go" && SERVER_PORT=18080 SERVER_ENV=test JWT_SECRET=conformance-secret exec "$work/nexpos-go") >"$work/go.log" 2>&1 &
 pids+=($!)
-SERVER_PORT=18090 DB_TIMEZONE="$zone" GO_UPSTREAM_URL=http://127.0.0.1:18080 "$root/backend/target/release/nexpos-server" >"$work/rust.log" 2>&1 &
+SERVER_PORT=18090 DB_TIMEZONE="$zone" "$root/backend/target/release/nexpos-server" >"$work/rust.log" 2>&1 &
 pids+=($!)
 wait_for http://127.0.0.1:18080/health/live
 wait_for http://127.0.0.1:18090/health/live

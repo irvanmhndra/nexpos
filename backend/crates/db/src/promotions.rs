@@ -203,3 +203,34 @@ pub async fn delete(db: impl PgExecutor<'_>, company_id: i64, id: i64) -> sqlx::
         .await?;
     Ok(res.rows_affected() > 0)
 }
+
+pub async fn by_code(
+    db: impl PgExecutor<'_>,
+    company_id: i64,
+    code: &str,
+) -> sqlx::Result<Option<Promotion>> {
+    sqlx::query_as(&format!(
+        "SELECT {COLUMNS} FROM promotions WHERE company_id = $1 AND code = $2"
+    ))
+    .bind(company_id)
+    .bind(code)
+    .fetch_optional(db)
+    .await
+}
+
+/// Running now, highest priority first.
+pub async fn active(
+    db: impl PgExecutor<'_>,
+    company_id: i64,
+    now: DateTime<Utc>,
+) -> sqlx::Result<Vec<Promotion>> {
+    sqlx::query_as(&format!(
+        "SELECT {COLUMNS} FROM promotions \
+         WHERE company_id = $1 AND is_active = true AND start_at <= $2 AND (end_at IS NULL OR end_at >= $2) \
+         ORDER BY priority DESC, created_at DESC"
+    ))
+    .bind(company_id)
+    .bind(now)
+    .fetch_all(db)
+    .await
+}

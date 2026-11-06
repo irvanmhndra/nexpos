@@ -91,7 +91,7 @@ impl From<Variant> for VariantResponse {
 }
 
 /// Go decodes attributes into float64 and prints `2.0` as `2`.
-fn go_numbers(value: Value) -> Value {
+pub(crate) fn go_numbers(value: Value) -> Value {
     match value {
         Value::Number(n) => match n.as_f64() {
             Some(f) if n.is_f64() && f.fract() == 0.0 && f.abs() < 1e15 => {
