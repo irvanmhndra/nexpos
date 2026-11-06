@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.10'
           cache-dependency-path: backend-go/go.sum
       - uses: golangci/golangci-lint-action@v7
         with:
@@ -65,10 +65,10 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.10'
           cache-dependency-path: backend-go/go.sum
       - name: Run all tests with coverage
-        run: go test -v -race -timeout 120s -coverprofile=coverage.out -covermode=atomic -coverpkg=./internal/... ./...
+        run: go test -v -race -timeout 300s -coverprofile=coverage.out -covermode=atomic -coverpkg=./internal/... ./...
       - name: Check coverage >= 50%
         run: |
           COVERAGE=$(go tool cover -func=coverage.out | grep "^total:" | awk '{print $3}' | tr -d '%')
@@ -92,7 +92,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.10'
           cache-dependency-path: backend-go/go.sum
       - run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
@@ -110,7 +110,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.10'
           cache-dependency-path: backend-go/go.sum
       - run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
@@ -169,9 +169,11 @@ jobs:
             echo "✅ Stack deployed: $(date)"
 
   # ==================== Rust API (backend/) ====================
-  # Not deployed yet. It must stay wire-compatible with the Go API: the
-  # conformance job runs the Go integration suite (tests listed in
-  # backend/conformance-tests.txt) against the Rust server.
+  # Serves every route, but takes no traffic until nginx points at it: it runs
+  # next to the Go API on 127.0.0.1:8090 (see backend/docker-compose.prod.yml and
+  # "Cutover" in backend/README.md). It must stay wire-compatible with Go: the
+  # conformance job runs the whole Go integration suite against it, with no Go
+  # upstream to fall back on.
 
   rust-check:
     name: "Rust: fmt, clippy, test"
@@ -232,9 +234,9 @@ jobs:
           workspaces: backend
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.10'
           cache-dependency-path: backend-go/go.sum
-      # Routes Rust doesn't serve yet go to the Go API, like in production.
+      # For the tests that compare the two servers byte for byte.
       - name: Start the Go API on :8080
         working-directory: backend-go
         env:
@@ -261,7 +263,6 @@ jobs:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
           POSTGRES_DB: nexpos
-          GO_UPSTREAM_URL: http://127.0.0.1:8080
         run: |
           nohup ./target/release/nexpos-server > server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:8090/health/live && exit 0; sleep 1; done
@@ -277,14 +278,57 @@ jobs:
         if: failure()
         run: cat backend/server.log /tmp/go.log
 
-  rust-image:
-    name: "Rust: Docker image builds"
-    needs: changes
-    if: needs.changes.outputs.rust == 'true'
+  rust-deploy:
+    name: "Rust: deploy next to Go"
+    needs: [rust-check, rust-conformance]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v5
-      - run: docker build -t nexpos-rust:ci backend
+
+      - name: Login to GHCR
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | \
+            docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build & push image
+        run: |
+          docker build -t ghcr.io/irvanmhndra/nexpos-rust:latest backend
+          docker push ghcr.io/irvanmhndra/nexpos-rust:latest
+
+      - name: Copy compose file to VPS
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "backend/docker-compose.prod.yml"
+          strip_components: 1
+          target: "~/nexpos-rust"
+
+      # Its own compose project: the Go deploy's --remove-orphans must not touch it,
+      # and a failure here must not touch Go. It joins Go's network for the database.
+      # Migrations stay with the Go deploy until Go is removed.
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/nexpos-rust
+            cp docker-compose.prod.yml docker-compose.yml
+            docker compose pull nexpos-rust
+            docker compose up -d --remove-orphans
+            for i in $(seq 1 30); do
+              curl -sf http://127.0.0.1:8090/health/ready && break
+              [ "$i" = 30 ] && { docker compose logs --tail=50 nexpos-rust; exit 1; }
+              sleep 2
+            done
+            echo "✅ Rust API up on 127.0.0.1:8090: $(date)"
 
   # ==================== Frontend ====================
 

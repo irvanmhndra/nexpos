@@ -1,0 +1,24 @@
+# The Rust API in production, next to the Go API. Shipped from the repo on every
+# deploy; don't hand-edit the copy on the server.
+#
+# It takes no traffic until nginx points at it (see "Cutover" in README.md): the
+# port is on localhost only. It shares ~/nexpos/.env and the database with Go.
+name: nexpos-rust
+
+services:
+  nexpos-rust:
+    image: ghcr.io/irvanmhndra/nexpos-rust:latest
+    container_name: nexpos_rust
+    restart: unless-stopped
+    env_file: ../nexpos/.env
+    environment:
+      SERVER_PORT: "8090"
+    ports:
+      - "127.0.0.1:8090:8090"
+    networks:
+      - nexpos
+
+networks:
+  nexpos:
+    name: nexpos_default
+    external: true
