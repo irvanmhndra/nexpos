@@ -3,3 +3,5 @@
 ^TestMigration036_
 ^TestBranch
 ^TestCustomer
+^TestCategory
+^TestCompanySettings

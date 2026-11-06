@@ -10,7 +10,7 @@ The rewrite of `../backend-go`, taking over production route group by route grou
 - **Done means conformant.** A route group is finished when the Go integration suite for it passes against this server:
 
   ```bash
-  just conformance        # Rust server on :8090, tests from conformance-tests.txt
+  just conformance-local  # throwaway DB, Go + Rust servers, tests from conformance-tests.txt, cleanup
   ```
 
   Add a group's Go test names to `conformance-tests.txt` once it's ported, and CI keeps checking them.
@@ -32,6 +32,8 @@ The rewrite of `../backend-go`, taking over production route group by route grou
 | auth | `POST /api/v1/auth/{login,register,refresh,logout}` + the `AuthUser` extractor | `TestAuth*`, `TestMigration036_*` |
 | branches | `/api/v1/branches`, `/api/v1/branches/{id}` (list, create, get, update, delete) | `TestBranch*` |
 | customers | `/api/v1/customers`, `/api/v1/customers/{id}` | `TestCustomer*` |
+| product categories | `/api/v1/product-categories`, `/all`, `/{id}` | `TestCategory*` |
+| company settings | `GET`/`PUT /api/v1/company-settings` | `TestCompanySettings*` |
 
 Sessions and passwords are interchangeable with Go: a token or account made by one backend works on the other.
 

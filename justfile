@@ -36,6 +36,10 @@ test-go:
 conformance target="http://127.0.0.1:8090" tests=`paste -sd'|' backend/conformance-tests.txt`:
     cd backend-go && TARGET_BASE_URL={{target}} TEST_DATABASE_URL={{test_db}} go test -count=1 -p 1 -run '{{tests}}' ./tests/integration/
 
+# Same suite with everything handled for you: throwaway DB, both servers, cleanup. Optional test regex.
+conformance-local *tests:
+    backend/scripts/conformance.sh {{tests}}
+
 # Lint everything
 lint:
     cd backend && cargo clippy --all-targets -- -D warnings
