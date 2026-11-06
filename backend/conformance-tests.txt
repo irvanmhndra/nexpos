@@ -5,3 +5,4 @@
 ^TestCustomer
 ^TestCategory
 ^TestCompanySettings
+^TestReport

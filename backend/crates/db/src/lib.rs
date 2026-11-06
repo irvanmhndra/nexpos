@@ -6,3 +6,4 @@ pub mod branches;
 pub mod categories;
 pub mod company_settings;
 pub mod customers;
+pub mod reports;

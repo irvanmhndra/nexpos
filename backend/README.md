@@ -34,10 +34,11 @@ The rewrite of `../backend-go`, taking over production route group by route grou
 | customers | `/api/v1/customers`, `/api/v1/customers/{id}` | `TestCustomer*` |
 | product categories | `/api/v1/product-categories`, `/all`, `/{id}` | `TestCategory*` |
 | company settings | `GET`/`PUT /api/v1/company-settings` | `TestCompanySettings*` |
+| reports | `/api/v1/reports/{summary,sales-trend,top-products,category-revenue,payment-methods,hourly-sales}` | `TestReport*` |
 
 Sessions and passwords are interchangeable with Go: a token or account made by one backend works on the other.
 
-Timestamps are rendered like Go's `time.Time` in the database's TimeZone. sqlx always reads UTC, so set `DB_TIMEZONE` (IANA name, default `UTC`, which is what production uses) to the database's zone; locally that is usually `Asia/Jakarta`.
+Timestamps are rendered like Go's `time.Time` in the database's TimeZone. sqlx starts sessions in UTC, so set `DB_TIMEZONE` (IANA name, default `UTC`, which is what production uses) to the database's zone; locally that is usually `Asia/Jakarta`. It sets each session's time zone, which reports depend on, and the zone timestamps are shown in.
 
 Go quirks kept on purpose, because the web app sees them: `"<X> not found not found"` messages, pagination `count` always 0, and an empty-string optional email failing validation.
 

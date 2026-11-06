@@ -13,6 +13,7 @@ mod health;
 pub mod money;
 pub mod params;
 mod proxy;
+mod reports;
 pub mod state;
 pub mod time;
 
@@ -50,6 +51,7 @@ pub fn app(state: AppState) -> Router {
         .merge(customers::router())
         .merge(categories::router())
         .merge(company_settings::router())
+        .merge(reports::router())
         .fallback(proxy::fallback)
         .method_not_allowed_fallback(method_not_allowed)
         .with_state(state)

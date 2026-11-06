@@ -9,4 +9,5 @@ publish.workspace = true
 bcrypt.workspace = true
 hex.workspace = true
 rand.workspace = true
+rust_decimal.workspace = true
 sha2.workspace = true
