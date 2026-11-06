@@ -34,6 +34,14 @@ pub fn serialize<S: Serializer>(value: &Decimal, s: S) -> Result<S::Ok, S::Error
         .serialize(s)
 }
 
+/// For optional decimals; pair with `skip_serializing_if = "Option::is_none"`.
+pub fn serialize_some<S: Serializer>(value: &Option<Decimal>, s: S) -> Result<S::Ok, S::Error> {
+    match value {
+        Some(v) => serialize(v, s),
+        None => s.serialize_none(),
+    }
+}
+
 /// `#[serde(serialize_with = "crate::money::serialize_float")]`: a float the way
 /// Go's encoder writes it, so `50.0` is `50` (serde_json would write `50.0`).
 pub fn serialize_float<S: Serializer>(value: &f64, s: S) -> Result<S::Ok, S::Error> {

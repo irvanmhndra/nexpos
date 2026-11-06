@@ -58,6 +58,14 @@ pub fn serialize<S: Serializer>(at: &DateTime<Utc>, s: S) -> Result<S::Ok, S::Er
     s.serialize_str(&go_rfc3339(at, zone()))
 }
 
+/// For optional times; pair with `skip_serializing_if = "Option::is_none"`.
+pub fn serialize_some<S: Serializer>(at: &Option<DateTime<Utc>>, s: S) -> Result<S::Ok, S::Error> {
+    match at {
+        Some(at) => serialize(at, s),
+        None => s.serialize_none(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
