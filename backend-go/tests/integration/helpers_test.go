@@ -38,6 +38,13 @@ func doDelete(t *testing.T, path string, token string) *testutil.Response {
 	return resp
 }
 
+func doRequest(t *testing.T, method, path string, body any, token string) *testutil.Response {
+	t.Helper()
+	resp, err := testEnv.Server.Do(testutil.Request{Method: method, Path: path, Body: body, Token: token})
+	require.NoError(t, err)
+	return resp
+}
+
 func decodeResponse(t *testing.T, resp *testutil.Response) testutil.APIResponse {
 	t.Helper()
 	r, err := resp.ParseResponse()
