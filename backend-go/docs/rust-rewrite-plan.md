@@ -169,6 +169,8 @@ Rules while both run:
 
 ## 8. Phases
 
+**Status (2026-11-07):** phases 0–5 are built and merged. All 105 routes pass the Go suite on Rust alone, and it runs in production on `127.0.0.1:8090` with no traffic. What's left is the shadow week below and phase 6; the steps are under "Cutover" in `backend/README.md`.
+
 | # | Phase | Deliverable | Exit criteria |
 |---|---|---|---|
 | 0 | Contract & harness | `openapi.yaml`, target-agnostic integration suite, generated TS client in nexpos-web | Suite green against Go via `TARGET_BASE_URL` |

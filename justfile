@@ -1,6 +1,6 @@
 # nexpos tasks. `just --list` to see them.
 #
-# backend/     Rust API (axum + sqlx) — the rewrite, taking over route group by route group
+# backend/     Rust API (axum + sqlx) — serves every route, takes production traffic at the cutover
 # backend-go/  Go API — serves production until the cutover, owns the migrations
 # frontend/    React web app
 
@@ -14,9 +14,9 @@ dev-db:
 dev-go:
     cd backend-go && air
 
-# Rust API on :8090 (same POSTGRES_* env as the Go API); routes it doesn't serve yet go to the Go API on :8080
+# Rust API on :8090 (same POSTGRES_* env as the Go API)
 dev-api:
-    cd backend && SERVER_PORT=8090 GO_UPSTREAM_URL=${GO_UPSTREAM_URL:-http://127.0.0.1:8080} cargo run --bin nexpos-server
+    cd backend && SERVER_PORT=8090 cargo run --bin nexpos-server
 
 # Web on :5173, talks to VITE_API_BASE_URL
 dev-web:
@@ -31,12 +31,11 @@ test-go:
     cd backend-go && TEST_DATABASE_URL={{test_db}} go test -race -count=1 ./...
 
 # Run the Go integration suite against a running server (default: the Rust API on :8090,
-# the tests listed in backend/conformance-tests.txt). Start the Go API on :8080 too (just dev-go) for
-# the routes Rust forwards; both must use TEST_DATABASE_URL's database.
+# the tests listed in backend/conformance-tests.txt). It must use TEST_DATABASE_URL's database.
 conformance target="http://127.0.0.1:8090" tests=`paste -sd'|' backend/conformance-tests.txt`:
     cd backend-go && TARGET_BASE_URL={{target}} TEST_DATABASE_URL={{test_db}} go test -count=1 -p 1 -run '{{tests}}' ./tests/integration/
 
-# Same suite with everything handled for you: throwaway DB, both servers, cleanup. Optional test regex.
+# Same suite with everything handled for you: throwaway DB, both servers, byte comparison, cleanup. Optional test regex.
 conformance-local *tests:
     backend/scripts/conformance.sh {{tests}}
 
