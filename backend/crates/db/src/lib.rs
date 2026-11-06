@@ -3,4 +3,6 @@
 
 pub mod auth;
 pub mod branches;
+pub mod categories;
+pub mod company_settings;
 pub mod customers;

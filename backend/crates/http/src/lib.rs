@@ -3,11 +3,14 @@
 
 mod auth;
 mod branches;
+mod categories;
+mod company_settings;
 mod customers;
 pub mod envelope;
 pub mod error;
 pub mod extract;
 mod health;
+pub mod money;
 pub mod params;
 mod proxy;
 pub mod state;
@@ -45,6 +48,8 @@ pub fn app(state: AppState) -> Router {
         .merge(auth::router())
         .merge(branches::router())
         .merge(customers::router())
+        .merge(categories::router())
+        .merge(company_settings::router())
         .fallback(proxy::fallback)
         .method_not_allowed_fallback(method_not_allowed)
         .with_state(state)

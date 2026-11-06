@@ -54,6 +54,13 @@ where
                 let field = err.path().to_string();
                 let inner = err.into_inner();
                 match inner.classify() {
+                    // shopspring/decimal's UnmarshalJSON fails with a plain error,
+                    // which BindError reports as a bad body rather than a bad field.
+                    serde_json::error::Category::Data
+                        if inner.to_string().contains(crate::money::INVALID_DECIMAL) =>
+                    {
+                        AppError::bad_request("invalid request body")
+                    }
                     serde_json::error::Category::Data => AppError::validation(
                         "Validation failed",
                         vec![FieldError::new(
@@ -148,6 +155,15 @@ impl Validator {
             Some(v) => self.field(name, v, rules),
             None => self,
         }
+    }
+
+    /// Tags without their own message (`gte`, `lte`): "<field> is invalid".
+    pub fn invalid_unless(&mut self, name: &str, ok: bool) -> &mut Self {
+        if !ok {
+            self.errors
+                .push(FieldError::new(name, format!("{name} is invalid")));
+        }
+        self
     }
 
     pub fn finish(&mut self) -> Result<(), AppError> {

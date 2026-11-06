@@ -41,8 +41,20 @@ pub fn go_rfc3339(at: &DateTime<Utc>, zone: Tz) -> String {
     out
 }
 
+/// Go's zero `time.Time`, shown for rows that don't exist yet. It renders the
+/// same in every zone.
+pub fn zero() -> DateTime<Utc> {
+    DateTime::from_timestamp(ZERO_UNIX, 0).unwrap_or_default()
+}
+
+/// `0001-01-01T00:00:00Z` as Unix seconds.
+const ZERO_UNIX: i64 = -62_135_596_800;
+
 /// `#[serde(serialize_with = "crate::time::serialize")]`
 pub fn serialize<S: Serializer>(at: &DateTime<Utc>, s: S) -> Result<S::Ok, S::Error> {
+    if at.timestamp() == ZERO_UNIX {
+        return s.serialize_str("0001-01-01T00:00:00Z");
+    }
     s.serialize_str(&go_rfc3339(at, zone()))
 }
 
@@ -51,6 +63,11 @@ mod tests {
     use chrono::TimeZone;
 
     use super::*;
+
+    #[test]
+    fn zero_time_is_year_one() {
+        assert_eq!(go_rfc3339(&zero(), Tz::UTC), "0001-01-01T00:00:00Z");
+    }
 
     #[test]
     fn matches_go_marshal_json() {
