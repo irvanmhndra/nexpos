@@ -250,3 +250,40 @@ pub async fn revoke_session(db: impl PgExecutor<'_>, id: i64) -> sqlx::Result<()
         .await?;
     Ok(())
 }
+
+/// A session plus what decides whether it may be used: the company's state and
+/// whether platform staff opened it.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct AuthContext {
+    pub id: i64,
+    pub user_id: i64,
+    pub company_id: i64,
+    pub branch_id: Option<i64>,
+    pub access_token_expires_at: DateTime<Utc>,
+    pub company_active: bool,
+    pub impersonated_by: Option<i64>,
+}
+
+pub async fn auth_context(
+    db: impl PgExecutor<'_>,
+    access_hash: &str,
+) -> sqlx::Result<Option<AuthContext>> {
+    sqlx::query_as(
+        "SELECT s.id, s.user_id, s.company_id, s.branch_id, s.access_token_expires_at, \
+             c.is_active AS company_active, pi.platform_user_id AS impersonated_by \
+         FROM user_sessions s \
+         JOIN companies c ON c.id = s.company_id \
+         LEFT JOIN platform_impersonations pi ON pi.session_id = s.id \
+         WHERE s.access_token_hash = $1 AND NOT s.is_revoked",
+    )
+    .bind(access_hash)
+    .fetch_optional(db)
+    .await
+}
+
+pub async fn company_is_active(db: impl PgExecutor<'_>, id: i64) -> sqlx::Result<bool> {
+    sqlx::query_scalar("SELECT is_active FROM companies WHERE id = $1")
+        .bind(id)
+        .fetch_one(db)
+        .await
+}

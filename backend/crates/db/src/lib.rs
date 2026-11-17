@@ -9,6 +9,7 @@ pub mod customers;
 pub mod daily_settlements;
 pub mod expenses;
 pub mod orders;
+pub mod platform;
 pub mod products;
 pub mod promotions;
 pub mod purchase_orders;
