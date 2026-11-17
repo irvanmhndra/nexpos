@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Card, CardTitle, CardDescription, Icon, DateRangePicker } from '@/components/ui';
 import { SalesChart, BarChart, PieChart } from '@/components/common';
-import { formatCurrency } from '@/utils';
+import { formatCurrency, toLocalDateString } from '@/utils';
 import {
   useReportSummary,
   useSalesTrend,
@@ -16,8 +16,8 @@ const getDefaultDateRange = () => {
   const start = new Date();
   start.setDate(end.getDate() - 30);
   return {
-    startDate: start.toISOString().split('T')[0],
-    endDate: end.toISOString().split('T')[0],
+    startDate: toLocalDateString(start),
+    endDate: toLocalDateString(end),
   };
 };
 

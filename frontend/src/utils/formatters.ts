@@ -115,3 +115,21 @@ export function formatFileSize(bytes: number): string {
 
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
+
+/**
+ * A date as YYYY-MM-DD in the browser's own time zone. `toISOString()` gives the
+ * UTC date, which is still yesterday until 07:00 in WIB.
+ */
+export function toLocalDateString(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/** A date as YYYY-MM-DDTHH:mm in the browser's time zone, for datetime-local inputs. */
+export function toLocalDateTimeString(date: Date = new Date()): string {
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${toLocalDateString(date)}T${hours}:${minutes}`;
+}

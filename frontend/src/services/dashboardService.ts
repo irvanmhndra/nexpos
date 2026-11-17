@@ -1,5 +1,6 @@
 import { api } from './api';
 import type { ApiResponse } from '@/types/api';
+import { toLocalDateString } from '@/utils/formatters';
 
 // Types for dashboard data
 export interface DashboardStats {
@@ -46,10 +47,7 @@ interface SalesTrendResponse {
   data: SalesTrendItem[];
 }
 
-// Helper to format date as YYYY-MM-DD
-function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0];
-}
+const formatDate = toLocalDateString;
 
 // Helper to get date range
 function getDateRange(days: number): { dateFrom: string; dateTo: string } {

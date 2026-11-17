@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { cn } from '@/utils';
+import { cn, toLocalDateString } from '@/utils';
 import { Icon } from './Icon';
 
 export interface DateRangePickerProps {
@@ -73,9 +73,8 @@ export function DateRangePicker({
     const start = new Date();
     start.setDate(end.getDate() - days);
 
-    const formatDate = (d: Date) => d.toISOString().split('T')[0];
-    setTempStartDate(formatDate(start));
-    setTempEndDate(formatDate(end));
+    setTempStartDate(toLocalDateString(start));
+    setTempEndDate(toLocalDateString(end));
   };
 
   const displayValue = getDisplayValue();

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button, Icon, Input, Badge } from '@/components/ui';
 import { DeleteConfirmModal } from '@/components/common';
+import { toLocalDateTimeString } from '@/utils';
 import {
   usePromotions,
   useCreatePromotion,
@@ -53,7 +54,7 @@ const EMPTY_FORM: PromoFormData = {
   discount_value: '',
   min_purchase: '',
   max_discount: '',
-  start_at: new Date().toISOString().slice(0, 16),
+  start_at: toLocalDateTimeString(),
   end_at: '',
   priority: '0',
   is_active: true,

@@ -10,7 +10,7 @@ import {
   useExpenseCategories,
 } from '@/hooks/useExpenses';
 import { useBranch } from '@/contexts/BranchContext';
-import { formatCurrency, formatDate, getApiErrorMessage } from '@/utils';
+import { formatCurrency, formatDate, getApiErrorMessage, toLocalDateString } from '@/utils';
 import type { Expense, CreateExpenseRequest, UpdateExpenseRequest } from '@/types/expense';
 
 interface ExpenseFormData {
@@ -43,7 +43,7 @@ function ExpenseFormModal({
   initialData?: Expense;
   categories: { id: number; name: string }[];
 }) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalDateString();
   const [formData, setFormData] = useState<ExpenseFormData>({
     category_id: initialData?.category_id ? String(initialData.category_id) : '',
     amount: initialData?.amount ? String(initialData.amount) : '',
