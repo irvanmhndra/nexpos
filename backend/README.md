@@ -56,6 +56,25 @@ Timestamps are rendered like Go's `time.Time` in the database's TimeZone. sqlx s
 
 Go quirks kept on purpose, because the web app sees them: `"<X> not found not found"` messages, pagination `count` always 0, an empty-string optional email failing validation, a refund leaving the order's `payment_status` as it was, a purchase order going to the session's branch rather than `branch_id` in the body, and only the complete endpoint saving a receipt (auto-completing doesn't).
 
+## Platform panel
+
+`/api/platform/v1` (`crates/http/src/platform.rs`) is for the internal team, so support work goes through the application instead of the database. It is Rust-only: the Go API doesn't serve it, and doesn't enforce suspensions or read-only support sessions, so it takes effect at the cutover.
+
+| Route | What | Who |
+|---|---|---|
+| `POST /auth/login`, `/auth/logout`, `GET /auth/me` | staff accounts and tokens of their own (8 hours, no refresh; 5 wrong passwords lock for 15 minutes) | anyone |
+| `GET /companies`, `/companies/{id}` | every company with users, branches, 30-day orders and revenue, last order | all roles |
+| `POST /companies/{id}/suspend`, `/activate` | sets `companies.is_active`; a suspended company can't sign in and its sessions stop | admin, ops |
+| `POST /companies/{id}/support-session` | a 30-minute tenant token as the company's owner, read-only, for the ordinary web app | all roles |
+| `GET /audit-logs` | who did what, to which company, why, and what changed | all roles |
+| `GET`/`POST /staff`, `PUT /staff/{id}` | staff accounts, roles, and which companies each may see | admin |
+
+Rules: every read is limited to the companies a staff member may see (others answer 404); every write needs a `reason` and writes its audit line in the same transaction; staff and tenant tokens live in different tables and are not accepted by each other's routes.
+
+The first admin comes from `PLATFORM_ADMIN_EMAIL` and `PLATFORM_ADMIN_PASSWORD` in the environment, created at startup if no account has that email. Remove the password from the environment afterwards. Not built yet: 2FA, a web UI, and write actions on tenant data (corrections go through tenant accounts for now).
+
+Tests: `crates/http/tests/platform.rs`, which needs `DATABASE_URL` and runs in a throwaway database.
+
 ## Cutover
 
 Each push to `main` deploys this next to Go on `127.0.0.1:8090` (`docker-compose.prod.yml`, project `nexpos-rust`, sharing `~/nexpos/.env` and the database). Nginx still sends everything to Go.

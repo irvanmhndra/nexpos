@@ -280,7 +280,15 @@ jobs:
 
   rust-deploy:
     name: "Rust: deploy next to Go"
-    needs: [rust-check, rust-conformance]
+    # After the Go deploy, which applies the migrations: Rust must never start
+    # against a schema older than the one it was built for.
+    needs: [changes, rust-check, rust-conformance, go-deploy]
+    if: >-
+      always() &&
+      needs.changes.outputs.rust == 'true' &&
+      needs.rust-check.result == 'success' &&
+      needs.rust-conformance.result == 'success' &&
+      (needs.go-deploy.result == 'success' || needs.changes.outputs.go != 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
