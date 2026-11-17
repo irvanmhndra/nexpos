@@ -1,0 +1,24 @@
+# Weekly dependency updates, grouped so each side gets one PR instead of dozens.
+# A PR runs pr-check.yml, so an update that breaks the conformance suite never merges.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /backend-go
+    schedule: { interval: weekly, day: monday }
+    groups:
+      go: { patterns: ["*"] }
+  - package-ecosystem: cargo
+    directory: /backend
+    schedule: { interval: weekly, day: monday }
+    groups:
+      rust: { patterns: ["*"] }
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule: { interval: weekly, day: monday }
+    groups:
+      frontend:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }
