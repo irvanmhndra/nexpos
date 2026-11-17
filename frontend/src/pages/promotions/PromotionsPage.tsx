@@ -84,8 +84,8 @@ function PromoFormModal({
           discount_value: initialData.discount_value?.toString() ?? '',
           min_purchase: initialData.min_purchase?.toString() ?? '',
           max_discount: initialData.max_discount?.toString() ?? '',
-          start_at: initialData.start_at.slice(0, 16),
-          end_at: initialData.end_at ? initialData.end_at.slice(0, 16) : '',
+          start_at: toLocalDateTimeString(new Date(initialData.start_at)),
+          end_at: initialData.end_at ? toLocalDateTimeString(new Date(initialData.end_at)) : '',
           priority: initialData.priority.toString(),
           is_active: initialData.is_active,
         }
