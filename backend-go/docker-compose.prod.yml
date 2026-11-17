@@ -17,12 +17,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    # NOTE: this publishes Postgres on the host's public interface. The API
-    # reaches the DB over the internal Docker network (host "nexpos_db"), so
-    # this mapping is only needed for external tools. To stop exposing the DB
-    # to the internet, change to "127.0.0.1:5432:5432" (local/SSH-tunnel only).
+    # Localhost only: the API reaches the DB over the Docker network, and people
+    # reach it through an SSH tunnel (ssh -L 5432:127.0.0.1:5432 <server>).
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - nexpos_pgdata:/var/lib/postgresql
     healthcheck:
