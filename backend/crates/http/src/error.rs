@@ -95,6 +95,24 @@ impl AppError {
         }
     }
 
+    /// The company was suspended from the platform panel.
+    pub fn company_suspended() -> Self {
+        Self::Coded {
+            status: StatusCode::FORBIDDEN,
+            code: "COMPANY_SUSPENDED",
+            message: "this company is suspended".into(),
+        }
+    }
+
+    /// A support session tried to change something.
+    pub fn read_only_session() -> Self {
+        Self::Coded {
+            status: StatusCode::FORBIDDEN,
+            code: "READ_ONLY_SESSION",
+            message: "support sessions are read-only".into(),
+        }
+    }
+
     pub fn status(&self) -> StatusCode {
         match self {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,

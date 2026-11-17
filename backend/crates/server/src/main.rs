@@ -124,6 +124,24 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(port = config.port, "nexpos-server listening");
 
     let mut state = AppState::new(db.clone()).with_auth(config.auth);
+
+    // The first platform admin, so the panel can be signed in to at all. In the
+    // background: the database may still be starting.
+    if let (Ok(email), Ok(password)) = (
+        env::var("PLATFORM_ADMIN_EMAIL"),
+        env::var("PLATFORM_ADMIN_PASSWORD"),
+    ) && !email.is_empty()
+        && !password.is_empty()
+    {
+        let db = db.clone();
+        tokio::spawn(async move {
+            match nexpos_http::platform::ensure_admin(&db, &email, &password).await {
+                Ok(true) => tracing::info!(%email, "created the first platform admin"),
+                Ok(false) => {}
+                Err(err) => tracing::warn!(error = ?err, "could not create the platform admin"),
+            }
+        });
+    }
     if let Some(storage) = config.storage {
         state = state.with_storage(Storage::new(storage)?);
     }

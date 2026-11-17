@@ -8,7 +8,7 @@ use std::net::SocketAddr;
 use axum::{
     body::Bytes,
     extract::{ConnectInfo, FromRequest, FromRequestParts, Request},
-    http::{StatusCode, header, request::Parts},
+    http::{Method, StatusCode, header, request::Parts},
 };
 use chrono::Utc;
 use nexpos_db::auth as db;
@@ -295,6 +295,14 @@ pub struct AuthUser {
     pub user_id: i64,
     pub company_id: i64,
     pub branch_id: Option<i64>,
+    /// The platform staff member who opened this session, for support sessions.
+    pub impersonated_by: Option<i64>,
+}
+
+/// What a support session may call besides GET: requests that only compute.
+fn is_read_only(method: &Method, path: &str) -> bool {
+    matches!(*method, Method::GET | Method::HEAD)
+        || (*method == Method::POST && path == "/api/v1/orders/preview")
 }
 
 impl FromRequestParts<AppState> for AuthUser {
@@ -308,7 +316,7 @@ impl FromRequestParts<AppState> for AuthUser {
             .and_then(|v| v.strip_prefix("Bearer "))
             .ok_or_else(|| AppError::unauthorized("unauthorized"))?;
 
-        let session = db::session_by_access_hash(&state.db, &hash_token(token))
+        let session = db::auth_context(&state.db, &hash_token(token))
             .await
             .ok()
             .flatten()
@@ -321,6 +329,12 @@ impl FromRequestParts<AppState> for AuthUser {
                 message: "token expired".into(),
             });
         }
+        if !session.company_active {
+            return Err(AppError::company_suspended());
+        }
+        if session.impersonated_by.is_some() && !is_read_only(&parts.method, parts.uri.path()) {
+            return Err(AppError::read_only_session());
+        }
 
         // Best-effort, like Go: a failed touch never fails the request.
         let _ = db::touch_session(&state.db, session.id).await;
@@ -329,6 +343,7 @@ impl FromRequestParts<AppState> for AuthUser {
             user_id: session.user_id,
             company_id: session.company_id,
             branch_id: session.branch_id,
+            impersonated_by: session.impersonated_by,
         })
     }
 }

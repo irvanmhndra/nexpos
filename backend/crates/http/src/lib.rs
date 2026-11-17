@@ -16,6 +16,7 @@ mod inventory;
 pub mod money;
 mod orders;
 pub mod params;
+pub mod platform;
 mod products;
 mod promotions;
 mod proxy;
@@ -77,6 +78,7 @@ pub fn app(state: AppState) -> Router {
         .merge(shifts::router())
         .merge(stock_opnames::router())
         .merge(daily_settlements::router())
+        .merge(platform::router())
         .fallback(proxy::fallback)
         .method_not_allowed_fallback(method_not_allowed)
         .with_state(state)

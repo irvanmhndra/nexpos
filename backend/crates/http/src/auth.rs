@@ -118,6 +118,9 @@ async fn login(
     if !user.is_active() {
         return Err(AppError::user_inactive());
     }
+    if !db::company_is_active(&state.db, user.company_id).await? {
+        return Err(AppError::company_suspended());
+    }
 
     // Go ignores lookup errors here: no default branch, role "user".
     let branch = db::default_branch(&state.db, user.id).await.ok().flatten();
@@ -229,6 +232,9 @@ async fn refresh(
         .ok_or_else(|| AppError::unauthorized("invalid refresh token"))?;
     if Utc::now() > session.refresh_token_expires_at {
         return Err(AppError::unauthorized("refresh token expired"));
+    }
+    if !db::company_is_active(&state.db, session.company_id).await? {
+        return Err(AppError::company_suspended());
     }
 
     let tokens = Tokens::new(&state);
@@ -351,7 +357,7 @@ pub(crate) async fn hash_password(password: String) -> AppResult<String> {
         .map_err(|e| AppError::Internal(e.into()))
 }
 
-async fn verify_password(password: String, hash: String) -> AppResult<bool> {
+pub(crate) async fn verify_password(password: String, hash: String) -> AppResult<bool> {
     Ok(
         tokio::task::spawn_blocking(move || rules::verify_password(&password, &hash))
             .await
